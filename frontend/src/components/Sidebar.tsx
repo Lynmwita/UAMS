@@ -41,10 +41,10 @@ export default function Sidebar({ role = 'super_admin' }: SidebarProps) {
   );
 
   return (
-    <aside className="w-64 bg-slate-900 border-r border-slate-800 text-slate-200 min-h-[calc(100vh-4rem)] p-4 flex flex-col justify-between">
-      <div className="space-y-1">
-        <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-          Navigation
+    <aside className="w-64 bg-academic-navy-900 border-r border-academic-navy-800 text-slate-200 min-h-[calc(100vh-4rem)] p-4 flex flex-col justify-between shadow-sm">
+      <div className="space-y-2">
+        <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-academic-navy-300">
+          Academic Navigation
         </div>
         <nav className="space-y-1">
           {filteredItems.map((item) => {
@@ -54,13 +54,13 @@ export default function Sidebar({ role = 'super_admin' }: SidebarProps) {
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex items-center space-x-3 px-3 py-2.5 rounded-md text-sm font-medium transition ${
+                className={`flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition ${
                   isActive
-                    ? 'bg-blue-600 text-white shadow'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                    ? 'bg-academic-gold-500 text-academic-navy-950 font-semibold shadow'
+                    : 'text-slate-300 hover:bg-academic-navy-800 hover:text-white'
                 }`}
               >
-                <Icon className="h-4 w-4" />
+                <Icon className={`h-4 w-4 ${isActive ? 'text-academic-navy-950' : 'text-academic-gold-400'}`} />
                 <span>{item.name}</span>
               </Link>
             );
@@ -68,8 +68,9 @@ export default function Sidebar({ role = 'super_admin' }: SidebarProps) {
         </nav>
       </div>
 
-      <div className="border-t border-slate-800 pt-4 text-xs text-slate-500">
-        UAMS v1.0.0 Enterprise Core
+      <div className="border-t border-academic-navy-800 pt-4 text-[11px] text-academic-navy-400 flex items-center justify-between">
+        <span>UAMS Institutional Core</span>
+        <span className="font-mono text-academic-gold-400">v1.0</span>
       </div>
     </aside>
   );

@@ -12,7 +12,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const role = (searchParams.get('role') as UserRole) || 'super_admin';
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
       <Navbar userEmail={`${role}@university.ac.ke`} userRole={ROLE_LABELS[role]} />
       <div className="flex-1 flex">
         <Sidebar role={role} />
@@ -30,7 +30,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-950 text-white p-8">Loading dashboard shell...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-slate-50 text-slate-900 p-8">Loading academic portal...</div>}>
       <DashboardShell>{children}</DashboardShell>
     </Suspense>
   );
