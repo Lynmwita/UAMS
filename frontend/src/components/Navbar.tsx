@@ -31,8 +31,8 @@ export default function Navbar({ userEmail, userRole }: NavbarProps) {
             <div className="flex items-center space-x-3 text-sm">
               <div className="flex items-center space-x-2 text-slate-300">
                 <User className="h-4 w-4 text-academic-gold-400" />
-                <span className="font-medium text-slate-200">{userEmail}</span>
-                <span className="text-xs font-semibold uppercase bg-academic-navy-800 text-academic-gold-300 px-2.5 py-0.5 rounded border border-academic-navy-700">
+                <span className="hidden sm:inline font-medium text-slate-200">{userEmail}</span>
+                <span className="hidden md:inline text-xs font-semibold uppercase bg-academic-navy-800 text-academic-gold-300 px-2.5 py-0.5 rounded border border-academic-navy-700">
                   {userRole}
                 </span>
               </div>

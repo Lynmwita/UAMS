@@ -15,15 +15,20 @@ export async function POST(request: Request) {
 
     const formattedPhone = formatKenyanPhoneNumber(body.phoneNumber);
     const checkoutRequestId = `ws_CO_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+    const mpesaReceipt = `QHJ${Math.floor(1000000 + Math.random() * 9000000)}`;
 
     return NextResponse.json({
       success: true,
-      message: 'STK push initiated successfully. Please complete PIN prompt on your phone.',
+      message: `M-Pesa STK Prompt sent to ${formattedPhone} via Paybill 522533 (Acc: ${body.accountReference}).`,
       MerchantRequestID: `MR_${Date.now()}`,
       CheckoutRequestID: checkoutRequestId,
+      BusinessShortCode: '522533',
+      AccountReference: body.accountReference,
+      Amount: body.amount,
+      ReceiptNumber: mpesaReceipt,
       ResponseCode: '0',
       ResponseDescription: 'Success. Request accepted for processing',
-      CustomerMessage: `Success. Request accepted for processing for ${formattedPhone}`,
+      CustomerMessage: `STK push prompt sent to ${formattedPhone} for KSh ${body.amount.toLocaleString()} using Paybill 522533 and Account No ${body.accountReference}. Enter your M-Pesa PIN to complete payment.`,
     });
   } catch (error: any) {
     return NextResponse.json(
