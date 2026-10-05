@@ -1,9 +1,15 @@
 const express = require('express');
 const cors = require('cors');
+const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
+const { normalizeRole, isValidDemoCredential } = require('./src/auth');
+
 const app = express();
-const PORT = process.env.PORT || 8000;
+const PORT = Number(process.env.PORT || 4000);
+const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+  : null;
 
 app.use(cors());
 app.use(express.json());
@@ -32,28 +38,67 @@ let transactions = [
   { ref: 'BNK-KCB-9941', student: 'BIT/2023/8849', amount: 25000, channel: 'Bank Transfer', date: '2026-09-20', status: 'verified' },
 ];
 
-// Health Check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', service: 'UAMS Enterprise API Backend', timestamp: new Date().toISOString() });
-});
-
-// Authentication
-app.post('/api/v1/auth/login', (req, res) => {
-  const { email, role } = req.body;
   res.json({
-    success: true,
-    token: `uams_jwt_mock_${Date.now()}`,
-    user: {
-      id: 'usr-demo-01',
-      email: email || 'admin@zetech.ac.ke',
-      role: role || 'super_admin',
-      first_name: 'Authorized',
-      last_name: 'Officer',
-    },
+    status: 'ok',
+    service: 'UAMS Enterprise API Backend',
+    supabase: supabase ? 'connected' : 'demo-mode',
+    timestamp: new Date().toISOString(),
   });
 });
 
-// Students API
+app.post('/api/v1/auth/login', async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim();
+    const password = String(req.body?.password || '');
+    const role = normalizeRole(req.body?.role || 'student');
+
+    if (!email || !password) {
+      return res.status(400).json({ success: false, error: 'Email and password are required.' });
+    }
+
+    if (supabase) {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        return res.status(401).json({ success: false, error: error.message || 'Authentication failed.' });
+      }
+
+      return res.json({
+        success: true,
+        token: data?.session?.access_token || `supabase_${Date.now()}`,
+        user: {
+          id: data?.user?.id || 'supabase-user',
+          email: data?.user?.email || email,
+          role,
+          first_name: data?.user?.user_metadata?.first_name || 'Authorized',
+          last_name: data?.user?.user_metadata?.last_name || 'User',
+        },
+      });
+    }
+
+    if (!isValidDemoCredential(email, password, role)) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid credentials for the selected demo role.',
+      });
+    }
+
+    return res.json({
+      success: true,
+      token: `uams_jwt_mock_${Date.now()}`,
+      user: {
+        id: `usr-demo-${role}`,
+        email,
+        role,
+        first_name: 'Authorized',
+        last_name: 'User',
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message || 'Internal server error.' });
+  }
+});
+
 app.get('/api/v1/students', (req, res) => {
   res.json({ success: true, count: students.length, data: students });
 });
@@ -77,12 +122,10 @@ app.post('/api/v1/students', (req, res) => {
   res.status(201).json({ success: true, data: newStudent });
 });
 
-// Courses API
 app.get('/api/v1/courses', (req, res) => {
   res.json({ success: true, count: courses.length, data: courses });
 });
 
-// Grades & Transcripts API
 app.get('/api/v1/grades', (req, res) => {
   const { admission_number } = req.query;
   const filtered = admission_number ? grades.filter((g) => g.admission_number === admission_number) : grades;
@@ -114,7 +157,6 @@ app.post('/api/v1/grades/enter', (req, res) => {
   res.status(201).json({ success: true, data: newGrade });
 });
 
-// Finance & M-Pesa STK Callback Webhook
 app.post('/api/v1/finance/mpesa/stkpush', (req, res) => {
   const { phoneNumber, amount, accountReference } = req.body;
   const receipt = `QHJ${Math.floor(1000000 + Math.random() * 9000000)}`;
