@@ -7,10 +7,10 @@ export default function StructurePage() {
   const [activeTab, setActiveTab] = useState<'schools' | 'departments' | 'programs'>('schools');
 
   const [schools, setSchools] = useState([
-    { id: '1', code: 'SOICT', name: 'School of Information Communication & Technology', dean: 'Prof. Alice Njuguna', deanEmail: 'dean.soict@zetech.ac.ke', depts: 3, programs: 7 },
-    { id: '2', code: 'SOBE', name: 'School of Business & Economics', dean: 'Dr. Martin Omondi', deanEmail: 'dean.sobe@zetech.ac.ke', depts: 2, programs: 5 },
-    { id: '3', code: 'SOET', name: 'School of Engineering & Technology', dean: 'Eng. Samuel Githae', deanEmail: 'dean.soet@zetech.ac.ke', depts: 3, programs: 6 },
-    { id: '4', code: 'SOEAS', name: 'School of Education, Arts & Social Sciences', dean: 'Dr. Beatrice Wanyama', deanEmail: 'dean.soeas@zetech.ac.ke', depts: 2, programs: 4 },
+    { id: '1', code: 'SOICT', name: 'School of Information Communication & Technology', dean: 'Prof. Alice Njuguna', deanEmail: 'dean.soict@university.ac.ke', depts: 3, programs: 7 },
+    { id: '2', code: 'SOBE', name: 'School of Business & Economics', dean: 'Dr. Martin Omondi', deanEmail: 'dean.sobe@university.ac.ke', depts: 2, programs: 5 },
+    { id: '3', code: 'SOET', name: 'School of Engineering & Technology', dean: 'Eng. Samuel Githae', deanEmail: 'dean.soet@university.ac.ke', depts: 3, programs: 6 },
+    { id: '4', code: 'SOEAS', name: 'School of Education, Arts & Social Sciences', dean: 'Dr. Beatrice Wanyama', deanEmail: 'dean.soeas@university.ac.ke', depts: 2, programs: 4 },
   ]);
 
   const [departments, setDepartments] = useState([
@@ -271,7 +271,7 @@ export default function StructurePage() {
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Dean Official Email</label>
                 <input
                   type="email"
-                  placeholder="dean.sohs@zetech.ac.ke"
+                  placeholder="dean.sohs@university.ac.ke"
                   value={newSchool.deanEmail}
                   onChange={(e) => setNewSchool({ ...newSchool, deanEmail: e.target.value })}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-academic-navy-900 outline-none"

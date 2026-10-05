@@ -90,7 +90,7 @@ export default function GradesPage() {
       academicStanding: standing,
     });
 
-    doc.save('Zetech_Official_Transcript_BIT_2023_8849.pdf');
+    doc.save('Official_Academic_Transcript_BIT_2023_8849.pdf');
   };
 
   return (

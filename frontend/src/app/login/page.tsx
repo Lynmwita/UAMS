@@ -63,23 +63,14 @@ function LoginForm() {
     }
   };
 
-  const handleQuickDemoLogin = async (role: UserRole) => {
+  const handleFillDemoCredentials = (role: UserRole) => {
     const nextEmail = `${role}@university.ac.ke`;
     const nextPassword = DEMO_PASSWORD;
 
     setSelectedRole(role);
     setEmail(nextEmail);
     setPassword(nextPassword);
-
-    try {
-      setLoading(true);
-      setError(null);
-      await authenticate(role, nextEmail, nextPassword);
-    } catch (loginError: any) {
-      setError(loginError.message || 'Unable to sign in right now.');
-    } finally {
-      setLoading(false);
-    }
+    setError(null);
   };
 
   return (
@@ -171,52 +162,55 @@ function LoginForm() {
               disabled={loading}
               className="w-full bg-academic-navy-900 hover:bg-academic-navy-800 text-white font-bold py-2.5 rounded-lg text-sm transition flex items-center justify-center space-x-2 shadow-sm disabled:opacity-50"
             >
-              <span>{loading ? 'Verifying Credentials...' : 'Authenticate'}</span>
+              <span>{loading ? 'Verifying Credentials...' : 'Authenticate & Sign In'}</span>
               <ArrowRight className="h-4 w-4 text-academic-gold-400" />
             </button>
           </form>
 
-          {/* Quick Role Tester */}
+          {/* Reviewer / Test Credentials Helper */}
           <div className="mt-8 border-t border-slate-200 pt-5">
-            <div className="flex items-center space-x-1.5 text-xs text-academic-navy-900 font-bold uppercase tracking-wider mb-3">
-              <ShieldCheck className="h-4 w-4 text-academic-navy-700" />
-              <span>Quick Test Access</span>
+            <div className="flex items-center space-x-1.5 text-[11px] text-slate-600 font-bold uppercase tracking-wider mb-1.5">
+              <ShieldCheck className="h-3.5 w-3.5 text-academic-navy-700" />
+              <span>Review Test Accounts (Pre-fills Form)</span>
             </div>
+            <p className="text-[11px] text-slate-500 mb-3">
+              Click a role to load demonstration credentials into the form, then click Authenticate:
+            </p>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <button
                 type="button"
-                onClick={() => handleQuickDemoLogin('super_admin')}
+                onClick={() => handleFillDemoCredentials('super_admin')}
                 className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
               >
                 Super Admin
               </button>
               <button
                 type="button"
-                onClick={() => handleQuickDemoLogin('registrar')}
+                onClick={() => handleFillDemoCredentials('registrar')}
                 className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
               >
                 Registrar
               </button>
               <button
                 type="button"
-                onClick={() => handleQuickDemoLogin('lecturer')}
+                onClick={() => handleFillDemoCredentials('lecturer')}
                 className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
               >
                 Lecturer
               </button>
               <button
                 type="button"
-                onClick={() => handleQuickDemoLogin('finance_officer')}
+                onClick={() => handleFillDemoCredentials('finance_officer')}
                 className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
               >
                 Finance Officer
               </button>
               <button
                 type="button"
-                onClick={() => handleQuickDemoLogin('student')}
-                className="col-span-2 p-2.5 bg-academic-gold-50 hover:bg-academic-gold-100 border border-academic-gold-300 text-academic-navy-950 text-center transition font-bold rounded-lg"
+                onClick={() => handleFillDemoCredentials('student')}
+                className="col-span-2 p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
               >
-                Student Demo Portal
+                Student (Faith Wanjiku)
               </button>
             </div>
           </div>

@@ -154,7 +154,7 @@ export default function ExamsPage() {
                 <div className="flex items-center justify-between border-b border-academic-navy-100 pb-4">
                   <div>
                     <span className="text-[11px] font-black uppercase tracking-widest text-academic-navy-800">
-                      ZETECH UNIVERSITY • OFFICE OF THE REGISTRAR (ACADEMIC)
+                      UNIVERSITY INSTITUTION • OFFICE OF THE REGISTRAR (ACADEMIC)
                     </span>
                     <h3 className="text-lg font-black text-slate-900 mt-1">OFFICIAL EXAMINATION CARD</h3>
                     <p className="text-xs text-slate-500">Academic Year 2026/2027 • {selectedCard.semester_name}</p>

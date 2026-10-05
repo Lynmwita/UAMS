@@ -41,10 +41,10 @@ export interface PDFTransaction {
 }
 
 const UNIVERSITY_HEADER = {
-  name: 'ZETECH UNIVERSITY',
-  motto: 'Invent Your Future',
-  address: 'P.O. Box 2768 - 00200, Nairobi, Kenya',
-  contact: 'Tel: +254 719 034 500 | Email: info@zetech.ac.ke | Web: www.zetech.ac.ke',
+  name: process.env.NEXT_PUBLIC_INSTITUTION_NAME || 'UNIVERSITY INSTITUTION',
+  motto: 'Excellence in Higher Education & Research',
+  address: 'P.O. Box 100 - 00100, Nairobi, Kenya',
+  contact: 'Tel: +254 700 000 000 | Email: registrar@university.ac.ke | Web: www.university.ac.ke',
 };
 
 // Colors (Oxford Navy & University Gold)
@@ -512,7 +512,7 @@ export function generateStudentIDCardPDF(data: {
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
-  doc.text('ZETECH UNIVERSITY', 42.8, 6.5, { align: 'center' });
+  doc.text(process.env.NEXT_PUBLIC_INSTITUTION_NAME || 'UNIVERSITY INSTITUTION', 42.8, 6.5, { align: 'center' });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(5);
   doc.text('STUDENT IDENTIFICATION CARD', 42.8, 10, { align: 'center' });
@@ -564,7 +564,7 @@ export function generateStudentIDCardPDF(data: {
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(4.5);
   doc.setFont('helvetica', 'normal');
-  doc.text('PROPERTY OF ZETECH UNIVERSITY • MUST BE RETURNED UPON DEMAND', 42.8, 52, { align: 'center' });
+  doc.text('PROPERTY OF THE UNIVERSITY • MUST BE RETURNED UPON DEMAND', 42.8, 52, { align: 'center' });
 
   // ========== BACK SIDE ==========
   doc.addPage([85.6, 54], 'landscape');
@@ -588,7 +588,7 @@ export function generateStudentIDCardPDF(data: {
   doc.setTextColor(SLATE[0], SLATE[1], SLATE[2]);
   doc.text('1. This card is non-transferable and remains valid while student is enrolled.', 6, 24);
   doc.text('2. Lost cards must be reported immediately to the Dean of Students office.', 6, 28);
-  doc.text('3. If found, please return to any Zetech University campus or police station.', 6, 32);
+  doc.text('3. If found, please return to any university campus administration or security.', 6, 32);
 
   // Barcode simulation
   doc.setFillColor(15, 23, 42);

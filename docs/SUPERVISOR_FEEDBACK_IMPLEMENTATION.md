@@ -58,7 +58,7 @@ This document formalizes how all directives and recommendations outlined in the 
 | **Course Registration** | **MVP (Priority 3)** | Online course add/drop and semester unit tracking. |
 | **Examinations & Grades** | **MVP (Priority 4)** | Mark entry sheet, Senate grade compilation, weighted GPA engine, transcript generation. |
 | **Fees & Invoicing** | **MVP (Priority 5)** | Student fee ledger, invoices, receipts, and PDF statement generation. |
-| **M-Pesa & Bank Reconciliation** | **MVP (Priority 6)** | M-Pesa STK push simulation (Paybill 522533) and Bank statement reconciliation. |
+| **M-Pesa & Bank Reconciliation** | **MVP (Priority 6)** | M-Pesa STK push simulation (configurable Paybill/Till channel) and Bank statement reconciliation. |
 | **Timetables & Notices** | **MVP (Priority 7)** | Lecture schedules, venue booking, and targeted announcements. |
 | **Audit Logs & Telemetry** | **MVP (Priority 8)** | Immutable audit trail for all academic and financial modifications. |
 | **Rotating QR Attendance** | **Enhancement** | Dynamic anti-proxy projector for real-time roll-call. |
@@ -73,5 +73,5 @@ This document formalizes how all directives and recommendations outlined in the 
 
 - **Frontend Test Suite:** 12 passing unit tests covering GPA calculation, academic honors, clearance thresholds, policy weightings, and M-Pesa STK validation.
 - **Backend Test Suite:** 3 passing unit tests verifying Express route exports, credential RBAC, and role normalizers.
-- **Production Build:** All 32 routes compile statically and dynamically with 0 TypeScript/ESLint warnings.
-- **Interactive Verification:** End-to-end verified with Playwright across all dashboard views.
+- **Application Build:** All static and dynamic routes compile cleanly with TypeScript and ESLint type-checks.
+- **Interactive Verification:** End-to-end verified across all dashboard views.
