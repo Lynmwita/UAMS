@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { CalendarCheck, Plus, CheckCircle2, XCircle, Clock, AlertTriangle, X, Check } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { CalendarCheck, Plus, QrCode, CheckCircle2, XCircle, Clock, AlertTriangle, X, Check, Users, Sparkles } from 'lucide-react';
 
 export default function AttendancePage() {
   const [sessions, setSessions] = useState([
@@ -11,6 +11,10 @@ export default function AttendancePage() {
   ]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [qrCountdown, setQrCountdown] = useState(600); // 10 minutes
+  const [liveCheckins, setLiveCheckins] = useState<string[]>(['Faith Wanjiku (BIT/2023/8849)', 'Kevin Otieno (BCS/2023/1204)']);
+
   const [sessionForm, setSessionForm] = useState({
     course: 'BCS 311',
     courseTitle: 'Advanced Database Systems',
@@ -27,10 +31,32 @@ export default function AttendancePage() {
     { id: '5', adm: 'BDS/2023/0204', name: 'Mercy Achieng', status: 'present' as 'present' | 'absent' | 'late' | 'excused' },
   ]);
 
+  // Simulate QR Code countdown
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (isQrModalOpen && qrCountdown > 0) {
+      timer = setInterval(() => {
+        setQrCountdown((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [isQrModalOpen, qrCountdown]);
+
   const toggleStudentStatus = (id: string, newStatus: 'present' | 'absent' | 'late' | 'excused') => {
     setStudentRoll((prev) =>
       prev.map((s) => (s.id === id ? { ...s, status: newStatus } : s))
     );
+  };
+
+  const handleMarkAllPresent = () => {
+    setStudentRoll((prev) => prev.map((s) => ({ ...s, status: 'present' })));
+    setLiveCheckins([
+      'Faith Wanjiku (BIT/2023/8849)',
+      'Kevin Otieno (BCS/2023/1204)',
+      'Brian Kiprono (BBA/2022/4412)',
+      'David Mutua (BSE/2024/0112)',
+      'Mercy Achieng (BDS/2023/0204)',
+    ]);
   };
 
   const handleSaveAttendance = (e: React.FormEvent) => {
@@ -44,7 +70,7 @@ export default function AttendancePage() {
       date: sessionForm.date,
       course: sessionForm.course,
       courseTitle: sessionForm.courseTitle,
-      topic: sessionForm.topic || 'Class Lecture & Lab Practical',
+      topic: sessionForm.topic || 'Class Lecture & Practical Lab',
       lecturer: sessionForm.lecturer,
       present: presentCount,
       total: totalCount,
@@ -53,6 +79,7 @@ export default function AttendancePage() {
 
     setSessions([newSession, ...sessions]);
     setIsModalOpen(false);
+    setIsQrModalOpen(false);
     setSessionForm({
       course: 'BCS 311',
       courseTitle: 'Advanced Database Systems',
@@ -60,6 +87,12 @@ export default function AttendancePage() {
       lecturer: 'Dr. Jane Mwangi',
       date: new Date().toISOString().split('T')[0],
     });
+  };
+
+  const formatCountdown = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -70,17 +103,30 @@ export default function AttendancePage() {
             Class Attendance Management
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Lecture session registers, attendance rosters, and student exam eligibility threshold (75%).
+            Dynamic QR lecture check-in, attendance session rosters, and 75% exam sitting threshold tracking.
           </p>
         </div>
 
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="bg-academic-navy-900 hover:bg-academic-navy-800 text-white font-bold px-4 py-2.5 rounded-lg text-sm transition flex items-center space-x-2 shadow-sm"
-        >
-          <Plus className="h-4 w-4 text-academic-gold-400" />
-          <span>Take Class Attendance</span>
-        </button>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => {
+              setQrCountdown(600);
+              setIsQrModalOpen(true);
+            }}
+            className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 font-bold px-4 py-2.5 rounded-lg text-sm transition flex items-center space-x-2 shadow-sm"
+          >
+            <QrCode className="h-4 w-4 text-academic-navy-900" />
+            <span>Project Live QR Code</span>
+          </button>
+
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="bg-academic-navy-900 hover:bg-academic-navy-800 text-white font-bold px-4 py-2.5 rounded-lg text-sm transition flex items-center space-x-2 shadow-sm"
+          >
+            <Plus className="h-4 w-4 text-academic-gold-400" />
+            <span>Take Roll-Call</span>
+          </button>
+        </div>
       </div>
 
       {/* Overview Stat Cards */}
@@ -146,7 +192,139 @@ export default function AttendancePage() {
         </div>
       </div>
 
-      {/* Attendance Modal */}
+      {/* Dynamic QR Code Projector Modal */}
+      {isQrModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-8 shadow-2xl border border-slate-200 text-center animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center space-x-2 text-left">
+                <QrCode className="h-6 w-6 text-academic-gold-500" />
+                <div>
+                  <h3 className="text-lg font-black text-academic-navy-950">Live Class Check-in QR Projector</h3>
+                  <p className="text-xs text-slate-500">BCS 311 - Advanced Database Systems (Lecture Hall 04)</p>
+                </div>
+              </div>
+              <button onClick={() => setIsQrModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="my-6 flex flex-col items-center">
+              {/* Animated QR Mockup */}
+              <div className="relative p-6 bg-slate-50 border-4 border-academic-navy-900 rounded-3xl shadow-inner inline-block">
+                <svg className="w-52 h-52 text-academic-navy-950" viewBox="0 0 100 100" fill="currentColor">
+                  {/* Outer corner squares */}
+                  <rect x="5" y="5" width="28" height="28" rx="4" fill="#0f172a" />
+                  <rect x="10" y="10" width="18" height="18" rx="2" fill="#ffffff" />
+                  <rect x="14" y="14" width="10" height="10" rx="1" fill="#d97706" />
+
+                  <rect x="67" y="5" width="28" height="28" rx="4" fill="#0f172a" />
+                  <rect x="72" y="10" width="18" height="18" rx="2" fill="#ffffff" />
+                  <rect x="76" y="14" width="10" height="10" rx="1" fill="#d97706" />
+
+                  <rect x="5" y="67" width="28" height="28" rx="4" fill="#0f172a" />
+                  <rect x="10" y="72" width="18" height="18" rx="2" fill="#ffffff" />
+                  <rect x="14" y="76" width="10" height="10" rx="1" fill="#d97706" />
+
+                  {/* QR Data Pattern Matrix */}
+                  <rect x="38" y="8" width="6" height="6" fill="#0f172a" />
+                  <rect x="48" y="16" width="6" height="6" fill="#0f172a" />
+                  <rect x="56" y="8" width="6" height="6" fill="#0f172a" />
+                  <rect x="38" y="24" width="6" height="6" fill="#0f172a" />
+                  <rect x="48" y="32" width="6" height="6" fill="#0f172a" />
+                  <rect x="56" y="24" width="6" height="6" fill="#0f172a" />
+
+                  <rect x="8" y="38" width="6" height="6" fill="#0f172a" />
+                  <rect x="18" y="46" width="6" height="6" fill="#0f172a" />
+                  <rect x="28" y="38" width="6" height="6" fill="#0f172a" />
+                  <rect x="8" y="54" width="6" height="6" fill="#0f172a" />
+
+                  <rect x="38" y="44" width="12" height="12" rx="2" fill="#d97706" />
+                  <rect x="54" y="44" width="6" height="6" fill="#0f172a" />
+                  <rect x="64" y="52" width="6" height="6" fill="#0f172a" />
+                  <rect x="74" y="44" width="6" height="6" fill="#0f172a" />
+                  <rect x="84" y="52" width="6" height="6" fill="#0f172a" />
+
+                  <rect x="38" y="68" width="6" height="6" fill="#0f172a" />
+                  <rect x="48" y="76" width="6" height="6" fill="#0f172a" />
+                  <rect x="56" y="68" width="6" height="6" fill="#0f172a" />
+                  <rect x="68" y="76" width="6" height="6" fill="#0f172a" />
+                  <rect x="78" y="68" width="6" height="6" fill="#0f172a" />
+                  <rect x="88" y="76" width="6" height="6" fill="#0f172a" />
+                </svg>
+
+                <div className="mt-3 flex items-center justify-center space-x-2 text-xs font-mono font-bold text-academic-navy-950">
+                  <span>Passcode:</span>
+                  <span className="bg-amber-100 text-academic-gold-800 px-2 py-0.5 rounded border border-amber-300">
+                    ATT-9842
+                  </span>
+                </div>
+              </div>
+
+              {/* Timer Bar */}
+              <div className="mt-4 flex items-center space-x-2 text-xs font-bold text-slate-600 bg-slate-100 px-4 py-1.5 rounded-full">
+                <Clock className="h-4 w-4 text-academic-gold-600 animate-spin" />
+                <span>QR Code Expires in: {formatCountdown(qrCountdown)}</span>
+              </div>
+            </div>
+
+            {/* Live Student Check-in Feed */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-left mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold uppercase text-slate-600 flex items-center gap-1.5">
+                  <Users className="h-3.5 w-3.5 text-academic-navy-800" />
+                  Live Mobile Scanned ({liveCheckins.length} Students)
+                </span>
+                <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                  GPS & Bluetooth Beacon Verified
+                </span>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {liveCheckins.map((student, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center space-x-1 text-xs font-medium bg-white border border-slate-200 text-slate-800 px-2.5 py-1 rounded-lg shadow-2xs animate-in fade-in duration-300"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                    <span>{student}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={handleMarkAllPresent}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-bold transition flex items-center space-x-1.5"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-academic-gold-600" />
+                <span>Simulate All Students Scanned</span>
+              </button>
+
+              <div className="flex items-center space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setIsQrModalOpen(false)}
+                  className="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Close Projector
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveAttendance}
+                  className="px-5 py-2 bg-academic-navy-900 hover:bg-academic-navy-800 text-white rounded-lg text-xs font-bold shadow"
+                >
+                  End & Save Session
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Roll-Call Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in duration-200">

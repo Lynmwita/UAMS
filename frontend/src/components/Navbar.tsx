@@ -27,6 +27,15 @@ export default function Navbar({ userEmail, userRole }: NavbarProps) {
         </div>
 
         <div className="flex items-center space-x-4">
+          <a
+            href="/UAMS_Master_Project_Blueprint.pdf"
+            download="UAMS_Master_Project_Blueprint.pdf"
+            className="hidden md:flex items-center space-x-1.5 text-xs font-bold text-academic-gold-300 hover:text-white bg-academic-navy-900 border border-academic-navy-700 px-3 py-1.5 rounded-lg transition"
+            title="Download Master Project Blueprint PDF"
+          >
+            <span>📄 Master Blueprint (PDF)</span>
+          </a>
+
           {userEmail ? (
             <div className="flex items-center space-x-3 text-sm">
               <div className="flex items-center space-x-2 text-slate-300">
