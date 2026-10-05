@@ -7,6 +7,7 @@ import Navbar from '@/components/Navbar';
 import { GraduationCap, Lock, Mail, ArrowRight, ShieldCheck, Landmark } from 'lucide-react';
 import { UserRole } from '@/types';
 import { ROLE_LABELS } from '@/lib/auth/rbac';
+import { DEMO_PASSWORD, saveSession } from '@/lib/auth/session';
 
 function LoginForm() {
   const router = useRouter();
@@ -19,22 +20,66 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const authenticate = async (nextRole: UserRole, nextEmail: string, nextPassword: string) => {
+    const response = await fetch('/api/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: nextEmail,
+        password: nextPassword,
+        role: nextRole,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data?.success) {
+      throw new Error(data?.error || 'Authentication failed. Please try again.');
+    }
+
+    saveSession({
+      id: data.user.id,
+      email: data.user.email,
+      role: data.user.role,
+      firstName: data.user.firstName,
+      lastName: data.user.lastName,
+      authenticatedAt: new Date().toISOString(),
+    });
+
+    router.push(`/dashboard?role=${data.user.role}`);
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    setTimeout(() => {
+    try {
+      await authenticate(selectedRole, email, password);
+    } catch (loginError: any) {
+      setError(loginError.message || 'Unable to sign in right now.');
+    } finally {
       setLoading(false);
-      router.push(`/dashboard?role=${selectedRole}`);
-    }, 500);
+    }
   };
 
-  const handleQuickDemoLogin = (role: UserRole) => {
+  const handleQuickDemoLogin = async (role: UserRole) => {
+    const nextEmail = `${role}@university.ac.ke`;
+    const nextPassword = DEMO_PASSWORD;
+
     setSelectedRole(role);
-    setEmail(`${role}@university.ac.ke`);
-    setPassword('DemoPassword2026!');
-    router.push(`/dashboard?role=${role}`);
+    setEmail(nextEmail);
+    setPassword(nextPassword);
+
+    try {
+      setLoading(true);
+      setError(null);
+      await authenticate(role, nextEmail, nextPassword);
+    } catch (loginError: any) {
+      setError(loginError.message || 'Unable to sign in right now.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

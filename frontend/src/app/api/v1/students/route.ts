@@ -1,0 +1,130 @@
+import { NextRequest, NextResponse } from 'next/server';
+
+// Mock student store for demo / initial API testing
+let studentsStore = [
+  {
+    id: 'stu-1',
+    user_id: 'usr-student-01',
+    admission_number: 'BIT/2023/8849',
+    first_name: 'Faith',
+    last_name: 'Wanjiku',
+    email: 'faith.wanjiku@student.zetech.ac.ke',
+    gender: 'female',
+    program_id: 'prog-bit',
+    program_name: 'Bachelor of Science in Information Technology',
+    current_year_of_study: 3,
+    current_semester_number: 1,
+    status: 'active',
+    admission_date: '2023-09-01',
+    cgpa: 3.82,
+    fee_balance: 0,
+  },
+  {
+    id: 'stu-2',
+    user_id: 'usr-student-02',
+    admission_number: 'BCS/2023/1204',
+    first_name: 'Kevin',
+    last_name: 'Otieno',
+    email: 'kevin.otieno@student.zetech.ac.ke',
+    gender: 'male',
+    program_id: 'prog-bcs',
+    program_name: 'Bachelor of Science in Computer Science',
+    current_year_of_study: 2,
+    current_semester_number: 2,
+    status: 'active',
+    admission_date: '2023-09-01',
+    cgpa: 3.65,
+    fee_balance: 18500,
+  },
+  {
+    id: 'stu-3',
+    user_id: 'usr-student-03',
+    admission_number: 'BBA/2022/4412',
+    first_name: 'Brian',
+    last_name: 'Kiprono',
+    email: 'brian.kiprono@student.zetech.ac.ke',
+    gender: 'male',
+    program_id: 'prog-bba',
+    program_name: 'Bachelor of Business Administration',
+    current_year_of_study: 4,
+    current_semester_number: 1,
+    status: 'active',
+    admission_date: '2022-09-01',
+    cgpa: 3.48,
+    fee_balance: 0,
+  },
+];
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const search = searchParams.get('search')?.toLowerCase();
+  const program = searchParams.get('program');
+  const status = searchParams.get('status');
+
+  let results = [...studentsStore];
+
+  if (search) {
+    results = results.filter(
+      (s) =>
+        s.admission_number.toLowerCase().includes(search) ||
+        s.first_name.toLowerCase().includes(search) ||
+        s.last_name.toLowerCase().includes(search) ||
+        s.email.toLowerCase().includes(search)
+    );
+  }
+
+  if (program) {
+    results = results.filter((s) => s.program_id === program);
+  }
+
+  if (status) {
+    results = results.filter((s) => s.status === status);
+  }
+
+  return NextResponse.json({
+    success: true,
+    total: results.length,
+    data: results,
+  });
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+
+    if (!body.first_name || !body.last_name || !body.admission_number || !body.program_name) {
+      return NextResponse.json(
+        { success: false, error: 'Missing required student fields: first_name, last_name, admission_number, program_name' },
+        { status: 400 }
+      );
+    }
+
+    const newStudent = {
+      id: `stu-${Date.now()}`,
+      user_id: `usr-${Date.now()}`,
+      admission_number: body.admission_number,
+      first_name: body.first_name,
+      last_name: body.last_name,
+      email: body.email || `${body.first_name.toLowerCase()}.${body.last_name.toLowerCase()}@student.zetech.ac.ke`,
+      gender: body.gender || 'other',
+      program_id: body.program_id || 'prog-bit',
+      program_name: body.program_name,
+      current_year_of_study: Number(body.current_year_of_study) || 1,
+      current_semester_number: Number(body.current_semester_number) || 1,
+      status: body.status || 'active',
+      admission_date: new Date().toISOString().split('T')[0],
+      cgpa: 0.0,
+      fee_balance: Number(body.fee_balance) || 55000,
+    };
+
+    studentsStore.unshift(newStudent);
+
+    return NextResponse.json({
+      success: true,
+      message: 'Student registered successfully',
+      data: newStudent,
+    }, { status: 201 });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}

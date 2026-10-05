@@ -1,20 +1,27 @@
 'use client';
 
 import { useState } from 'react';
-import { CreditCard, Smartphone, Building, CheckCircle2, ArrowRight, Copy, Check, Info } from 'lucide-react';
+import { CreditCard, Smartphone, Building, CheckCircle2, ArrowRight, Copy, Check, Info, Download, FileText } from 'lucide-react';
+import { generateFeeStatementPDF } from '@/lib/pdf/generator';
 
 export default function FinancePage() {
-  const [admissionNo, setAdmissionNo] = useState('STU/2026/0001');
+  const [admissionNo, setAdmissionNo] = useState('BIT/2023/8849');
+  const [studentName, setStudentName] = useState('Faith Wanjiku');
   const [phone, setPhone] = useState('0712345678');
   const [amount, setAmount] = useState('15000');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [copiedPaybill, setCopiedPaybill] = useState(false);
 
+  // Financial Ledger State
+  const [totalBilled, setTotalBilled] = useState(85000);
+  const [amountPaid, setAmountPaid] = useState(85000);
+  const balanceRemaining = Math.max(0, totalBilled - amountPaid);
+
   const [transactions, setTransactions] = useState([
-    { ref: 'QHJ8917263', student: 'STU/2026/0001', amount: 'KSh 60,000', method: 'M-Pesa (522533)', status: 'Cleared', date: '2026-10-02' },
-    { ref: 'BNK-KCB-9941', student: 'STU/2026/0045', amount: 'KSh 45,000', method: 'Bank Slip', status: 'Cleared', date: '2026-10-01' },
-    { ref: 'QHJ4410928', student: 'STU/2026/0112', amount: 'KSh 25,000', method: 'M-Pesa (522533)', status: 'Cleared', date: '2026-09-28' },
+    { ref: 'QHJ8917263', student: 'BIT/2023/8849', desc: 'Semester 1 Tuition Fee', amount: 45000, method: 'mpesa', status: 'verified', date: '2026-09-15' },
+    { ref: 'BNK-KCB-9941', student: 'BIT/2023/8849', desc: 'Hostel & Activity Levy', amount: 25000, method: 'bank_transfer', status: 'verified', date: '2026-09-20' },
+    { ref: 'QHJ4410928', student: 'BIT/2023/8849', desc: 'Library & Exam Fee', amount: 15000, method: 'mpesa', status: 'verified', date: '2026-10-02' },
   ]);
 
   const copyPaybill = () => {
@@ -42,20 +49,23 @@ export default function FinancePage() {
       const data = await res.json();
       setLoading(false);
       if (data.success) {
-        setMessage({ type: 'success', text: data.CustomerMessage || 'STK Push sent to mobile device!' });
+        setMessage({ type: 'success', text: data.CustomerMessage || 'STK Push initiated! M-Pesa prompt sent.' });
 
-        // Simulate instant cleared transaction into live ledger
-        if (data.ReceiptNumber) {
-          const newTx = {
-            ref: data.ReceiptNumber,
-            student: admissionNo.trim(),
-            amount: `KSh ${Number(amount).toLocaleString()}`,
-            method: 'M-Pesa (522533)',
-            status: 'Cleared',
-            date: new Date().toISOString().split('T')[0],
-          };
-          setTransactions((prev) => [newTx, ...prev]);
-        }
+        const txAmount = Number(amount);
+        const receiptNo = data.ReceiptNumber || `MP${Date.now().toString().slice(-8)}`;
+
+        const newTx = {
+          ref: receiptNo,
+          student: admissionNo.trim(),
+          desc: 'Tuition Installment via M-Pesa',
+          amount: txAmount,
+          method: 'mpesa',
+          status: 'verified',
+          date: new Date().toISOString().split('T')[0],
+        };
+
+        setTransactions((prev) => [newTx, ...prev]);
+        setAmountPaid((prev) => prev + txAmount);
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to initiate STK push.' });
       }
@@ -63,6 +73,35 @@ export default function FinancePage() {
       setLoading(false);
       setMessage({ type: 'error', text: err.message || 'Network connection failed.' });
     }
+  };
+
+  const handleDownloadFeeStatement = () => {
+    const doc = generateFeeStatementPDF({
+      student: {
+        name: studentName,
+        admissionNumber: admissionNo,
+        program: 'Bachelor of Science in Information Technology',
+        school: 'School of Information Communication & Technology',
+        department: 'Information Technology',
+        yearOfStudy: 3,
+        semesterNumber: 1,
+      },
+      invoiceNumber: `INV-2026-${admissionNo.replace(/\//g, '-')}`,
+      totalBilled,
+      amountPaid,
+      balanceRemaining,
+      dueDate: '2026-10-31',
+      transactions: transactions.map((t) => ({
+        date: t.date,
+        reference: t.ref,
+        description: t.desc,
+        method: t.method === 'mpesa' ? 'M-Pesa (522533)' : 'Bank Transfer',
+        amount: t.amount,
+        status: t.status,
+      })),
+    });
+
+    doc.save(`Fee_Statement_${admissionNo.replace(/\//g, '_')}.pdf`);
   };
 
   return (
@@ -76,6 +115,14 @@ export default function FinancePage() {
             Student fee invoicing, Safaricom M-Pesa Paybill (522533), bank slip reconciliation, and institutional ledger.
           </p>
         </div>
+
+        <button
+          onClick={handleDownloadFeeStatement}
+          className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold px-4 py-2.5 rounded-lg text-sm transition flex items-center space-x-2 shadow-sm"
+        >
+          <Download className="h-4 w-4 text-academic-navy-700" />
+          <span>Download Official Fee Statement PDF</span>
+        </button>
       </div>
 
       {/* Official M-Pesa Payment Details Banner */}
@@ -117,6 +164,29 @@ export default function FinancePage() {
         </div>
       </div>
 
+      {/* Financial Overview Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-xs font-semibold text-slate-500 uppercase">Total Invoiced (Sem 1)</p>
+          <p className="text-2xl font-black text-academic-navy-950 mt-1">KES {totalBilled.toLocaleString()}</p>
+          <p className="text-xs text-slate-400 mt-1">Billed per program curriculum</p>
+        </div>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-xs font-semibold text-slate-500 uppercase">Total Cleared</p>
+          <p className="text-2xl font-black text-emerald-600 mt-1">KES {amountPaid.toLocaleString()}</p>
+          <p className="text-xs text-emerald-700 mt-1">100% Verified via Bank & M-Pesa</p>
+        </div>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-xs font-semibold text-slate-500 uppercase">Outstanding Balance</p>
+          <p className={`text-2xl font-black mt-1 ${balanceRemaining === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            KES {balanceRemaining.toLocaleString()}
+          </p>
+          <p className="text-xs text-slate-400 mt-1">
+            {balanceRemaining === 0 ? 'Fully Cleared for Exams & Graduation' : 'Due before examination period'}
+          </p>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Col: STK Push Form */}
         <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
@@ -140,17 +210,17 @@ export default function FinancePage() {
           <form onSubmit={handleSTKPush} className="space-y-4 text-sm">
             <div>
               <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
-                Student Admission Number (Account No)
+                Student Admission Number (Account Ref)
               </label>
               <input
                 type="text"
                 required
-                placeholder="e.g. STU/2026/0001"
+                placeholder="e.g. BIT/2023/8849"
                 value={admissionNo}
                 onChange={(e) => setAdmissionNo(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-lg px-3.5 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-academic-navy-700 font-medium"
               />
-              <p className="text-[11px] text-slate-500 mt-1">This will be passed as the M-Pesa Account Reference.</p>
+              <p className="text-[11px] text-slate-500 mt-1">Passed to Safaricom as AccountReference.</p>
             </div>
 
             <div>
@@ -169,7 +239,7 @@ export default function FinancePage() {
 
             <div>
               <label className="block text-xs font-bold uppercase text-slate-700 mb-1">
-                Payment Amount (KSh)
+                Payment Amount (KES)
               </label>
               <input
                 type="number"
@@ -195,13 +265,13 @@ export default function FinancePage() {
           <div className="mt-6 pt-5 border-t border-slate-200 text-xs text-slate-600 space-y-2">
             <div className="flex items-center space-x-1.5 font-bold text-academic-navy-950 uppercase tracking-wider">
               <Info className="h-3.5 w-3.5 text-academic-navy-700" />
-              <span>Manual SIM Toolkit / App Steps</span>
+              <span>Manual SIM Toolkit / M-Pesa App</span>
             </div>
             <ol className="list-decimal pl-4 space-y-1 text-slate-600">
               <li>Open M-Pesa &rarr; <strong>Lipa na M-Pesa</strong> &rarr; <strong>Paybill</strong>.</li>
               <li>Enter Business No: <strong className="font-mono text-academic-navy-950">522533</strong>.</li>
               <li>Enter Account No: <strong className="font-mono text-academic-navy-950">{admissionNo || 'Student Admission No'}</strong>.</li>
-              <li>Enter Amount and your M-Pesa PIN to complete.</li>
+              <li>Enter Amount and PIN to authorize.</li>
             </ol>
           </div>
         </div>
@@ -211,7 +281,7 @@ export default function FinancePage() {
           <div>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold text-academic-navy-950">Institutional Transaction Ledger</h2>
-              <span className="text-xs text-slate-500">Live Cleared Records</span>
+              <span className="text-xs text-slate-500 font-medium">{transactions.length} Verified Records</span>
             </div>
 
             <div className="overflow-x-auto">
@@ -219,9 +289,9 @@ export default function FinancePage() {
                 <thead className="text-xs font-bold uppercase bg-slate-50 text-slate-600 border-b border-slate-200">
                   <tr>
                     <th className="px-4 py-3">Receipt / Ref</th>
-                    <th className="px-4 py-3">Admission (Account)</th>
+                    <th className="px-4 py-3">Description</th>
                     <th className="px-4 py-3">Amount</th>
-                    <th className="px-4 py-3">Payment Channel</th>
+                    <th className="px-4 py-3">Channel</th>
                     <th className="px-4 py-3">Date</th>
                     <th className="px-4 py-3">Status</th>
                   </tr>
@@ -230,11 +300,11 @@ export default function FinancePage() {
                   {transactions.map((tx) => (
                     <tr key={tx.ref} className="hover:bg-slate-50/60">
                       <td className="px-4 py-3 font-mono text-xs text-academic-navy-800 font-semibold">{tx.ref}</td>
-                      <td className="px-4 py-3 font-mono text-xs text-slate-800 font-medium">{tx.student}</td>
-                      <td className="px-4 py-3 font-bold text-academic-navy-950">{tx.amount}</td>
+                      <td className="px-4 py-3 text-xs text-slate-700 font-medium">{tx.desc}</td>
+                      <td className="px-4 py-3 font-bold text-academic-navy-950">KES {tx.amount.toLocaleString()}</td>
                       <td className="px-4 py-3">
                         <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                          {tx.method}
+                          {tx.method === 'mpesa' ? 'M-Pesa 522533' : 'Bank Slip'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-500">{tx.date}</td>
