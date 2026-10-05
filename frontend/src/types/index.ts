@@ -123,3 +123,108 @@ export interface FinancialTransaction {
   verified_by?: string;
   verified_at?: string;
 }
+
+export interface HostelBlock {
+  id: string;
+  code: string;
+  name: string;
+  gender_designation: 'male' | 'female' | 'mixed';
+  total_floors: number;
+  total_capacity: number;
+  warden_name: string;
+  warden_phone: string;
+  is_active: boolean;
+}
+
+export interface HostelRoom {
+  id: string;
+  block_id: string;
+  room_number: string;
+  floor_number: number;
+  capacity: number;
+  occupied_beds: number;
+  semester_fee: number;
+  is_available: boolean;
+}
+
+export interface HostelAllocation {
+  id: string;
+  student_id: string;
+  student_name: string;
+  admission_number: string;
+  room_id: string;
+  block_name: string;
+  room_number: string;
+  bed_number: number;
+  payment_status: 'pending' | 'paid' | 'cleared';
+  status: 'allocated' | 'checked_in' | 'checked_out';
+}
+
+export interface LibraryBook {
+  id: string;
+  isbn: string;
+  title: string;
+  author: string;
+  publisher: string;
+  category: string;
+  total_copies: number;
+  available_copies: number;
+  shelf_location: string;
+  is_ebook_available: boolean;
+}
+
+export interface LibraryLoan {
+  id: string;
+  book_id: string;
+  book_title: string;
+  student_id: string;
+  student_name: string;
+  admission_number: string;
+  borrow_date: string;
+  due_date: string;
+  return_date?: string;
+  status: 'borrowed' | 'returned' | 'overdue';
+  fine_amount?: number;
+}
+
+export interface ExamSchedule {
+  id: string;
+  course_code: string;
+  course_title: string;
+  exam_date: string;
+  start_time: string;
+  end_time: string;
+  venue: string;
+  chief_invigilator: string;
+  total_candidates: number;
+  status: 'scheduled' | 'ongoing' | 'completed';
+}
+
+export interface ExamClearanceCard {
+  id: string;
+  student_id: string;
+  student_name: string;
+  admission_number: string;
+  program_name: string;
+  semester_name: string;
+  card_serial_number: string;
+  fee_balance: number;
+  fee_paid_percentage: number;
+  is_cleared: boolean;
+  security_qr_token: string;
+  registered_units: number;
+}
+
+export interface NotificationLog {
+  id: string;
+  recipient_type: 'student' | 'guardian' | 'lecturer' | 'staff' | 'broadcast';
+  recipient_identifier: string;
+  recipient_name: string;
+  channel: 'sms' | 'email' | 'in_app';
+  subject?: string;
+  message_content: string;
+  provider: 'africas_talking' | 'smtp_relay' | 'system';
+  status: 'delivered' | 'sent' | 'queued' | 'failed';
+  created_at: string;
+}
+

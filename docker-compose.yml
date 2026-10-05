@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 16 Database with UUID and Crypto Extensions
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: uams_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: uams_admin
+      POSTGRES_PASSWORD: uams_secure_password_2026
+      POSTGRES_DB: uams_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - uams_pgdata:/var/lib/postgresql/data
+      - ./database/01_schema_init.sql:/docker-entrypoint-initdb.d/01_schema_init.sql
+      - ./database/02_rls_policies.sql:/docker-entrypoint-initdb.d/02_rls_policies.sql
+      - ./database/03_seed_data.sql:/docker-entrypoint-initdb.d/03_seed_data.sql
+      - ./database/04_extended_modules.sql:/docker-entrypoint-initdb.d/04_extended_modules.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U uams_admin -d uams_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Node.js Enterprise API Backend
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: uams_backend
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      DATABASE_URL: postgres://uams_admin:uams_secure_password_2026@postgres:5432/uams_db
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Next.js 14 Frontend Application
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: uams_frontend
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  uams_pgdata:
+    driver: local

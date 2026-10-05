@@ -3,7 +3,7 @@ const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
-const { normalizeRole, isValidDemoCredential } = require('./src/auth');
+const { normalizeRole, isValidDemoCredential, buildDemoToken } = require('./src/auth');
 
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
@@ -83,9 +83,11 @@ app.post('/api/v1/auth/login', async (req, res) => {
       });
     }
 
+    const issuedToken = buildDemoToken(role);
+
     return res.json({
       success: true,
-      token: `uams_jwt_mock_${Date.now()}`,
+      token: issuedToken,
       user: {
         id: `usr-demo-${role}`,
         email,
@@ -179,14 +181,74 @@ app.post('/api/v1/finance/mpesa/stkpush', (req, res) => {
   });
 });
 
-app.post('/api/v1/finance/mpesa/callback', (req, res) => {
-  res.json({ ResultCode: 0, ResultDesc: 'STK Callback processed and student ledger updated' });
+let hostelAllocations = [
+  { id: 'alc-01', student_name: 'Alex Kiptoo Kimutai', admission_number: 'BIT/2023/8849', room: 'A-101', hall: 'Kilimanjaro Hall', bed: 1, status: 'checked_in' },
+];
+
+let libraryBooks = [
+  { id: 'bk-01', isbn: '978-0131103627', title: 'The C Programming Language', author: 'Brian Kernighan', total_copies: 15, available_copies: 12 },
+  { id: 'bk-02', isbn: '978-0262033848', title: 'Introduction to Algorithms', author: 'Thomas Cormen', total_copies: 20, available_copies: 14 },
+];
+
+let examSchedules = [
+  { id: 'exm-01', course_code: 'BCS 2101', title: 'Database Systems', date: '2026-10-15', venue: 'Multi-Purpose Hall A' },
+  { id: 'exm-02', course_code: 'BCS 2102', title: 'Operating Systems Design', date: '2026-10-17', venue: 'Main Auditorium' },
+];
+
+let notificationLogs = [
+  { id: 'ntf-01', recipient: '+254712345678', channel: 'sms', content: 'Fee payment receipt verified.', status: 'delivered' },
+];
+
+// Extended Module Endpoints
+app.get('/api/v1/hostels', (req, res) => {
+  res.json({ success: true, data: { allocations: hostelAllocations } });
 });
 
-if (process.env.NODE_ENV !== 'test') {
+app.post('/api/v1/hostels/allocate', (req, res) => {
+  const { student_name, admission_number, room, hall, bed } = req.body;
+  const newAllocation = {
+    id: `alc-${Date.now()}`,
+    student_name: student_name || 'Student',
+    admission_number: admission_number || 'BIT/2023/8849',
+    room: room || 'A-101',
+    hall: hall || 'Kilimanjaro Hall',
+    bed: Number(bed || 1),
+    status: 'allocated',
+  };
+  hostelAllocations.push(newAllocation);
+  res.status(201).json({ success: true, data: newAllocation });
+});
+
+app.get('/api/v1/library/books', (req, res) => {
+  res.json({ success: true, count: libraryBooks.length, data: libraryBooks });
+});
+
+app.get('/api/v1/exams', (req, res) => {
+  res.json({ success: true, count: examSchedules.length, data: examSchedules });
+});
+
+app.get('/api/v1/notifications', (req, res) => {
+  res.json({ success: true, count: notificationLogs.length, data: notificationLogs });
+});
+
+app.post('/api/v1/notifications/send', (req, res) => {
+  const { recipient, message, channel } = req.body;
+  const newNotification = {
+    id: `ntf-${Date.now()}`,
+    recipient: recipient || '+254712345678',
+    channel: channel || 'sms',
+    content: message || 'UAMS Alert',
+    status: 'delivered',
+  };
+  notificationLogs.unshift(newNotification);
+  res.status(201).json({ success: true, data: newNotification });
+});
+
+if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`[UAMS Enterprise API] Server running on port ${PORT}`);
   });
 }
 
 module.exports = app;
+
