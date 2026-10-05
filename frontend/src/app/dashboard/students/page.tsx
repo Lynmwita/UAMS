@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Users, Search, Plus, Filter, CheckCircle2, ShieldAlert, Download, X, Award, FileText } from 'lucide-react';
-import { generateExamCardPDF } from '@/lib/pdf/generator';
+import { Users, Search, Plus, Filter, CheckCircle2, ShieldAlert, Download, X, Award, FileText, CreditCard } from 'lucide-react';
+import { generateExamCardPDF, generateStudentIDCardPDF } from '@/lib/pdf/generator';
 
 export default function StudentsPage() {
   const [search, setSearch] = useState('');
@@ -70,6 +70,21 @@ export default function StudentsPage() {
     });
 
     doc.save(`Exam_Clearance_Card_${student.admissionNo.replace(/\//g, '_')}.pdf`);
+  };
+
+  const handleDownloadIDCard = (student: typeof students[0]) => {
+    const doc = generateStudentIDCardPDF({
+      student: {
+        name: student.name,
+        admissionNumber: student.admissionNo,
+        program: student.program,
+        yearOfStudy: student.year,
+        semesterNumber: student.semester,
+      },
+      expiryDate: 'DECEMBER 2027',
+    });
+
+    doc.save(`Student_ID_${student.admissionNo.replace(/\//g, '_')}.pdf`);
   };
 
   const filtered = students.filter((s) => {
@@ -140,7 +155,7 @@ export default function StudentsPage() {
                 <th className="px-5 py-3.5">Level</th>
                 <th className="px-5 py-3.5">CGPA</th>
                 <th className="px-5 py-3.5">Fee Balance</th>
-                <th className="px-5 py-3.5 text-center">Exam Clearance Card</th>
+                <th className="px-5 py-3.5 text-center">Student Credentials</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -163,14 +178,25 @@ export default function StudentsPage() {
                     )}
                   </td>
                   <td className="px-5 py-3.5 text-center">
-                    <button
-                      onClick={() => handleDownloadExamCard(s)}
-                      className="inline-flex items-center space-x-1.5 text-xs font-semibold px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
-                      title="Download Exam Clearance Card PDF"
-                    >
-                      <Download className="h-3.5 w-3.5 text-academic-navy-700" />
-                      <span>Exam Pass (PDF)</span>
-                    </button>
+                    <div className="flex items-center justify-center space-x-2">
+                      <button
+                        onClick={() => handleDownloadIDCard(s)}
+                        className="inline-flex items-center space-x-1 text-xs font-semibold px-2.5 py-1 rounded bg-academic-navy-50 hover:bg-academic-navy-100 text-academic-navy-800 border border-academic-navy-200 transition"
+                        title="Download PVC Student ID Card PDF"
+                      >
+                        <CreditCard className="h-3.5 w-3.5 text-academic-gold-600" />
+                        <span>ID Card</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleDownloadExamCard(s)}
+                        className="inline-flex items-center space-x-1 text-xs font-semibold px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+                        title="Download Exam Clearance Card PDF"
+                      >
+                        <Download className="h-3.5 w-3.5 text-academic-navy-700" />
+                        <span>Exam Pass</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -178,6 +204,7 @@ export default function StudentsPage() {
           </table>
         </div>
       </div>
+
 
       {/* Registration Modal */}
       {isModalOpen && (
