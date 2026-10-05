@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const app = require('../server');
 const { normalizeRole, isValidDemoCredential, buildDemoToken, verifyDemoToken, requireRole } = require('../src/auth');
 
 test('normalizeRole supports source-role strings from the frontend', () => {
@@ -45,4 +46,41 @@ test('requireRole rejects a user whose role is not allowed', () => {
   requireRole(['finance_officer'])(req, res, next);
   assert.equal(res.statusCode, 403);
   assert.equal(res.payload.success, false);
+});
+
+test('student list route requires authentication', async () => {
+  const server = app.listen(0);
+  const { port } = server.address();
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/api/v1/students`);
+    const body = await response.json();
+
+    assert.equal(response.status, 401);
+    assert.equal(body.success, false);
+    assert.match(body.error, /Authentication required/i);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('valid student token can access the student list', async () => {
+  const server = app.listen(0);
+  const { port } = server.address();
+  const token = buildDemoToken('student');
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/api/v1/students`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.success, true);
+    assert.ok(Array.isArray(body.data));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });

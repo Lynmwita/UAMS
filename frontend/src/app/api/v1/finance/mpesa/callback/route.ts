@@ -4,6 +4,9 @@ import { NextRequest, NextResponse } from 'next/server';
  * Safaricom Daraja STK Push Webhook / Callback Handler
  * Receives result payload upon M-Pesa pin entry on mobile device
  */
+// In-memory idempotency set for processed receipt numbers
+const processedReceipts = new Set<string>();
+
 export async function POST(request: NextRequest) {
   try {
     const payload = await request.json();
@@ -30,6 +33,19 @@ export async function POST(request: NextRequest) {
           if (item.Name === 'TransactionDate') transactionDate = item.Value?.toString();
           if (item.Name === 'PhoneNumber') phoneNumber = item.Value?.toString();
         }
+      }
+
+      // Idempotency check: Guard against duplicate callback processing
+      if (mpesaReceiptNumber && processedReceipts.has(mpesaReceiptNumber)) {
+        console.warn(`[Daraja Webhook] Duplicate callback ignored for Receipt: ${mpesaReceiptNumber}`);
+        return NextResponse.json({
+          ResultCode: 0,
+          ResultDesc: 'Transaction already processed (Idempotent duplicate)',
+        });
+      }
+
+      if (mpesaReceiptNumber) {
+        processedReceipts.add(mpesaReceiptNumber);
       }
 
       console.log(`[Daraja Webhook] SUCCESSFUL PAYMENT: KES ${amount} | Receipt: ${mpesaReceiptNumber} | Phone: ${phoneNumber}`);

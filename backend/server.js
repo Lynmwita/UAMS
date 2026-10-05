@@ -3,7 +3,7 @@ const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
-const { normalizeRole, isValidDemoCredential, buildDemoToken } = require('./src/auth');
+const { normalizeRole, isValidDemoCredential, buildDemoToken, requireRole } = require('./src/auth');
 
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
@@ -101,11 +101,11 @@ app.post('/api/v1/auth/login', async (req, res) => {
   }
 });
 
-app.get('/api/v1/students', (req, res) => {
+app.get('/api/v1/students', requireRole(['student', 'admin', 'super_admin', 'registrar', 'hod', 'lecturer', 'finance_officer']), (req, res) => {
   res.json({ success: true, count: students.length, data: students });
 });
 
-app.post('/api/v1/students', (req, res) => {
+app.post('/api/v1/students', requireRole(['admin', 'super_admin', 'registrar']), (req, res) => {
   const { admission_number, first_name, last_name, program } = req.body;
   if (!admission_number || !first_name || !last_name) {
     return res.status(400).json({ success: false, error: 'Missing required student fields' });
@@ -124,17 +124,17 @@ app.post('/api/v1/students', (req, res) => {
   res.status(201).json({ success: true, data: newStudent });
 });
 
-app.get('/api/v1/courses', (req, res) => {
+app.get('/api/v1/courses', requireRole(['student', 'admin', 'super_admin', 'registrar', 'hod', 'lecturer', 'finance_officer']), (req, res) => {
   res.json({ success: true, count: courses.length, data: courses });
 });
 
-app.get('/api/v1/grades', (req, res) => {
+app.get('/api/v1/grades', requireRole(['student', 'admin', 'super_admin', 'registrar', 'hod', 'lecturer']), (req, res) => {
   const { admission_number } = req.query;
   const filtered = admission_number ? grades.filter((g) => g.admission_number === admission_number) : grades;
   res.json({ success: true, data: filtered });
 });
 
-app.post('/api/v1/grades/enter', (req, res) => {
+app.post('/api/v1/grades/enter', requireRole(['lecturer', 'registrar', 'hod', 'admin', 'super_admin']), (req, res) => {
   const { admission_number, course_code, cat, exam } = req.body;
   const total = Number(cat) + Number(exam);
   let grade = 'E';
@@ -159,7 +159,7 @@ app.post('/api/v1/grades/enter', (req, res) => {
   res.status(201).json({ success: true, data: newGrade });
 });
 
-app.post('/api/v1/finance/mpesa/stkpush', (req, res) => {
+app.post('/api/v1/finance/mpesa/stkpush', requireRole(['student', 'finance_officer', 'admin', 'super_admin']), (req, res) => {
   const { phoneNumber, amount, accountReference } = req.body;
   const receipt = `QHJ${Math.floor(1000000 + Math.random() * 9000000)}`;
   const newTx = {
