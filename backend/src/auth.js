@@ -13,9 +13,20 @@ function normalizeRole(role = 'student') {
   return Object.prototype.hasOwnProperty.call(DEMO_USERS, normalized) ? normalized : 'student';
 }
 
+const crypto = require('crypto');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'uams-backend-secure-jwt-signing-key-2026';
+
+function signPayload(payload) {
+  return crypto.createHmac('sha256', JWT_SECRET).update(payload).digest('hex');
+}
+
 function buildDemoToken(role = 'student') {
   const normalizedRole = normalizeRole(role);
-  return `uams_demo_${normalizedRole}_${Date.now()}`;
+  const ts = Date.now();
+  const raw = `uams_demo_${normalizedRole}_${ts}`;
+  const sig = signPayload(raw);
+  return `${raw}.${sig}`;
 }
 
 function verifyDemoToken(token, expectedRole) {
@@ -23,14 +34,36 @@ function verifyDemoToken(token, expectedRole) {
     return null;
   }
 
-  const match = token.match(/^uams_demo_([a-z_]+)_(\d+)$/);
+  // Format: uams_demo_${role}_${timestamp}.${sig}
+  const parts = token.split('.');
+  if (parts.length !== 2) {
+    return null;
+  }
+
+  const [raw, sig] = parts;
+  const match = raw.match(/^uams_demo_([a-z_]+)_(\d+)$/);
   if (!match) {
     return null;
   }
 
-  const [, role] = match;
+  const expectedSig = signPayload(raw);
+  if (sig.length !== expectedSig.length) {
+    return null;
+  }
+
+  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))) {
+    return null; // Tampered or forged token
+  }
+
+  const [, role, tsStr] = match;
   if (!Object.prototype.hasOwnProperty.call(DEMO_USERS, role)) {
     return null;
+  }
+
+  // Enforce 24-hour token expiry
+  const ts = Number(tsStr);
+  if (Date.now() - ts > 24 * 60 * 60 * 1000) {
+    return null; // Expired token
   }
 
   if (expectedRole && normalizeRole(expectedRole) !== role) {

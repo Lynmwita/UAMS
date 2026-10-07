@@ -1,12 +1,13 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { NotificationLog } from '@/types';
+import { requireServerAuth } from '@/lib/auth/server-auth';
 
 let notificationLogs: NotificationLog[] = [
   {
     id: 'ntf-01',
     recipient_type: 'student',
     recipient_identifier: '+254712345678',
-    recipient_name: 'Alex Kiptoo Kimutai',
+    recipient_name: 'Faith Wanjiku',
     channel: 'sms',
     message_content: 'UAMS ALERT: Your M-Pesa fee payment of KES 35,000 (Ref: QHJ8829101) has been verified. Current balance: KES 0.',
     provider: 'africas_talking',
@@ -17,7 +18,7 @@ let notificationLogs: NotificationLog[] = [
     id: 'ntf-02',
     recipient_type: 'student',
     recipient_identifier: '+254723456789',
-    recipient_name: 'Faith Chebet Korir',
+    recipient_name: 'Kevin Otieno',
     channel: 'sms',
     message_content: 'UAMS NOTICE: Exam clearance card generated for Semester 1, 2026/2027. Download your clearance card from the student portal.',
     provider: 'africas_talking',
@@ -38,14 +39,33 @@ let notificationLogs: NotificationLog[] = [
   },
 ];
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const auth = requireServerAuth(req);
+  if ('errorResponse' in auth) {
+    return auth.errorResponse;
+  }
+
+  const { user } = auth;
+  if (user.role === 'student') {
+    // Only return broadcast or personal alerts
+    const filtered = notificationLogs.filter(
+      (n) => n.recipient_type === 'broadcast' || n.recipient_name.toLowerCase().includes('faith')
+    );
+    return NextResponse.json({ success: true, data: filtered });
+  }
+
   return NextResponse.json({
     success: true,
     data: notificationLogs,
   });
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  // Staff authorization required for sending notifications
+  const auth = requireServerAuth(req, ['super_admin', 'admin', 'registrar', 'finance_officer', 'hod']);
+  if ('errorResponse' in auth) {
+    return auth.errorResponse;
+  }
   try {
     const body = await req.json();
     const { recipient_type, recipient_identifier, recipient_name, channel, message_content, subject } = body;

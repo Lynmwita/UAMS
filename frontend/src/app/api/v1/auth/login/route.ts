@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { DEMO_USERS, isValidDemoCredentials, normalizeRole } from '@/lib/auth/session';
+import { createSignedToken } from '@/lib/auth/server-auth';
 
 export async function POST(request: Request) {
   try {
@@ -25,18 +26,36 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({
+    const userId = `usr-${role}-${Date.now().toString().slice(-4)}`;
+    const signedToken = createSignedToken({
+      id: userId,
+      email,
+      role,
+    });
+
+    const response = NextResponse.json({
       success: true,
       message: 'Authentication successful',
-      token: 'jwt_mock_token_uams_2026',
+      token: signedToken,
       user: {
-        id: `usr-demo-${role}`,
+        id: userId,
         email,
         role,
-        firstName: 'Authorized',
-        lastName: 'User',
+        firstName: role === 'student' ? 'Faith' : 'Authorized',
+        lastName: role === 'student' ? 'Wanjiku' : 'Staff',
       },
     });
+
+    // Set secure HTTP cookie for browser session handling
+    response.cookies.set('uams_auth_token', signedToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 86400, // 24 hours
+    });
+
+    return response;
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error?.message || 'Invalid request payload.' },
@@ -44,3 +63,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

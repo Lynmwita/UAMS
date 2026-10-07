@@ -9,8 +9,10 @@ export type AuthSession = {
   role: UserRole;
   firstName: string;
   lastName: string;
+  token?: string;
   authenticatedAt: string;
 };
+
 
 export const DEMO_USERS: Record<UserRole, { email: string; password: string }> = {
   super_admin: { email: 'super_admin@university.ac.ke', password: DEMO_PASSWORD },

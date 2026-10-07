@@ -43,8 +43,10 @@ function LoginForm() {
       role: data.user.role,
       firstName: data.user.firstName,
       lastName: data.user.lastName,
+      token: data.token,
       authenticatedAt: new Date().toISOString(),
     });
+
 
     router.push(`/dashboard?role=${data.user.role}`);
   };

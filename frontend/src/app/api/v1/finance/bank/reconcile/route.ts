@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireServerAuth } from '@/lib/auth/server-auth';
 
 export interface BankTransaction {
   id: string;
@@ -58,7 +59,12 @@ let bankTransactions: BankTransaction[] = [
   },
 ];
 
-export async function GET() {
+export async function GET(req: Request) {
+  const auth = requireServerAuth(req, ['finance_officer', 'admin', 'super_admin']);
+  if ('errorResponse' in auth) {
+    return auth.errorResponse;
+  }
+
   return NextResponse.json({
     success: true,
     data: bankTransactions,
@@ -72,6 +78,12 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const auth = requireServerAuth(req, ['finance_officer', 'admin', 'super_admin']);
+  if ('errorResponse' in auth) {
+    return auth.errorResponse;
+  }
+
+  const { user } = auth;
   try {
     const body = await req.json();
     const { action, transaction_id, reference, bank_name, amount, student_admission_number, student_name, notes } = body;
@@ -83,9 +95,10 @@ export async function POST(req: Request) {
       }
 
       tx.is_reconciled = true;
-      tx.reconciled_by = 'Authorized Finance Officer';
+      tx.reconciled_by = `Finance Officer (${user.email})`;
       tx.reconciled_at = new Date().toISOString().replace('T', ' ').substring(0, 16);
       if (notes) tx.notes = notes;
+
 
       return NextResponse.json({
         success: true,

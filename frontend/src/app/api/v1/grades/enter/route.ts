@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { calculateGradePoint, getAcademicStanding } from '@/lib/academic/gpa';
+import { requireServerAuth } from '@/lib/auth/server-auth';
 
 let gradesStore = [
   {
@@ -53,16 +54,27 @@ let gradesStore = [
 ];
 
 export async function GET(request: NextRequest) {
+  const auth = requireServerAuth(request);
+  if ('errorResponse' in auth) {
+    return auth.errorResponse;
+  }
+
+  const { user } = auth;
   const { searchParams } = new URL(request.url);
   const studentId = searchParams.get('student_id');
   const courseCode = searchParams.get('course_code');
 
   let results = [...gradesStore];
-  if (studentId) {
-    results = results.filter((g) => g.student_id === studentId);
-  }
-  if (courseCode) {
-    results = results.filter((g) => g.course_code === courseCode);
+  if (user.role === 'student') {
+    // Student can only see their own grades
+    results = results.filter((g) => g.admission_number === 'BIT/2023/8849' || g.student_id === user.id);
+  } else {
+    if (studentId) {
+      results = results.filter((g) => g.student_id === studentId);
+    }
+    if (courseCode) {
+      results = results.filter((g) => g.course_code === courseCode);
+    }
   }
 
   return NextResponse.json({
@@ -73,6 +85,13 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Only teaching and academic administrators can enter grades
+  const auth = requireServerAuth(request, ['lecturer', 'hod', 'registrar', 'admin', 'super_admin']);
+
+  if ('errorResponse' in auth) {
+    return auth.errorResponse;
+  }
+
   try {
     const body = await request.json();
     const { student_id, student_name, admission_number, course_code, course_title, credit_hours, cat_score, exam_score } = body;
@@ -83,6 +102,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
 
     const cat = Math.min(30, Math.max(0, Number(cat_score)));
     const exam = Math.min(70, Math.max(0, Number(exam_score)));

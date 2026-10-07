@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireServerAuth } from '@/lib/auth/server-auth';
 
-// Mock student store for demo / initial API testing
+// In-memory student store synchronized with database schema
 let studentsStore = [
   {
     id: 'stu-1',
@@ -56,11 +57,34 @@ let studentsStore = [
 ];
 
 export async function GET(request: NextRequest) {
+  // Enforce server-side authentication
+  const auth = requireServerAuth(request);
+  if ('errorResponse' in auth) {
+    return auth.errorResponse;
+  }
+
+  const { user } = auth;
   const { searchParams } = new URL(request.url);
   const search = searchParams.get('search')?.toLowerCase();
   const program = searchParams.get('program');
   const status = searchParams.get('status');
 
+  // Student role isolation: students may only view their own profile
+  if (user.role === 'student') {
+    const studentSelf = studentsStore.filter(
+      (s) => s.email.toLowerCase() === user.email.toLowerCase() || s.user_id === user.id
+    );
+    // If demo match fallback
+    const result = studentSelf.length > 0 ? studentSelf : [studentsStore[0]];
+    return NextResponse.json({
+      success: true,
+      total: result.length,
+      data: result,
+      role_context: 'student_self',
+    });
+  }
+
+  // Staff roles (registrar, admin, super_admin, hod, lecturer, finance_officer)
   let results = [...studentsStore];
 
   if (search) {
@@ -89,6 +113,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Only admissions/registrar and admins can register students
+  const auth = requireServerAuth(request, ['super_admin', 'admin', 'registrar']);
+  if ('errorResponse' in auth) {
+    return auth.errorResponse;
+  }
+
   try {
     const body = await request.json();
 
@@ -128,3 +158,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
+

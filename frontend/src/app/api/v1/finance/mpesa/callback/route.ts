@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getPendingSTK, settleSTKPayment } from '@/lib/finance/pending-requests';
 
 /**
  * Safaricom Daraja STK Push Webhook / Callback Handler
  * Receives result payload upon M-Pesa pin entry on mobile device
+ * Enforces origin verification against initiated CheckoutRequestIDs
  */
-// In-memory idempotency set for processed receipt numbers
-const processedReceipts = new Set<string>();
-
 export async function POST(request: NextRequest) {
   try {
     const payload = await request.json();
@@ -19,6 +18,23 @@ export async function POST(request: NextRequest) {
 
     const { MerchantRequestID, CheckoutRequestID, ResultCode, ResultDesc, CallbackMetadata } = stkCallback;
 
+    if (!CheckoutRequestID) {
+      return NextResponse.json({ ResultCode: 1, ResultDesc: 'Missing CheckoutRequestID' }, { status: 400 });
+    }
+
+    // Origin verification: check if this checkout was initiated by UAMS
+    const pending = getPendingSTK(CheckoutRequestID);
+    if (!pending) {
+      console.warn(`[Daraja Webhook] Rejected unauthorized callback for uninitiated CheckoutRequestID: ${CheckoutRequestID}`);
+      return NextResponse.json(
+        {
+          ResultCode: 1,
+          ResultDesc: 'Rejected: Unrecognized or expired CheckoutRequestID. Callback origin verification failed.',
+        },
+        { status: 400 }
+      );
+    }
+
     if (ResultCode === 0) {
       // Payment Successful
       let mpesaReceiptNumber = '';
@@ -28,27 +44,31 @@ export async function POST(request: NextRequest) {
 
       if (CallbackMetadata?.Item) {
         for (const item of CallbackMetadata.Item) {
-          if (item.Name === 'MpesaReceiptNumber') mpesaReceiptNumber = item.Value;
-          if (item.Name === 'Amount') amount = item.Value;
-          if (item.Name === 'TransactionDate') transactionDate = item.Value?.toString();
-          if (item.Name === 'PhoneNumber') phoneNumber = item.Value?.toString();
+          if (item.Name === 'MpesaReceiptNumber') mpesaReceiptNumber = String(item.Value || '');
+          if (item.Name === 'Amount') amount = Number(item.Value) || 0;
+          if (item.Name === 'TransactionDate') transactionDate = item.Value?.toString() || '';
+          if (item.Name === 'PhoneNumber') phoneNumber = item.Value?.toString() || '';
         }
       }
 
-      // Idempotency check: Guard against duplicate callback processing
-      if (mpesaReceiptNumber && processedReceipts.has(mpesaReceiptNumber)) {
-        console.warn(`[Daraja Webhook] Duplicate callback ignored for Receipt: ${mpesaReceiptNumber}`);
+      if (!mpesaReceiptNumber) {
+        return NextResponse.json(
+          { ResultCode: 1, ResultDesc: 'Rejected: Missing authentic MpesaReceiptNumber in successful payload.' },
+          { status: 400 }
+        );
+      }
+
+      // Settle against pending ledger with strict amount matching & idempotency check
+      const settlement = settleSTKPayment(CheckoutRequestID, mpesaReceiptNumber, amount);
+      if (!settlement.success) {
+        console.warn(`[Daraja Webhook] Settlement failed for ${CheckoutRequestID}: ${settlement.error}`);
         return NextResponse.json({
-          ResultCode: 0,
-          ResultDesc: 'Transaction already processed (Idempotent duplicate)',
-        });
+          ResultCode: 1,
+          ResultDesc: settlement.error || 'Payment settlement validation failed',
+        }, { status: 409 });
       }
 
-      if (mpesaReceiptNumber) {
-        processedReceipts.add(mpesaReceiptNumber);
-      }
-
-      console.log(`[Daraja Webhook] SUCCESSFUL PAYMENT: KES ${amount} | Receipt: ${mpesaReceiptNumber} | Phone: ${phoneNumber}`);
+      console.log(`[Daraja Webhook] VERIFIED SETTLED PAYMENT: KES ${amount} | Receipt: ${mpesaReceiptNumber} | Student: ${pending.accountReference}`);
 
       return NextResponse.json({
         ResultCode: 0,
@@ -56,6 +76,7 @@ export async function POST(request: NextRequest) {
         data: {
           mpesaReceiptNumber,
           amount,
+          accountReference: pending.accountReference,
           transactionDate,
           phoneNumber,
           merchantRequestId: MerchantRequestID,
@@ -75,3 +96,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ResultCode: 1, ResultDesc: err.message }, { status: 500 });
   }
 }
+

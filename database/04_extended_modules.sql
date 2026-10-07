@@ -148,3 +148,88 @@ CREATE INDEX IF NOT EXISTS idx_library_books_isbn ON library_books(isbn);
 CREATE INDEX IF NOT EXISTS idx_exam_schedules_course ON exam_schedules(course_id);
 CREATE INDEX IF NOT EXISTS idx_exam_clearance_student ON exam_clearance_cards(student_id);
 CREATE INDEX IF NOT EXISTS idx_notification_logs_status ON notification_logs(status);
+
+-- =============================================================================
+-- ROW LEVEL SECURITY (RLS) FOR EXTENDED MODULES
+-- =============================================================================
+
+ALTER TABLE hostel_blocks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE hostel_rooms ENABLE ROW LEVEL SECURITY;
+ALTER TABLE hostel_allocations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE library_books ENABLE ROW LEVEL SECURITY;
+ALTER TABLE library_loans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE exam_schedules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE exam_clearance_cards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notification_logs ENABLE ROW LEVEL SECURITY;
+
+-- 1. Hostel Policies
+CREATE POLICY "Public read for active hostel blocks"
+    ON hostel_blocks FOR SELECT
+    USING (is_active = TRUE OR auth_user_role() IN ('super_admin', 'admin', 'registrar'));
+
+CREATE POLICY "Admins and registrars manage hostel blocks"
+    ON hostel_blocks FOR ALL
+    USING (auth_user_role() IN ('super_admin', 'admin', 'registrar'));
+
+CREATE POLICY "Public read for hostel rooms"
+    ON hostel_rooms FOR SELECT
+    USING (is_available = TRUE OR auth_user_role() IN ('super_admin', 'admin', 'registrar'));
+
+CREATE POLICY "Admins manage hostel rooms"
+    ON hostel_rooms FOR ALL
+    USING (auth_user_role() IN ('super_admin', 'admin', 'registrar'));
+
+CREATE POLICY "Students view own hostel allocation"
+    ON hostel_allocations FOR SELECT
+    USING (student_id = auth_student_id() OR auth_user_role() IN ('super_admin', 'admin', 'registrar', 'dean'));
+
+CREATE POLICY "Admins and registrars manage hostel allocations"
+    ON hostel_allocations FOR ALL
+    USING (auth_user_role() IN ('super_admin', 'admin', 'registrar'));
+
+-- 2. Library Policies
+CREATE POLICY "Public read for active library books"
+    ON library_books FOR SELECT
+    USING (is_active = TRUE OR auth_user_role() IN ('super_admin', 'admin', 'librarian'));
+
+CREATE POLICY "Admins manage library catalog"
+    ON library_books FOR ALL
+    USING (auth_user_role() IN ('super_admin', 'admin', 'librarian'));
+
+CREATE POLICY "Students view own library loans"
+    ON library_loans FOR SELECT
+    USING (student_id = auth_student_id() OR auth_user_role() IN ('super_admin', 'admin', 'librarian'));
+
+CREATE POLICY "Librarians manage library circulation"
+    ON library_loans FOR ALL
+    USING (auth_user_role() IN ('super_admin', 'admin', 'librarian'));
+
+-- 3. Exam Schedule & Clearance Policies
+CREATE POLICY "Authenticated users view exam schedules"
+    ON exam_schedules FOR SELECT
+    USING (status != 'draft' OR auth_user_role() IN ('super_admin', 'admin', 'registrar', 'dean', 'lecturer'));
+
+CREATE POLICY "Registrars and deans manage exam schedules"
+    ON exam_schedules FOR ALL
+    USING (auth_user_role() IN ('super_admin', 'admin', 'registrar', 'dean'));
+
+CREATE POLICY "Students view own exam clearance card"
+    ON exam_clearance_cards FOR SELECT
+    USING (student_id = auth_student_id() OR auth_user_role() IN ('super_admin', 'admin', 'registrar', 'finance_officer'));
+
+CREATE POLICY "Registrars and finance manage exam clearance cards"
+    ON exam_clearance_cards FOR ALL
+    USING (auth_user_role() IN ('super_admin', 'admin', 'registrar', 'finance_officer'));
+
+-- 4. Notification Policies
+CREATE POLICY "Users view relevant notifications"
+    ON notification_logs FOR SELECT
+    USING (
+        recipient_type = 'broadcast'
+        OR auth_user_role() IN ('super_admin', 'admin', 'registrar', 'finance_officer')
+    );
+
+CREATE POLICY "Staff dispatch notifications"
+    ON notification_logs FOR INSERT
+    WITH CHECK (auth_user_role() IN ('super_admin', 'admin', 'registrar', 'finance_officer', 'hod'));
+

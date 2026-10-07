@@ -84,3 +84,32 @@ test('valid student token can access the student list', async () => {
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test('verifyDemoToken rejects tampered or forged HMAC signatures', () => {
+  const token = buildDemoToken('student');
+  const [raw] = token.split('.');
+  // Attacker tries to modify signature or forge payload
+  const forgedToken = `${raw}.invalid_fake_hmac_hex_digest`;
+  const verified = verifyDemoToken(forgedToken);
+  assert.equal(verified, null);
+
+  // Attacker tries to change role in raw string with old signature
+  const [, sig] = token.split('.');
+  const forgedPayloadToken = `uams_demo_super_admin_${Date.now()}.${sig}`;
+  const verified2 = verifyDemoToken(forgedPayloadToken);
+  assert.equal(verified2, null);
+});
+
+test('verifyDemoToken rejects expired tokens', () => {
+  // Token timestamp older than 24 hours
+  const expiredTs = Date.now() - (25 * 60 * 60 * 1000);
+  const crypto = require('crypto');
+  const secret = process.env.JWT_SECRET || 'uams-backend-secure-jwt-signing-key-2026';
+  const raw = `uams_demo_student_${expiredTs}`;
+  const sig = crypto.createHmac('sha256', secret).update(raw).digest('hex');
+  const expiredToken = `${raw}.${sig}`;
+
+  const verified = verifyDemoToken(expiredToken);
+  assert.equal(verified, null);
+});
+

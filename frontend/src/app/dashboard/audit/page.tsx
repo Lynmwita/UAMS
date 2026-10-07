@@ -23,29 +23,32 @@ export default function AuditPage() {
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-        <table className="w-full text-left text-sm">
-          <thead className="text-xs font-bold uppercase bg-slate-50 text-slate-600 border-b border-slate-200">
-            <tr>
-              <th className="px-5 py-3.5">Timestamp</th>
-              <th className="px-5 py-3.5">User</th>
-              <th className="px-5 py-3.5">Action Code</th>
-              <th className="px-5 py-3.5">Target Entity</th>
-              <th className="px-5 py-3.5">IP Address</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {logs.map((l, i) => (
-              <tr key={i} className="hover:bg-slate-50/60">
-                <td className="px-5 py-3.5 font-mono text-xs text-slate-500">{l.timestamp}</td>
-                <td className="px-5 py-3.5 font-medium text-slate-900">{l.user}</td>
-                <td className="px-5 py-3.5"><span className="px-2.5 py-0.5 rounded text-xs font-mono font-bold bg-slate-100 text-academic-navy-900 border border-slate-200">{l.action}</span></td>
-                <td className="px-5 py-3.5 font-mono text-xs text-slate-600">{l.entity}</td>
-                <td className="px-5 py-3.5 font-mono text-xs text-slate-400">{l.ip}</td>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead className="text-xs font-bold uppercase bg-slate-50 text-slate-600 border-b border-slate-200">
+              <tr>
+                <th className="px-5 py-3.5">Timestamp</th>
+                <th className="px-5 py-3.5">User</th>
+                <th className="px-5 py-3.5">Action Code</th>
+                <th className="px-5 py-3.5">Target Entity</th>
+                <th className="px-5 py-3.5">IP Address</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {logs.map((l, i) => (
+                <tr key={i} className="hover:bg-slate-50/60">
+                  <td className="px-5 py-3.5 font-mono text-xs text-slate-500 whitespace-nowrap">{l.timestamp}</td>
+                  <td className="px-5 py-3.5 font-medium text-slate-900 whitespace-nowrap">{l.user}</td>
+                  <td className="px-5 py-3.5 whitespace-nowrap"><span className="px-2.5 py-0.5 rounded text-xs font-mono font-bold bg-slate-100 text-academic-navy-900 border border-slate-200">{l.action}</span></td>
+                  <td className="px-5 py-3.5 font-mono text-xs text-slate-600 whitespace-nowrap">{l.entity}</td>
+                  <td className="px-5 py-3.5 font-mono text-xs text-slate-400 whitespace-nowrap">{l.ip}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
+
     </div>
   );
 }
