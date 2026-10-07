@@ -1,19 +1,55 @@
+const crypto = require('crypto');
+
+const SCRYPT_PARAMS = {
+  N: 16384,
+  r: 8,
+  p: 1,
+  maxmem: 32 * 1024 * 1024,
+};
+const KEY_LENGTH = 64;
+
+function hashPassword(plainText, saltHex) {
+  if (!plainText || typeof plainText !== 'string') {
+    throw new Error('Password must be a non-empty string');
+  }
+  const salt = saltHex || crypto.randomBytes(16).toString('hex');
+  const derivedKey = crypto.scryptSync(plainText, salt, KEY_LENGTH, SCRYPT_PARAMS);
+  return `${salt}$${derivedKey.toString('hex')}`;
+}
+
+function verifyPassword(plainText, storedHash) {
+  if (!plainText || !storedHash || typeof storedHash !== 'string' || !storedHash.includes('$')) {
+    return false;
+  }
+  const parts = storedHash.split('$');
+  if (parts.length !== 2) return false;
+  const [salt, expectedHashHex] = parts;
+  try {
+    const derivedKey = crypto.scryptSync(plainText, salt, KEY_LENGTH, SCRYPT_PARAMS);
+    const expectedBuf = Buffer.from(expectedHashHex, 'hex');
+    if (derivedKey.length !== expectedBuf.length) return false;
+    return crypto.timingSafeEqual(derivedKey, expectedBuf);
+  } catch {
+    return false;
+  }
+}
+
+const INITIAL_DEMO_HASH = hashPassword('DemoPassword2026!');
+
 const DEMO_USERS = {
-  super_admin: { email: 'super_admin@university.ac.ke', password: 'DemoPassword2026!' },
-  admin: { email: 'admin@university.ac.ke', password: 'DemoPassword2026!' },
-  registrar: { email: 'registrar@university.ac.ke', password: 'DemoPassword2026!' },
-  hod: { email: 'hod@university.ac.ke', password: 'DemoPassword2026!' },
-  lecturer: { email: 'lecturer@university.ac.ke', password: 'DemoPassword2026!' },
-  finance_officer: { email: 'finance_officer@university.ac.ke', password: 'DemoPassword2026!' },
-  student: { email: 'student@university.ac.ke', password: 'DemoPassword2026!' },
+  super_admin: { email: 'super_admin@university.ac.ke', passwordHash: INITIAL_DEMO_HASH },
+  admin: { email: 'admin@university.ac.ke', passwordHash: INITIAL_DEMO_HASH },
+  registrar: { email: 'registrar@university.ac.ke', passwordHash: INITIAL_DEMO_HASH },
+  hod: { email: 'hod@university.ac.ke', passwordHash: INITIAL_DEMO_HASH },
+  lecturer: { email: 'lecturer@university.ac.ke', passwordHash: INITIAL_DEMO_HASH },
+  finance_officer: { email: 'finance_officer@university.ac.ke', passwordHash: INITIAL_DEMO_HASH },
+  student: { email: 'student@university.ac.ke', passwordHash: INITIAL_DEMO_HASH },
 };
 
 function normalizeRole(role = 'student') {
   const normalized = String(role).trim().toLowerCase().replace(/-/g, '_');
   return Object.prototype.hasOwnProperty.call(DEMO_USERS, normalized) ? normalized : 'student';
 }
-
-const crypto = require('crypto');
 
 let ephemeralDevSecret = null;
 
@@ -131,7 +167,8 @@ function isValidDemoCredential(email, password, role) {
   const normalizedRole = normalizeRole(role);
   const expectedUser = DEMO_USERS[normalizedRole];
   if (!expectedUser) return false;
-  return String(email).trim().toLowerCase() === expectedUser.email && String(password) === expectedUser.password;
+  if (String(email).trim().toLowerCase() !== expectedUser.email) return false;
+  return verifyPassword(password, expectedUser.passwordHash);
 }
 
 module.exports = {
@@ -141,5 +178,7 @@ module.exports = {
   verifyDemoToken,
   requireRole,
   isValidDemoCredential,
+  hashPassword,
+  verifyPassword,
   getJwtSecret,
 };

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isValidDemoCredentials, normalizeRole, saveSession, SESSION_STORAGE_KEY } from './session';
+import { isValidDemoCredentials, normalizeRole, saveSession, readSession, clearSession, SESSION_STORAGE_KEY } from './session';
 import { createSignedToken, verifySignedToken, requireServerAuth, requirePermission, getJwtSecret } from './server-auth';
 import { checkRateLimit, resetRateLimit } from './rate-limiter';
 import { validateCsrf } from './csrf';
@@ -107,10 +107,10 @@ test('rate limiter blocks requests when threshold is exceeded', () => {
   resetRateLimit(`login:${testIp}`);
 });
 
-test('saveSession strips raw token from localStorage payload', () => {
-  // Mock window.localStorage
-  let storedValue = '';
-  const mockStorage: Record<string, string> = {};
+test('saveSession eliminates localStorage persistence and maintains in-memory state', () => {
+  const mockStorage: Record<string, string> = {
+    [SESSION_STORAGE_KEY]: 'legacy-token-data',
+  };
   (global as any).window = {
     localStorage: {
       setItem: (key: string, val: string) => {
@@ -133,10 +133,18 @@ test('saveSession strips raw token from localStorage payload', () => {
     authenticatedAt: new Date().toISOString(),
   });
 
-  const parsed = JSON.parse(mockStorage[SESSION_STORAGE_KEY]);
-  assert.equal(parsed.token, undefined);
-  assert.equal(parsed.email, 'student@university.ac.ke');
-  assert.equal(parsed.role, 'student');
+  // Zero localStorage verification: legacy storage purged and no new entries written
+  assert.equal(mockStorage[SESSION_STORAGE_KEY], undefined);
+
+  // In-memory session returns safe sanitized metadata without raw token
+  const current = readSession();
+  assert.ok(current);
+  assert.equal(current?.token, undefined);
+  assert.equal(current?.email, 'student@university.ac.ke');
+  assert.equal(current?.role, 'student');
+
+  clearSession();
+  assert.equal(readSession(), null);
 
   delete (global as any).window;
 });
@@ -286,5 +294,140 @@ test('auth/me route verifies cookie-only sessions and logout clears cookie', asy
   assert.equal(logoutRes.status, 200);
   const cookieHeader = logoutRes.headers.get('set-cookie');
   assert.ok(cookieHeader?.includes('uams_auth_token=;'));
+  assert.ok(cookieHeader?.includes('uams_refresh_token=;'));
 });
+
+test('password hashing implements salted scrypt key derivation and timing-safe verification', async () => {
+  const { hashPassword, verifyPassword } = await import('./password');
+
+  const plain = 'StrongInstitutionalSecret2026!';
+  const hashed = hashPassword(plain);
+
+  assert.ok(hashed.includes('$'));
+  const [salt, hash] = hashed.split('$');
+  assert.equal(salt.length, 32); // 16 bytes hex
+  assert.equal(hash.length, 128); // 64 bytes hex
+
+  // Positive verification
+  assert.equal(verifyPassword(plain, hashed), true);
+
+  // Negative verification (wrong password)
+  assert.equal(verifyPassword('WrongPassword', hashed), false);
+
+  // Negative verification (malformed hash)
+  assert.equal(verifyPassword(plain, 'invalid-hash-string'), false);
+});
+
+test('refresh token engine enforces rotation and detects token replay attacks', async () => {
+  const { issueRefreshToken, rotateRefreshToken, verifyRefreshToken } = await import('./refresh-token');
+
+  const user = {
+    id: 'usr-student-99',
+    email: 'student99@university.ac.ke',
+    role: 'student' as const,
+  };
+
+  // Issue initial refresh token
+  const token1 = issueRefreshToken(user);
+  const payload1 = verifyRefreshToken(token1);
+  assert.ok(payload1);
+  assert.equal(payload1?.id, user.id);
+
+  // 1st Rotation (legitimate client refresh)
+  const rotation1 = rotateRefreshToken(token1);
+  assert.equal(rotation1.success, true);
+  if (!rotation1.success) return;
+  assert.ok(rotation1.newRefreshToken);
+  assert.notEqual(rotation1.newRefreshToken, token1);
+
+  // 2nd Rotation (legitimate client refresh again)
+  const rotation2 = rotateRefreshToken(rotation1.newRefreshToken);
+  assert.equal(rotation2.success, true);
+  if (!rotation2.success) return;
+
+  // REPLAY ATTACK: Adversary intercepts and attempts to use the already-rotated token1
+  const replayAttack = rotateRefreshToken(token1, '192.168.1.100');
+  assert.equal(replayAttack.success, false);
+  assert.equal(replayAttack.breachDetected, true);
+  assert.ok(replayAttack.error.includes('Security breach detected'));
+
+  // Verify that replay containment invalidated the entire token family (rotation2's token is now revoked too)
+  const subsequentAttempt = rotateRefreshToken(rotation2.newRefreshToken);
+  assert.equal(subsequentAttempt.success, false);
+});
+
+test('MFA engine generates standard TOTP passcodes and verifies timing-safe tokens', async () => {
+  const { generateMfaSecret, generateTotp, verifyTotp } = await import('./mfa');
+
+  const secret = generateMfaSecret();
+  assert.equal(secret.length, 20);
+
+  const code = generateTotp(secret);
+  assert.equal(code.length, 6);
+  assert.ok(/^\d{6}$/.test(code));
+
+  // Positive verification
+  assert.equal(verifyTotp(code, secret), true);
+
+  // Negative verification (invalid code)
+  assert.equal(verifyTotp('000000', secret), false);
+  assert.equal(verifyTotp('999999', secret), false);
+});
+
+test('refresh and mfa API routes handle authentication cycles securely', async () => {
+  const { POST: postRefresh } = await import('../../app/api/v1/auth/refresh/route');
+  const { POST: postMfaVerify } = await import('../../app/api/v1/auth/mfa/verify/route');
+  const { issueRefreshToken } = await import('./refresh-token');
+  const { generateTotp } = await import('./mfa');
+
+  // Test Refresh Route with unauthenticated request
+  const unauthRefreshReq = new Request('http://localhost:3000/api/v1/auth/refresh', { method: 'POST' });
+  const unauthRefreshRes = await postRefresh(unauthRefreshReq as any);
+  assert.equal(unauthRefreshRes.status, 401);
+
+  // Test Refresh Route with valid cookie
+  const validRefreshToken = issueRefreshToken({
+    id: 'usr-student-01',
+    email: 'student@university.ac.ke',
+    role: 'student',
+  });
+
+  const validRefreshReq = new Request('http://localhost:3000/api/v1/auth/refresh', {
+    method: 'POST',
+    headers: {
+      Cookie: `uams_refresh_token=${validRefreshToken}`,
+    },
+  });
+
+  const validRefreshRes = await postRefresh(validRefreshReq as any);
+  assert.equal(validRefreshRes.status, 200);
+  const refreshData = await validRefreshRes.json();
+  assert.equal(refreshData.success, true);
+  assert.equal(refreshData.user.email, 'student@university.ac.ke');
+
+  // Test MFA Route (requires same-origin header for CSRF defense on POST mutations)
+  const validUserToken = createSignedToken({
+    id: 'usr-admin-01',
+    email: 'admin@university.ac.ke',
+    role: 'admin',
+  });
+
+  const validOtp = generateTotp('JBSWY3DPEHPK3PXP');
+  const mfaReq = new Request('http://localhost:3000/api/v1/auth/mfa/verify', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: 'http://localhost:3000',
+      Cookie: `uams_auth_token=${validUserToken}`,
+    },
+    body: JSON.stringify({ code: validOtp }),
+  });
+
+  const mfaRes = await postMfaVerify(mfaReq as any);
+  assert.equal(mfaRes.status, 200);
+  const mfaData = await mfaRes.json();
+  assert.equal(mfaData.success, true);
+  assert.equal(mfaData.mfaVerified, true);
+});
+
 

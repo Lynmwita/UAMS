@@ -4,6 +4,9 @@ const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
 const { normalizeRole, isValidDemoCredential, buildDemoToken, requireRole } = require('./src/auth');
+const { assertRuntimeSecurityConfig } = require('./src/config');
+
+assertRuntimeSecurityConfig();
 
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
@@ -47,8 +50,38 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+const loginAttempts = new Map();
+
+function checkLoginRateLimit(ip, limit = 10, windowMs = 60000) {
+  const now = Date.now();
+  const record = loginAttempts.get(ip) || { count: 0, resetAt: now + windowMs };
+  if (now > record.resetAt) {
+    record.count = 0;
+    record.resetAt = now + windowMs;
+  }
+  record.count += 1;
+  loginAttempts.set(ip, record);
+  return {
+    allowed: record.count <= limit,
+    remaining: Math.max(0, limit - record.count),
+    resetSeconds: Math.ceil((record.resetAt - now) / 1000),
+  };
+}
+
 app.post('/api/v1/auth/login', async (req, res) => {
   try {
+    const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1')
+      .split(',')[0]
+      .trim();
+
+    const rateLimit = checkLoginRateLimit(ip);
+    if (!rateLimit.allowed) {
+      return res.status(429).json({
+        success: false,
+        error: `Too many authentication attempts. Please retry in ${rateLimit.resetSeconds} seconds.`,
+      });
+    }
+
     const email = String(req.body?.email || '').trim();
     const password = String(req.body?.password || '');
     const role = normalizeRole(req.body?.role || 'student');

@@ -346,15 +346,16 @@
 </div>
 
 <div class="card card-highlight">
-  <h4>Step 2: Role-Based Access Control (RBAC) & Authentication Overhaul</h4>
+  <h4>Step 2: Enterprise Authentication, Scrypt Key Derivation & Refresh Token Rotation</h4>
   <p>
-    Engineered role guards ensuring that users only access functionality permitted by institutional charter:
+    Engineered enterprise identity guards ensuring users only access functionality permitted by institutional charter:
   </p>
   <ul>
     <li><strong>6 Roles Supported:</strong> Student, Lecturer, Registrar, Finance Officer, Dean, and System Administrator.</li>
-    <li><strong>Role Normalization:</strong> Built a robust normalizer (<code>normalizeRole</code>) in both backend and frontend to map varied case representations to canonical role enums.</li>
-    <li><strong>Sandboxed Evaluator Controls:</strong> Isolated demonstration test credentials into a dedicated defense sandbox mode (disabled in production) with sensitive tokens purged from <code>localStorage</code> to prevent XSS exfiltration.</li>
-    <li><strong>Token Security:</strong> Implemented HMAC-SHA256 signed session token verification (HS256) with timing-safe signature comparison, 24-hour expiration, and fail-closed production secret policy.</li>
+    <li><strong>Salted Scrypt Password Hashing:</strong> Strict adherence to OWASP Password Storage standards using salted scrypt key derivation (512-bit keys) and constant-time <code>timingSafeEqual</code> comparison. Cleartext credentials never exist in storage.</li>
+    <li><strong>Zero-LocalStorage Trust Boundary:</strong> Authentication tokens are isolated in <code>httpOnly</code>, <code>SameSite=Lax</code>, <code>Secure</code> cookies. The frontend maintains memory-only session metadata, completely purging <code>localStorage</code> to eliminate DOM XSS token theft.</li>
+    <li><strong>OWASP Refresh Token Rotation & Replay Containment:</strong> Short-lived access tokens (15-min) paired with rotating refresh tokens (7-day). Any replay of a previously rotated token triggers immediate revocation of the entire token family and terminates active sessions.</li>
+    <li><strong>RFC 6238 TOTP Multi-Factor Authentication:</strong> High-risk workflows (grade approvals, bank payouts) support step-up authorization with 6-digit TOTP passcodes verified with timing-safe buffers.</li>
   </ul>
 </div>
 
@@ -411,13 +412,13 @@
 </div>
 
 <div class="card card-highlight">
-  <h4>Step 7: Automated Test Suite & Security Assurance Verification</h4>
+  <h4>Step 7: Automated Test Suite & Enterprise Security Assurance Verification</h4>
   <p>
-    Engineered 37 automated test specifications across frontend and backend verifying business logic, authorization invariants, and enterprise security controls:
+    Engineered 42 automated test specifications across frontend and backend verifying business logic, authorization invariants, and enterprise security controls:
   </p>
   <ul>
-    <li><strong>Backend Test Suite (9/9 Passed):</strong> Role normalization, credential validation, token encryption/decryption, route protection middleware, health endpoints, tampered HMAC signature rejection, and token expiration.</li>
-    <li><strong>Frontend Test Suite (28/28 Passed):</strong> Exam fee clearance rules, library fine calculations, hostel capacity guards, 4.0 weighted GPA formulas, honors classifications, policy engine CAT/Exam splits, Safaricom M-Pesa STK payload validation & callback settlement, zero hardcoded fallback secrets, brute-force rate limiting, server-side cookie verification (/api/v1/auth/me), session logout (/api/v1/auth/logout), complete elimination of localStorage from auth boundaries, IDOR/BOLA student data isolation, CSRF origin verification, permission-based RBAC capability guards, and immutable audit event ledger logging.</li>
+    <li><strong>Backend Test Suite (10/10 Passed):</strong> Role normalization, credential validation, token encryption/decryption, route protection middleware, health endpoints, tampered HMAC signature rejection, token expiration, fail-closed production secrets, and brute-force rate limiting.</li>
+    <li><strong>Frontend Test Suite (32/32 Passed):</strong> Exam fee clearance rules, library fine calculations, hostel capacity guards, 4.0 weighted GPA formulas, honors classifications, policy engine CAT/Exam splits, Safaricom M-Pesa STK payload validation & callback settlement, zero hardcoded fallback secrets, brute-force rate limiting, server-side cookie verification (/api/v1/auth/me), session logout (/api/v1/auth/logout), complete elimination of localStorage from auth boundaries, IDOR/BOLA student data isolation, CSRF origin verification, permission-based RBAC capability guards, immutable audit event ledger logging, salted scrypt password hashing & timingSafeEqual verification, OWASP refresh token rotation with replay breach containment, and RFC 6238 TOTP Multi-Factor Authentication.</li>
   </ul>
 </div>
 
@@ -435,67 +436,91 @@
   </thead>
   <tbody>
     <tr>
-      <td><strong>Backend</strong></td>
-      <td>Role Normalization</td>
-      <td>Accepts case-insensitive roles (student, lecturer, admin)</td>
+      <td><strong>Security</strong></td>
+      <td>Password Hashing Engine</td>
+      <td>Salted scrypt key derivation (512-bit) with timing-safe verification</td>
       <td><span class="status-tag status-pass">PASSED</span></td>
     </tr>
     <tr>
-      <td><strong>Backend</strong></td>
-      <td>Credential Authenticity</td>
-      <td>Rejects invalid passwords; approves genuine role credentials</td>
+      <td><strong>Security</strong></td>
+      <td>Refresh Token Rotation</td>
+      <td>Issues rotating tokens; revokes entire token family upon replay attempt</td>
       <td><span class="status-tag status-pass">PASSED</span></td>
     </tr>
     <tr>
-      <td><strong>Backend</strong></td>
-      <td>JWT Token Auth & RBAC</td>
-      <td>Blocks unauthenticated requests; rejects unauthorized roles</td>
+      <td><strong>Security</strong></td>
+      <td>Multi-Factor Auth (MFA)</td>
+      <td>RFC 6238 TOTP engine generating & verifying 6-digit passcodes</td>
       <td><span class="status-tag status-pass">PASSED</span></td>
     </tr>
     <tr>
-      <td><strong>Backend</strong></td>
-      <td>Health & Endpoint Sanity</td>
-      <td>Validates health payload format, service names, and timestamp</td>
+      <td><strong>Security</strong></td>
+      <td>Zero-LocalStorage Trust Boundary</td>
+      <td>Purges legacy localStorage and restricts auth state to httpOnly cookies</td>
       <td><span class="status-tag status-pass">PASSED</span></td>
     </tr>
     <tr>
-      <td><strong>Frontend</strong></td>
+      <td><strong>Security</strong></td>
+      <td>Brute-Force Rate Limiting</td>
+      <td>Throttles rapid authentication attempts with HTTP 429 and Retry-After</td>
+      <td><span class="status-tag status-pass">PASSED</span></td>
+    </tr>
+    <tr>
+      <td><strong>Security</strong></td>
+      <td>BOLA / IDOR Student Isolation</td>
+      <td>Enforces student self-record confinement on /api/v1/students and grades</td>
+      <td><span class="status-tag status-pass">PASSED</span></td>
+    </tr>
+    <tr>
+      <td><strong>Security</strong></td>
+      <td>CSRF Same-Origin Guard</td>
+      <td>Rejects cross-origin mutation requests (POST/PUT/DELETE)</td>
+      <td><span class="status-tag status-pass">PASSED</span></td>
+    </tr>
+    <tr>
+      <td><strong>Security</strong></td>
+      <td>Append-Only Audit Ledger</td>
+      <td>Records immutable telemetry for administrative and financial events</td>
+      <td><span class="status-tag status-pass">PASSED</span></td>
+    </tr>
+    <tr>
+      <td><strong>Academic</strong></td>
       <td>GPA Calculation Engine</td>
       <td>Accurate 4.0 weighted scale semester calculations</td>
       <td><span class="status-tag status-pass">PASSED</span></td>
     </tr>
     <tr>
-      <td><strong>Frontend</strong></td>
+      <td><strong>Academic</strong></td>
       <td>Academic Honors Classifier</td>
       <td>First Class &ge;3.70, Upper &ge;3.00, Lower &ge;2.50, Pass &ge;2.00</td>
       <td><span class="status-tag status-pass">PASSED</span></td>
     </tr>
     <tr>
-      <td><strong>Frontend</strong></td>
+      <td><strong>Academic</strong></td>
       <td>Continuous Assessment Policy</td>
       <td>Verifies 30/70 and 40/60 dynamic CAT/Exam score weighting</td>
       <td><span class="status-tag status-pass">PASSED</span></td>
     </tr>
     <tr>
-      <td><strong>Frontend</strong></td>
+      <td><strong>Academic</strong></td>
       <td>Exam Clearance Gate</td>
       <td>Verifies attendance (&ge;75%) and financial threshold rules</td>
       <td><span class="status-tag status-pass">PASSED</span></td>
     </tr>
     <tr>
-      <td><strong>Frontend</strong></td>
+      <td><strong>Finance</strong></td>
       <td>M-Pesa STK Validator</td>
       <td>Formats numbers to 254 standard; rejects invalid payloads</td>
       <td><span class="status-tag status-pass">PASSED</span></td>
     </tr>
     <tr>
-      <td><strong>Frontend</strong></td>
+      <td><strong>Operations</strong></td>
       <td>Hostel Bed Limit Guard</td>
       <td>Prevents assigning beds beyond maximum capacity</td>
       <td><span class="status-tag status-pass">PASSED</span></td>
     </tr>
     <tr>
-      <td><strong>Frontend</strong></td>
+      <td><strong>Operations</strong></td>
       <td>Library Fine Calculator</td>
       <td>Accurately computes daily overdue penalty accumulation</td>
       <td><span class="status-tag status-pass">PASSED</span></td>

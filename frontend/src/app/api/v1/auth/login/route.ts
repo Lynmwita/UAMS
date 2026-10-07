@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { DEMO_USERS, isValidDemoCredentials, normalizeRole } from '@/lib/auth/session';
 import { createSignedToken } from '@/lib/auth/server-auth';
+import { issueRefreshToken } from '@/lib/auth/refresh-token';
 import { checkRateLimit } from '@/lib/auth/rate-limiter';
 import { recordAuditEvent } from '@/lib/audit/audit-logger';
 
@@ -97,7 +98,16 @@ export async function POST(request: Request) {
     }
 
     const userId = `usr-${role}-${Date.now().toString().slice(-4)}`;
-    const signedToken = createSignedToken({
+    const signedToken = createSignedToken(
+      {
+        id: userId,
+        email,
+        role,
+      },
+      900 // Short-lived access token: 15 minutes (OWASP Session Management)
+    );
+
+    const refreshToken = issueRefreshToken({
       id: userId,
       email,
       role,
@@ -111,6 +121,7 @@ export async function POST(request: Request) {
       entity_id: userId,
       ip_address: ip,
       status: 'SUCCESS',
+      details: { accessLifetimeSeconds: 900, refreshRotationEnabled: true },
     });
 
     const response = NextResponse.json({
@@ -126,13 +137,22 @@ export async function POST(request: Request) {
       },
     });
 
-    // Set secure HTTP cookie for browser session handling
+    // Short-lived access token cookie (15 mins)
     response.cookies.set('uams_auth_token', signedToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 86400, // 24 hours
+      maxAge: 900,
+    });
+
+    // Rotatable refresh token cookie (7 days, Strict sameSite)
+    response.cookies.set('uams_refresh_token', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/',
+      maxAge: 7 * 24 * 60 * 60,
     });
 
     return response;
