@@ -15,18 +15,24 @@ function normalizeRole(role = 'student') {
 
 const crypto = require('crypto');
 
+let ephemeralDevSecret = null;
+
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
     if (process.env.NODE_ENV === 'production') {
       throw new Error(
-        'FATAL: JWT_SECRET environment variable is missing in production environment. Refusing to start with insecure defaults.'
+        'FATAL SECURITY VIOLATION: JWT_SECRET environment variable must be configured in production. Refusing to start.'
       );
     }
-    return 'uams-enterprise-secure-jwt-signing-key-2026-nonprod-salt';
+    // Dynamic runtime secret: zero static fallback secrets in source code
+    if (!ephemeralDevSecret) {
+      ephemeralDevSecret = crypto.randomBytes(32).toString('hex');
+    }
+    return ephemeralDevSecret;
   }
   if (secret.length < 32 && process.env.NODE_ENV === 'production') {
-    throw new Error('FATAL: JWT_SECRET must be at least 32 characters in production.');
+    throw new Error('FATAL SECURITY VIOLATION: JWT_SECRET must be at least 32 characters in production.');
   }
   return secret;
 }

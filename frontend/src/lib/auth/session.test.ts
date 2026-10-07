@@ -1,8 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isValidDemoCredentials, normalizeRole, saveSession, SESSION_STORAGE_KEY } from './session';
-import { createSignedToken, verifySignedToken, requireServerAuth, getJwtSecret } from './server-auth';
+import { createSignedToken, verifySignedToken, requireServerAuth, requirePermission, getJwtSecret } from './server-auth';
 import { checkRateLimit, resetRateLimit } from './rate-limiter';
+import { validateCsrf } from './csrf';
+import { roleHasPermission } from './rbac';
+import { recordAuditEvent, getAuditLogs } from '../audit/audit-logger';
 
 test('role normalization accepts known university roles', () => {
   assert.equal(normalizeRole('student'), 'student');
@@ -178,5 +181,74 @@ test('students endpoint strictly enforces student isolation without fallback lea
   assert.equal(res.status, 200);
   assert.equal(data.total, 0);
   assert.equal(data.data.length, 0); // Must NOT leak Faith Wanjiku or student 0
+});
+
+test('validateCsrf rejects cross-origin mutations and permits same-origin requests', () => {
+  // Safe GET request
+  const getReq = new Request('http://localhost:3000/api/v1/students', { method: 'GET' });
+  assert.equal(validateCsrf(getReq).valid, true);
+
+  // POST with valid matching origin
+  const validPost = new Request('http://localhost:3000/api/v1/courses/register', {
+    method: 'POST',
+    headers: {
+      origin: 'http://localhost:3000',
+      host: 'localhost:3000',
+    },
+  });
+  assert.equal(validateCsrf(validPost).valid, true);
+
+  // POST with hostile cross-origin
+  const evilPost = new Request('http://localhost:3000/api/v1/courses/register', {
+    method: 'POST',
+    headers: {
+      origin: 'https://attacker-controlled-site.com',
+      host: 'localhost:3000',
+    },
+  });
+  const evilRes = validateCsrf(evilPost);
+  assert.equal(evilRes.valid, false);
+  assert.ok(evilRes.error?.includes('CSRF violation'));
+});
+
+test('requirePermission enforces fine-grained capability checks', () => {
+  const lecturerToken = createSignedToken({
+    id: 'usr-lec-1',
+    email: 'lecturer@university.ac.ke',
+    role: 'lecturer',
+  });
+
+  const lecturerReq = new Request('http://localhost:3000/api/v1/grades/enter', {
+    headers: { Authorization: `Bearer ${lecturerToken}` },
+  });
+
+  // Lecturer has grades:write
+  const allowed = requirePermission(lecturerReq, 'grades:write');
+  assert.ok('user' in allowed);
+
+  // Lecturer lacks finance:reconcile
+  const blocked = requirePermission(lecturerReq, 'finance:reconcile');
+  assert.ok('errorResponse' in blocked);
+  assert.equal(blocked.errorResponse.status, 403);
+});
+
+test('audit logging appends immutable records and supports telemetry filtering', () => {
+  const uniqueAction = `AUDIT_TEST_${Date.now()}`;
+  recordAuditEvent({
+    actor_email: 'tester@university.ac.ke',
+    actor_role: 'admin',
+    action: uniqueAction,
+    entity_type: 'security_test',
+    entity_id: 'tst-01',
+    ip_address: '10.0.0.1',
+    status: 'SUCCESS',
+    details: { test: true },
+  });
+
+  const logs = getAuditLogs({ action: uniqueAction });
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0].action, uniqueAction);
+  assert.equal(logs[0].actor_email, 'tester@university.ac.ke');
+  assert.equal(logs[0].status, 'SUCCESS');
 });
 

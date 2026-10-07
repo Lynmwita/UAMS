@@ -76,6 +76,13 @@ app.post('/api/v1/auth/login', async (req, res) => {
       });
     }
 
+    if (process.env.NODE_ENV === 'production' && process.env.ENABLE_DEMO_AUTH !== 'true') {
+      return res.status(403).json({
+        success: false,
+        error: 'Demo accounts are disabled in production environment. Please configure authentic Supabase authentication.',
+      });
+    }
+
     if (!isValidDemoCredential(email, password, role)) {
       return res.status(401).json({
         success: false,

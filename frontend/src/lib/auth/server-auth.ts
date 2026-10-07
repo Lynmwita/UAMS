@@ -2,19 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { UserRole } from '@/types';
 import { normalizeRole } from './session';
+import { validateCsrf } from './csrf';
+
+let ephemeralDevSecret: string | null = null;
 
 export function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
     if (process.env.NODE_ENV === 'production') {
       throw new Error(
-        'FATAL: JWT_SECRET environment variable is missing in production environment. Refusing to start with insecure defaults.'
+        'FATAL SECURITY VIOLATION: JWT_SECRET environment variable must be configured in production. Refusing to start.'
       );
     }
-    return 'uams-enterprise-secure-jwt-signing-key-2026-nonprod-salt';
+    // Dynamic runtime secret: zero static fallback secrets in source code
+    if (!ephemeralDevSecret) {
+      ephemeralDevSecret = crypto.randomBytes(32).toString('hex');
+    }
+    return ephemeralDevSecret;
   }
   if (secret.length < 32 && process.env.NODE_ENV === 'production') {
-    throw new Error('FATAL: JWT_SECRET must be at least 32 characters in production.');
+    throw new Error('FATAL SECURITY VIOLATION: JWT_SECRET must be at least 32 characters in production.');
   }
   return secret;
 }
@@ -124,6 +131,17 @@ export function requireServerAuth(
     };
   }
 
+  // Enforce CSRF protection for authenticated state-changing requests
+  const csrf = validateCsrf(request);
+  if (!csrf.valid) {
+    return {
+      errorResponse: NextResponse.json(
+        { success: false, error: `Forbidden: ${csrf.error}` },
+        { status: 403 }
+      ),
+    };
+  }
+
   if (allowedRoles && allowedRoles.length > 0) {
     const canonicalRole = normalizeRole(user.role);
     const hasRole = allowedRoles.some((r) => normalizeRole(r) === canonicalRole || canonicalRole === 'super_admin');
@@ -138,4 +156,32 @@ export function requireServerAuth(
   }
 
   return { user };
+}
+
+/**
+ * Validates that an authenticated request holds a fine-grained permission.
+ */
+export function requirePermission(
+  request: Request | NextRequest,
+  permission: import('./rbac').Permission
+): { user: TokenPayload } | { errorResponse: NextResponse } {
+  const auth = requireServerAuth(request);
+  if ('errorResponse' in auth) {
+    return auth;
+  }
+
+  const { roleHasPermission } = require('./rbac');
+  if (!roleHasPermission(auth.user.role, permission)) {
+    return {
+      errorResponse: NextResponse.json(
+        {
+          success: false,
+          error: `Forbidden: User role '${auth.user.role}' lacks required permission '${permission}'.`,
+        },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return { user: auth.user };
 }

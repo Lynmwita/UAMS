@@ -1,13 +1,42 @@
 'use client';
 
-import { Activity, ShieldCheck } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Activity, ShieldCheck, RefreshCw } from 'lucide-react';
+
+interface AuditItem {
+  id: string;
+  timestamp: string;
+  actor_email: string;
+  actor_role: string;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  ip_address: string;
+  status: string;
+}
 
 export default function AuditPage() {
-  const logs = [
-    { timestamp: '2026-10-03 22:15:10', user: 'admin@university.ac.ke', action: 'STUDENT_ADMITTED', entity: 'students (STU/2026/0204)', ip: '192.168.1.10' },
-    { timestamp: '2026-10-03 21:40:22', user: 'finance@university.ac.ke', action: 'PAYMENT_VERIFIED', entity: 'transactions (QHJ8917263)', ip: '192.168.1.45' },
-    { timestamp: '2026-10-03 20:10:04', user: 'lecturer@university.ac.ke', action: 'GRADE_SUBMITTED', entity: 'student_grades (CSC401)', ip: '192.168.2.18' },
-  ];
+  const [logs, setLogs] = useState<AuditItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/v1/audit?limit=25');
+      const data = await res.json();
+      if (data?.success && Array.isArray(data.data)) {
+        setLogs(data.data);
+      }
+    } catch {
+      // Graceful fallback to initial telemetry
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLogs();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -17,9 +46,17 @@ export default function AuditPage() {
             Security & Audit Telemetry
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Immutable transaction logs, administrative grade overrides, and permission mutations.
+            Append-only event ledger tracking logins, grade submissions, administrative overrides, and mutations.
           </p>
         </div>
+        <button
+          onClick={fetchLogs}
+          disabled={loading}
+          className="inline-flex items-center space-x-2 px-3.5 py-2 text-xs font-semibold bg-white border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 shadow-sm transition disabled:opacity-50"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
+          <span>Refresh Telemetry</span>
+        </button>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
@@ -28,27 +65,61 @@ export default function AuditPage() {
             <thead className="text-xs font-bold uppercase bg-slate-50 text-slate-600 border-b border-slate-200">
               <tr>
                 <th className="px-5 py-3.5">Timestamp</th>
-                <th className="px-5 py-3.5">User</th>
+                <th className="px-5 py-3.5">Actor</th>
                 <th className="px-5 py-3.5">Action Code</th>
                 <th className="px-5 py-3.5">Target Entity</th>
+                <th className="px-5 py-3.5">Status</th>
                 <th className="px-5 py-3.5">IP Address</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {logs.map((l, i) => (
-                <tr key={i} className="hover:bg-slate-50/60">
-                  <td className="px-5 py-3.5 font-mono text-xs text-slate-500 whitespace-nowrap">{l.timestamp}</td>
-                  <td className="px-5 py-3.5 font-medium text-slate-900 whitespace-nowrap">{l.user}</td>
-                  <td className="px-5 py-3.5 whitespace-nowrap"><span className="px-2.5 py-0.5 rounded text-xs font-mono font-bold bg-slate-100 text-academic-navy-900 border border-slate-200">{l.action}</span></td>
-                  <td className="px-5 py-3.5 font-mono text-xs text-slate-600 whitespace-nowrap">{l.entity}</td>
-                  <td className="px-5 py-3.5 font-mono text-xs text-slate-400 whitespace-nowrap">{l.ip}</td>
+              {logs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-6 text-center text-xs text-slate-400">
+                    {loading ? 'Streaming audit ledger records...' : 'No audit telemetry events found.'}
+                  </td>
                 </tr>
-              ))}
+              ) : (
+                logs.map((l) => (
+                  <tr key={l.id} className="hover:bg-slate-50/60">
+                    <td className="px-5 py-3.5 font-mono text-xs text-slate-500 whitespace-nowrap">
+                      {new Date(l.timestamp).toLocaleString()}
+                    </td>
+                    <td className="px-5 py-3.5 font-medium text-slate-900 whitespace-nowrap">
+                      <div>{l.actor_email}</div>
+                      <div className="text-[10px] text-slate-400 uppercase font-mono">{l.actor_role}</div>
+                    </td>
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      <span className="px-2.5 py-0.5 rounded text-xs font-mono font-bold bg-slate-100 text-academic-navy-900 border border-slate-200">
+                        {l.action}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5 font-mono text-xs text-slate-600 whitespace-nowrap">
+                      {l.entity_type} ({l.entity_id})
+                    </td>
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          l.status === 'SUCCESS'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : l.status === 'BLOCKED'
+                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                            : 'bg-rose-50 text-rose-700 border border-rose-200'
+                        }`}
+                      >
+                        {l.status}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5 font-mono text-xs text-slate-400 whitespace-nowrap">
+                      {l.ip_address}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
       </div>
-
     </div>
   );
 }

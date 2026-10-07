@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { calculateGradePoint, getAcademicStanding } from '@/lib/academic/gpa';
 import { requireServerAuth } from '@/lib/auth/server-auth';
+import { recordAuditEvent } from '@/lib/audit/audit-logger';
 
 let gradesStore = [
   {
@@ -131,6 +132,22 @@ export async function POST(request: NextRequest) {
     };
 
     gradesStore.push(newGrade);
+
+    recordAuditEvent({
+      actor_email: auth.user.email,
+      actor_role: auth.user.role,
+      action: 'GRADE_SUBMITTED',
+      entity_type: 'student_grades',
+      entity_id: newGrade.id,
+      ip_address: request.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1',
+      status: 'SUCCESS',
+      details: {
+        student_id: newGrade.student_id,
+        course_code: newGrade.course_code,
+        total_score: newGrade.total_score,
+        letter_grade: newGrade.letter_grade,
+      },
+    });
 
     return NextResponse.json({
       success: true,

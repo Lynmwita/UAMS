@@ -1,5 +1,24 @@
 import { UserRole } from '@/types';
 
+export type Permission =
+  | 'students:read'
+  | 'students:write'
+  | 'grades:read'
+  | 'grades:write'
+  | 'grades:approve'
+  | 'courses:read'
+  | 'courses:write'
+  | 'finance:read'
+  | 'finance:reconcile'
+  | 'finance:write'
+  | 'hostels:read'
+  | 'hostels:allocate'
+  | 'library:read'
+  | 'library:loan'
+  | 'exams:read'
+  | 'exams:schedule'
+  | 'audit:read';
+
 export const ROLE_HIERARCHY: Record<UserRole, number> = {
   super_admin: 100,
   admin: 90,
@@ -19,6 +38,98 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   finance_officer: 'Finance Officer',
   student: 'Student',
 };
+
+export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
+  super_admin: [
+    'students:read',
+    'students:write',
+    'grades:read',
+    'grades:write',
+    'grades:approve',
+    'courses:read',
+    'courses:write',
+    'finance:read',
+    'finance:reconcile',
+    'finance:write',
+    'hostels:read',
+    'hostels:allocate',
+    'library:read',
+    'library:loan',
+    'exams:read',
+    'exams:schedule',
+    'audit:read',
+  ],
+  admin: [
+    'students:read',
+    'students:write',
+    'grades:read',
+    'grades:write',
+    'grades:approve',
+    'courses:read',
+    'courses:write',
+    'finance:read',
+    'finance:reconcile',
+    'finance:write',
+    'hostels:read',
+    'hostels:allocate',
+    'library:read',
+    'library:loan',
+    'exams:read',
+    'exams:schedule',
+    'audit:read',
+  ],
+  registrar: [
+    'students:read',
+    'students:write',
+    'grades:read',
+    'grades:approve',
+    'courses:read',
+    'courses:write',
+    'exams:read',
+    'exams:schedule',
+    'hostels:read',
+    'hostels:allocate',
+    'audit:read',
+  ],
+  hod: [
+    'students:read',
+    'grades:read',
+    'grades:write',
+    'grades:approve',
+    'courses:read',
+    'courses:write',
+    'exams:read',
+    'exams:schedule',
+  ],
+  lecturer: [
+    'grades:read',
+    'grades:write',
+    'courses:read',
+    'exams:read',
+  ],
+  finance_officer: [
+    'finance:read',
+    'finance:reconcile',
+    'finance:write',
+    'students:read',
+    'audit:read',
+  ],
+  student: [
+    'courses:read',
+    'courses:write',
+    'hostels:read',
+    'hostels:allocate',
+    'library:read',
+    'library:loan',
+    'exams:read',
+  ],
+};
+
+export function roleHasPermission(role: UserRole, permission: Permission): boolean {
+  if (role === 'super_admin') return true;
+  const permissions = ROLE_PERMISSIONS[role] || [];
+  return permissions.includes(permission);
+}
 
 export function hasPermission(userRole: UserRole, requiredRoles: UserRole[]): boolean {
   if (userRole === 'super_admin') return true;
