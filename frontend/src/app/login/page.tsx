@@ -169,53 +169,60 @@ function LoginForm() {
             </button>
           </form>
 
-          {/* Reviewer / Test Credentials Helper */}
-          <div className="mt-8 border-t border-slate-200 pt-5">
-            <div className="flex items-center space-x-1.5 text-[11px] text-slate-600 font-bold uppercase tracking-wider mb-1.5">
-              <ShieldCheck className="h-3.5 w-3.5 text-academic-navy-700" />
-              <span>Review Test Accounts (Pre-fills Form)</span>
+          {/* Reviewer / Test Credentials Sandbox Helper (Disabled when NEXT_PUBLIC_DISABLE_DEMO_CREDENTIALS=true) */}
+          {process.env.NEXT_PUBLIC_DISABLE_DEMO_CREDENTIALS !== 'true' && (
+            <div className="mt-8 border-t border-slate-200 pt-5">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center space-x-1.5 text-[11px] text-slate-600 font-bold uppercase tracking-wider">
+                  <ShieldCheck className="h-3.5 w-3.5 text-amber-600" />
+                  <span>Defense Sandbox Accounts</span>
+                </div>
+                <span className="text-[10px] font-semibold bg-amber-100 text-amber-800 px-2 py-0.5 rounded border border-amber-200">
+                  Demo Mode Only
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mb-3">
+                Pre-populates demonstration accounts for supervisor evaluation. Automatically disabled in production deployments:
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => handleFillDemoCredentials('super_admin')}
+                  className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
+                >
+                  Super Admin
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleFillDemoCredentials('registrar')}
+                  className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
+                >
+                  Registrar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleFillDemoCredentials('lecturer')}
+                  className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
+                >
+                  Lecturer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleFillDemoCredentials('finance_officer')}
+                  className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
+                >
+                  Finance Officer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleFillDemoCredentials('student')}
+                  className="col-span-2 p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
+                >
+                  Student (Faith Wanjiku)
+                </button>
+              </div>
             </div>
-            <p className="text-[11px] text-slate-500 mb-3">
-              Click a role to load demonstration credentials into the form, then click Authenticate:
-            </p>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => handleFillDemoCredentials('super_admin')}
-                className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
-              >
-                Super Admin
-              </button>
-              <button
-                type="button"
-                onClick={() => handleFillDemoCredentials('registrar')}
-                className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
-              >
-                Registrar
-              </button>
-              <button
-                type="button"
-                onClick={() => handleFillDemoCredentials('lecturer')}
-                className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
-              >
-                Lecturer
-              </button>
-              <button
-                type="button"
-                onClick={() => handleFillDemoCredentials('finance_officer')}
-                className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
-              >
-                Finance Officer
-              </button>
-              <button
-                type="button"
-                onClick={() => handleFillDemoCredentials('student')}
-                className="col-span-2 p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
-              >
-                Student (Faith Wanjiku)
-              </button>
-            </div>
-          </div>
+          )}
         </div>
       </main>
     </div>

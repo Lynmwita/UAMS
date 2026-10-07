@@ -1,9 +1,34 @@
 import { NextResponse } from 'next/server';
 import { DEMO_USERS, isValidDemoCredentials, normalizeRole } from '@/lib/auth/session';
 import { createSignedToken } from '@/lib/auth/server-auth';
+import { checkRateLimit } from '@/lib/auth/rate-limiter';
 
 export async function POST(request: Request) {
   try {
+    // Brute-force & rate-limiting protection (OWASP defense against credential stuffing)
+    const ip =
+      request.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+      request.headers.get('x-real-ip') ||
+      '127.0.0.1';
+
+    const rateLimit = checkRateLimit(`login:${ip}`, 10, 60);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Too many authentication attempts. Please retry in ${rateLimit.resetSeconds} seconds.`,
+        },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(rateLimit.resetSeconds),
+            'X-RateLimit-Limit': String(rateLimit.limit),
+            'X-RateLimit-Remaining': '0',
+          },
+        }
+      );
+    }
+
     const body = await request.json();
     const email = typeof body?.email === 'string' ? body.email.trim() : '';
     const password = typeof body?.password === 'string' ? body.password : '';

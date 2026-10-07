@@ -15,10 +15,24 @@ function normalizeRole(role = 'student') {
 
 const crypto = require('crypto');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'uams-backend-secure-jwt-signing-key-2026';
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'FATAL: JWT_SECRET environment variable is missing in production environment. Refusing to start with insecure defaults.'
+      );
+    }
+    return 'uams-enterprise-secure-jwt-signing-key-2026-nonprod-salt';
+  }
+  if (secret.length < 32 && process.env.NODE_ENV === 'production') {
+    throw new Error('FATAL: JWT_SECRET must be at least 32 characters in production.');
+  }
+  return secret;
+}
 
 function signPayload(payload) {
-  return crypto.createHmac('sha256', JWT_SECRET).update(payload).digest('hex');
+  return crypto.createHmac('sha256', getJwtSecret()).update(payload).digest('hex');
 }
 
 function buildDemoToken(role = 'student') {
@@ -121,4 +135,5 @@ module.exports = {
   verifyDemoToken,
   requireRole,
   isValidDemoCredential,
+  getJwtSecret,
 };

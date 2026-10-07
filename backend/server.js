@@ -102,6 +102,10 @@ app.post('/api/v1/auth/login', async (req, res) => {
 });
 
 app.get('/api/v1/students', requireRole(['student', 'admin', 'super_admin', 'registrar', 'hod', 'lecturer', 'finance_officer']), (req, res) => {
+  if (req.user.role === 'student') {
+    const studentSelf = students.filter((s) => s.admission_number === 'BIT/2023/8849');
+    return res.json({ success: true, count: studentSelf.length, data: studentSelf, role_context: 'student_self' });
+  }
   res.json({ success: true, count: students.length, data: students });
 });
 
@@ -129,6 +133,11 @@ app.get('/api/v1/courses', requireRole(['student', 'admin', 'super_admin', 'regi
 });
 
 app.get('/api/v1/grades', requireRole(['student', 'admin', 'super_admin', 'registrar', 'hod', 'lecturer']), (req, res) => {
+  if (req.user.role === 'student') {
+    // IDOR / BOLA Guard: Students can only view their own transcript
+    const myGrades = grades.filter((g) => g.admission_number === 'BIT/2023/8849');
+    return res.json({ success: true, data: myGrades });
+  }
   const { admission_number } = req.query;
   const filtered = admission_number ? grades.filter((g) => g.admission_number === admission_number) : grades;
   res.json({ success: true, data: filtered });

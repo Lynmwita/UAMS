@@ -41,7 +41,10 @@ export function isValidDemoCredentials(email: string, password: string, role?: s
 
 export function saveSession(session: AuthSession): void {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  // Security hardening: Do not persist sensitive JWTs in localStorage (OWASP XSS defense).
+  // The cryptographically signed token is stored exclusively in the secure httpOnly cookie.
+  const { token: _omitted, ...safeSession } = session;
+  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(safeSession));
 }
 
 export function readSession(): AuthSession | null {

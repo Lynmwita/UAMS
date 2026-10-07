@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { ExamSchedule, ExamClearanceCard } from '@/types';
+import { requireServerAuth } from '@/lib/auth/server-auth';
 
 let examSchedules: ExamSchedule[] = [
   { id: 'exm-01', course_code: 'BCS 2101', course_title: 'Database Systems & Architecture', exam_date: '2026-10-15', start_time: '09:00 AM', end_time: '12:00 PM', venue: 'Multi-Purpose Hall A', chief_invigilator: 'Dr. Evans Kiprop', total_candidates: 120, status: 'scheduled' },
@@ -38,17 +39,39 @@ let clearanceCards: ExamClearanceCard[] = [
   },
 ];
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const auth = requireServerAuth(req);
+  if ('errorResponse' in auth) {
+    return auth.errorResponse;
+  }
+
+  const { user } = auth;
+  let filteredCards = [...clearanceCards];
+
+  if (user.role === 'student') {
+    filteredCards = filteredCards.filter(
+      (c) =>
+        c.student_id === user.id ||
+        (user.email === 'student@university.ac.ke' && c.admission_number === 'BIT/2023/8849')
+    );
+  }
+
   return NextResponse.json({
     success: true,
     data: {
       schedules: examSchedules,
-      cards: clearanceCards,
+      cards: filteredCards,
     },
   });
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  // Only academic administrators can schedule examinations
+  const auth = requireServerAuth(req, ['super_admin', 'admin', 'registrar', 'hod']);
+  if ('errorResponse' in auth) {
+    return auth.errorResponse;
+  }
+
   try {
     const body = await req.json();
     const { action, course_code, course_title, exam_date, start_time, end_time, venue, chief_invigilator, total_candidates } = body;

@@ -69,17 +69,18 @@ export async function GET(request: NextRequest) {
   const program = searchParams.get('program');
   const status = searchParams.get('status');
 
-  // Student role isolation: students may only view their own profile
+  // Student role isolation: students may only view their own profile (IDOR / BOLA Prevention)
   if (user.role === 'student') {
     const studentSelf = studentsStore.filter(
-      (s) => s.email.toLowerCase() === user.email.toLowerCase() || s.user_id === user.id
+      (s) =>
+        s.email.toLowerCase() === user.email.toLowerCase() ||
+        s.user_id === user.id ||
+        (user.email.toLowerCase() === 'student@university.ac.ke' && s.id === 'stu-1')
     );
-    // If demo match fallback
-    const result = studentSelf.length > 0 ? studentSelf : [studentsStore[0]];
     return NextResponse.json({
       success: true,
-      total: result.length,
-      data: result,
+      total: studentSelf.length,
+      data: studentSelf,
       role_context: 'student_self',
     });
   }

@@ -3,7 +3,21 @@ import crypto from 'crypto';
 import { UserRole } from '@/types';
 import { normalizeRole } from './session';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'uams-enterprise-secure-jwt-signing-key-2026';
+export function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'FATAL: JWT_SECRET environment variable is missing in production environment. Refusing to start with insecure defaults.'
+      );
+    }
+    return 'uams-enterprise-secure-jwt-signing-key-2026-nonprod-salt';
+  }
+  if (secret.length < 32 && process.env.NODE_ENV === 'production') {
+    throw new Error('FATAL: JWT_SECRET must be at least 32 characters in production.');
+  }
+  return secret;
+}
 
 export interface TokenPayload {
   id: string;
@@ -24,7 +38,7 @@ export function createSignedToken(payload: Omit<TokenPayload, 'exp' | 'iat'>, ex
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
   const body = Buffer.from(JSON.stringify(fullPayload)).toString('base64url');
   const signature = crypto
-    .createHmac('sha256', JWT_SECRET)
+    .createHmac('sha256', getJwtSecret())
     .update(`${header}.${body}`)
     .digest('base64url');
 
@@ -42,7 +56,7 @@ export function verifySignedToken(token: string): TokenPayload | null {
 
   const [header, body, signature] = parts;
   const expectedSig = crypto
-    .createHmac('sha256', JWT_SECRET)
+    .createHmac('sha256', getJwtSecret())
     .update(`${header}.${body}`)
     .digest('base64url');
 

@@ -66,8 +66,12 @@ export async function GET(request: NextRequest) {
 
   let results = [...gradesStore];
   if (user.role === 'student') {
-    // Student can only see their own grades
-    results = results.filter((g) => g.admission_number === 'BIT/2023/8849' || g.student_id === user.id);
+    // Student can strictly see only their own grades (IDOR / BOLA Prevention)
+    results = results.filter(
+      (g) =>
+        g.student_id === user.id ||
+        (user.email.toLowerCase() === 'student@university.ac.ke' && g.admission_number === 'BIT/2023/8849')
+    );
   } else {
     if (studentId) {
       results = results.filter((g) => g.student_id === studentId);
