@@ -159,8 +159,9 @@ function LoginForm() {
             </button>
           </form>
 
-          {/* Reviewer / Test Credentials Sandbox Helper (Disabled when NEXT_PUBLIC_DISABLE_DEMO_CREDENTIALS=true) */}
-          {process.env.NEXT_PUBLIC_DISABLE_DEMO_CREDENTIALS !== 'true' && (
+          {/* Reviewer / Test Credentials Sandbox Helper (Strictly hidden in production unless NEXT_PUBLIC_ENABLE_DEMO_AUTH='true') */}
+          {(process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_ENABLE_DEMO_AUTH === 'true') &&
+            process.env.NEXT_PUBLIC_DISABLE_DEMO_CREDENTIALS !== 'true' && (
             <div className="mt-8 border-t border-slate-200 pt-5">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center space-x-1.5 text-[11px] text-slate-600 font-bold uppercase tracking-wider">
