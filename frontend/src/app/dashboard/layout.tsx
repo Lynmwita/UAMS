@@ -6,7 +6,7 @@ import Navbar from '@/components/Navbar';
 import Sidebar from '@/components/Sidebar';
 import { UserRole } from '@/types';
 import { ROLE_LABELS } from '@/lib/auth/rbac';
-import { readSession, AuthSession } from '@/lib/auth/session';
+import { AuthSession } from '@/lib/auth/session';
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -15,14 +15,38 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const [isVerifying, setIsVerifying] = useState(true);
 
   useEffect(() => {
-    const activeSession = readSession();
-    if (!activeSession) {
-      // Unauthenticated: redirect to login page
-      router.replace('/login?redirect=/dashboard');
-      return;
+    let isMounted = true;
+    async function verifySession() {
+      try {
+        const res = await fetch('/api/v1/auth/me');
+        if (!res.ok) {
+          router.replace('/login?redirect=/dashboard');
+          return;
+        }
+        const data = await res.json();
+        if (isMounted) {
+          if (data?.success && data?.user) {
+            setSession({
+              id: data.user.id,
+              email: data.user.email,
+              role: data.user.role,
+              firstName: data.user.firstName,
+              lastName: data.user.lastName,
+              authenticatedAt: new Date().toISOString(),
+            });
+            setIsVerifying(false);
+          } else {
+            router.replace('/login?redirect=/dashboard');
+          }
+        }
+      } catch {
+        router.replace('/login?redirect=/dashboard');
+      }
     }
-    setSession(activeSession);
-    setIsVerifying(false);
+    verifySession();
+    return () => {
+      isMounted = false;
+    };
   }, [router]);
 
   if (isVerifying) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { HostelBlock, HostelRoom, HostelAllocation } from '@/types';
-import { requireServerAuth } from '@/lib/auth/server-auth';
+import { requireServerAuth, requirePermission } from '@/lib/auth/server-auth';
+import { recordAuditEvent } from '@/lib/audit/audit-logger';
 
 let hostelBlocks: HostelBlock[] = [
   { id: 'blk-01', code: 'BLK-A', name: 'Kilimanjaro Hall (Male)', gender_designation: 'male', total_floors: 4, total_capacity: 320, warden_name: 'Mr. David Omondi', warden_phone: '+254711223344', is_active: true },
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = requireServerAuth(req, ['student', 'admin', 'super_admin', 'registrar']);
+  const auth = requirePermission(req, 'hostels:allocate');
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
@@ -98,6 +99,17 @@ export async function POST(req: NextRequest) {
     selectedRoom.is_available = selectedRoom.occupied_beds < selectedRoom.capacity;
 
     hostelAllocations.unshift(newAllocation);
+
+    recordAuditEvent({
+      actor_email: user.email,
+      actor_role: user.role,
+      action: 'HOSTEL_ALLOCATED',
+      entity_type: 'hostel_allocations',
+      entity_id: newAllocation.id,
+      ip_address: req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1',
+      status: 'SUCCESS',
+      details: { room: newAllocation.room_number, bed: newAllocation.bed_number, student: newAllocation.student_name },
+    });
 
     return NextResponse.json({
       success: true,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ExamSchedule, ExamClearanceCard } from '@/types';
-import { requireServerAuth } from '@/lib/auth/server-auth';
+import { requireServerAuth, requirePermission } from '@/lib/auth/server-auth';
+import { recordAuditEvent } from '@/lib/audit/audit-logger';
 
 let examSchedules: ExamSchedule[] = [
   { id: 'exm-01', course_code: 'BCS 2101', course_title: 'Database Systems & Architecture', exam_date: '2026-10-15', start_time: '09:00 AM', end_time: '12:00 PM', venue: 'Multi-Purpose Hall A', chief_invigilator: 'Dr. Evans Kiprop', total_candidates: 120, status: 'scheduled' },
@@ -66,11 +67,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  // Only academic administrators can schedule examinations
-  const auth = requireServerAuth(req, ['super_admin', 'admin', 'registrar', 'hod']);
+  // Permission guard: strictly requires exams:schedule permission
+  const auth = requirePermission(req, 'exams:schedule');
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
+
+  const { user } = auth;
 
   try {
     const body = await req.json();
@@ -91,6 +94,18 @@ export async function POST(req: NextRequest) {
       };
 
       examSchedules.push(newSchedule);
+
+      recordAuditEvent({
+        actor_email: user.email,
+        actor_role: user.role,
+        action: 'EXAM_SCHEDULED',
+        entity_type: 'exam_schedules',
+        entity_id: newSchedule.id,
+        ip_address: req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1',
+        status: 'SUCCESS',
+        details: { course_code: newSchedule.course_code, venue: newSchedule.venue, date: newSchedule.exam_date },
+      });
+
       return NextResponse.json({ success: true, message: `Exam scheduled for ${course_code}.`, data: newSchedule });
     }
 

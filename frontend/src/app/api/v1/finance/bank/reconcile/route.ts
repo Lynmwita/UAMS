@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { requireServerAuth } from '@/lib/auth/server-auth';
+import { requirePermission } from '@/lib/auth/server-auth';
+import { recordAuditEvent } from '@/lib/audit/audit-logger';
 
 export interface BankTransaction {
   id: string;
@@ -60,7 +61,7 @@ let bankTransactions: BankTransaction[] = [
 ];
 
 export async function GET(req: Request) {
-  const auth = requireServerAuth(req, ['finance_officer', 'admin', 'super_admin']);
+  const auth = requirePermission(req, 'finance:read');
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
@@ -78,7 +79,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const auth = requireServerAuth(req, ['finance_officer', 'admin', 'super_admin']);
+  const auth = requirePermission(req, 'finance:reconcile');
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
@@ -99,6 +100,16 @@ export async function POST(req: Request) {
       tx.reconciled_at = new Date().toISOString().replace('T', ' ').substring(0, 16);
       if (notes) tx.notes = notes;
 
+      recordAuditEvent({
+        actor_email: user.email,
+        actor_role: user.role,
+        action: 'BANK_TRANSACTION_RECONCILED',
+        entity_type: 'bank_transactions',
+        entity_id: tx.reference,
+        ip_address: req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1',
+        status: 'SUCCESS',
+        details: { amount: tx.amount, student: tx.student_admission_number },
+      });
 
       return NextResponse.json({
         success: true,

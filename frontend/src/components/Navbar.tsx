@@ -45,12 +45,17 @@ export default function Navbar({ userEmail, userRole }: NavbarProps) {
                   {userRole}
                 </span>
               </div>
-              <Link
-                href="/login"
-                className="text-xs bg-academic-crimson-900/30 hover:bg-academic-crimson-900/50 text-rose-300 border border-rose-800/40 px-3 py-1.5 rounded transition font-medium"
+              <button
+                onClick={async () => {
+                  try {
+                    await fetch('/api/v1/auth/logout', { method: 'POST' });
+                  } catch {}
+                  window.location.href = '/login';
+                }}
+                className="text-xs bg-academic-crimson-900/30 hover:bg-academic-crimson-900/50 text-rose-300 border border-rose-800/40 px-3 py-1.5 rounded transition font-medium cursor-pointer"
               >
                 Sign Out
-              </Link>
+              </button>
             </div>
           ) : (
             <div className="flex items-center space-x-3">

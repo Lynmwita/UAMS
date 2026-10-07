@@ -252,3 +252,39 @@ test('audit logging appends immutable records and supports telemetry filtering',
   assert.equal(logs[0].status, 'SUCCESS');
 });
 
+test('auth/me route verifies cookie-only sessions and logout clears cookie', async () => {
+  const { GET: getAuthMe } = await import('../../app/api/v1/auth/me/route');
+  const { POST: postLogout } = await import('../../app/api/v1/auth/logout/route');
+
+  // Unauthenticated call
+  const unauthReq = new Request('http://localhost:3000/api/v1/auth/me');
+  const unauthRes = await getAuthMe(unauthReq as any);
+  assert.equal(unauthRes.status, 401);
+
+  // Authenticated call via cookie
+  const validToken = createSignedToken({
+    id: 'usr-student-01',
+    email: 'student@university.ac.ke',
+    role: 'student',
+  });
+
+  const authReq = new Request('http://localhost:3000/api/v1/auth/me', {
+    headers: {
+      Cookie: `uams_auth_token=${validToken}`,
+    },
+  });
+
+  const authRes = await getAuthMe(authReq as any);
+  assert.equal(authRes.status, 200);
+  const authData = await authRes.json();
+  assert.equal(authData.success, true);
+  assert.equal(authData.user.email, 'student@university.ac.ke');
+  assert.equal(authData.user.role, 'student');
+
+  // Logout clears session cookie
+  const logoutRes = await postLogout();
+  assert.equal(logoutRes.status, 200);
+  const cookieHeader = logoutRes.headers.get('set-cookie');
+  assert.ok(cookieHeader?.includes('uams_auth_token=;'));
+});
+

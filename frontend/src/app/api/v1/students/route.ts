@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireServerAuth } from '@/lib/auth/server-auth';
+import { requireServerAuth, requirePermission } from '@/lib/auth/server-auth';
+import { recordAuditEvent } from '@/lib/audit/audit-logger';
 
 // In-memory student store synchronized with database schema
 let studentsStore = [
@@ -114,8 +115,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  // Only admissions/registrar and admins can register students
-  const auth = requireServerAuth(request, ['super_admin', 'admin', 'registrar']);
+  // Permission guard: strictly requires students:write permission
+  const auth = requirePermission(request, 'students:write');
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
@@ -149,6 +150,17 @@ export async function POST(request: NextRequest) {
     };
 
     studentsStore.unshift(newStudent);
+
+    recordAuditEvent({
+      actor_email: auth.user.email,
+      actor_role: auth.user.role,
+      action: 'STUDENT_REGISTERED',
+      entity_type: 'students',
+      entity_id: newStudent.id,
+      ip_address: request.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1',
+      status: 'SUCCESS',
+      details: { admission_number: newStudent.admission_number, name: `${newStudent.first_name} ${newStudent.last_name}` },
+    });
 
     return NextResponse.json({
       success: true,

@@ -37,17 +37,7 @@ function LoginForm() {
       throw new Error(data?.error || 'Authentication failed. Please try again.');
     }
 
-    saveSession({
-      id: data.user.id,
-      email: data.user.email,
-      role: data.user.role,
-      firstName: data.user.firstName,
-      lastName: data.user.lastName,
-      token: data.token,
-      authenticatedAt: new Date().toISOString(),
-    });
-
-
+    // Session is held exclusively in secure httpOnly cookie set by /api/v1/auth/login
     router.push(`/dashboard?role=${data.user.role}`);
   };
 
