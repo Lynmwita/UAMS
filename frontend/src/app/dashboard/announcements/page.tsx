@@ -1,54 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/lib/auth/context';
 import { Bell, Plus, AlertCircle, Bookmark, Megaphone, Calendar, X, Filter } from 'lucide-react';
 
 export default function AnnouncementsPage() {
+  const {role}=useAuth();
+  const canPost=['super_admin','admin','registrar'].includes(role);
   const [filterAudience, setFilterAudience] = useState('All');
 
-  const [notices, setNotices] = useState([
-    {
-      id: '1',
-      title: 'Semester 1 Course Registration & Add/Drop Deadline',
-      audience: 'Students',
-      category: 'Academic',
-      priority: 'Urgent',
-      date: 'Oct 3, 2026',
-      author: 'Office of the Registrar',
-      body: 'All students are reminded that the portal window for registering Semester 1 units will officially close on October 15, 2026 at 11:59 PM. Late registration will attract a penalty fee.',
-    },
-    {
-      id: '2',
-      title: 'Fee Payment & Examination Clearance Regulations',
-      audience: 'Students',
-      category: 'Finance',
-      priority: 'Important',
-      date: 'Oct 2, 2026',
-      author: 'Bursar & Finance Directorate',
-      body: 'Students must clear all outstanding semester balances via M-Pesa Paybill 522533 using their Student Admission Number as the account reference. Exam passes will be generated only for cleared students.',
-    },
-    {
-      id: '3',
-      title: 'Faculty Continuous Assessment (CAT) Marks Submission Deadline',
-      audience: 'Faculty & Lecturers',
-      category: 'Examinations',
-      priority: 'Normal',
-      date: 'Oct 1, 2026',
-      author: 'Senate Examination Board',
-      body: 'All course lecturers are requested to enter and submit Continuous Assessment Test (CAT 30%) scores into the UAMS portal before mid-semester moderation.',
-    },
-    {
-      id: '4',
-      title: 'University Career Fair & Tech Innovation Expo 2026',
-      audience: 'All Campus',
-      category: 'Events',
-      priority: 'Normal',
-      date: 'Sep 28, 2026',
-      author: 'Dean of Students',
-      body: 'Join leading tech and financial institutions at the Main Auditorium on November 10, 2026 for on-campus internship and graduate employment interviews.',
-    },
-  ]);
-
+  const [error,setError]=useState('');
+  const [notices,setNotices]=useState<{id:string;title:string;audience:string;category:string;priority:string;date:string;author:string;body:string}[]>([]);
+  useEffect(()=>{fetch('/api/v1/announcements').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);setNotices(d.data);}).catch(e=>setError(e.message));},[]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newNotice, setNewNotice] = useState({
     title: '',
@@ -59,37 +22,16 @@ export default function AnnouncementsPage() {
     body: '',
   });
 
-  const handlePublish = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newNotice.title || !newNotice.body) return;
-
-    const noticeObj = {
-      id: `nt-${Date.now()}`,
-      title: newNotice.title,
-      audience: newNotice.audience,
-      category: newNotice.category,
-      priority: newNotice.priority,
-      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      author: newNotice.author,
-      body: newNotice.body,
-    };
-
-    setNotices([noticeObj, ...notices]);
-    setIsModalOpen(false);
-    setNewNotice({
-      title: '',
-      audience: 'All Campus',
-      category: 'Academic',
-      priority: 'Normal',
-      author: 'Registrar Academic Affairs',
-      body: '',
-    });
+  const handlePublish=async(e:React.FormEvent)=>{
+    e.preventDefault();if(!canPost)return;
+    try{const r=await fetch('/api/v1/announcements',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(newNotice)});const d=await r.json();if(!r.ok)throw new Error(d.error);setNotices(prev=>[d.data,...prev]);setIsModalOpen(false);setError('');}catch(e){setError(e instanceof Error?e.message:'Publishing failed.');}
   };
 
   const filteredNotices = filterAudience === 'All' ? notices : notices.filter((n) => n.audience === filterAudience || n.audience === 'All Campus');
 
   return (
     <div className="space-y-6">
+      {error&&<p role="alert" className="text-rose-700">{error}</p>}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-200 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-academic-navy-950 tracking-tight">
@@ -101,7 +43,8 @@ export default function AnnouncementsPage() {
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
+          hidden={!canPost} style={{display:canPost ? undefined : 'none'}}
+            onClick={() => setIsModalOpen(true)}
           className="bg-academic-navy-900 hover:bg-academic-navy-800 text-white font-bold px-4 py-2.5 rounded-lg text-sm transition flex items-center space-x-2 shadow-sm"
         >
           <Plus className="h-4 w-4 text-academic-gold-400" />

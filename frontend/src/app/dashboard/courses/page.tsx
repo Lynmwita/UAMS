@@ -1,22 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/lib/auth/context';
+import { roleHasPermission } from '@/lib/auth/rbac';
 import { BookOpen, Plus, Search, Filter, X, Check, Layers } from 'lucide-react';
 
 export default function CoursesPage() {
+  const { role } = useAuth();
+  const canWrite = roleHasPermission(role, 'courses:write');
+  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [levelFilter, setLevelFilter] = useState('all');
 
-  const [courses, setCourses] = useState([
-    { id: '1', code: 'BCS 101', title: 'Introduction to Computer Science & Algorithms', credits: 3, level: 100, dept: 'Computer Science', prereq: 'None', lecturer: 'Dr. Jane Mwangi' },
-    { id: '2', code: 'BIT 102', title: 'Structured Programming in C/C++', credits: 4, level: 100, dept: 'Information Technology', prereq: 'BCS 101', lecturer: 'Prof. David Kamau' },
-    { id: '3', code: 'BCS 211', title: 'Object-Oriented Programming (Java/TypeScript)', credits: 3, level: 200, dept: 'Computer Science', prereq: 'BIT 102', lecturer: 'Eng. Eric Ochieng' },
-    { id: '4', code: 'BCS 311', title: 'Advanced Database Systems & Architecture', credits: 3, level: 300, dept: 'Computer Science', prereq: 'BCS 211', lecturer: 'Dr. Jane Mwangi' },
-    { id: '5', code: 'BIT 312', title: 'Distributed Systems & Cloud Computing', credits: 3, level: 300, dept: 'Information Technology', prereq: 'BIT 220', lecturer: 'Prof. David Kamau' },
-    { id: '6', code: 'BCS 314', title: 'Software Engineering Architecture', credits: 4, level: 300, dept: 'Computer Science', prereq: 'BCS 211', lecturer: 'Eng. Eric Ochieng' },
-    { id: '7', code: 'BCS 316', title: 'Network & System Security', credits: 3, level: 300, dept: 'Computer Science', prereq: 'BIT 215', lecturer: 'Dr. Jane Mwangi' },
-    { id: '8', code: 'BBA 201', title: 'Principles of Financial Accounting', credits: 3, level: 200, dept: 'Business Administration', prereq: 'None', lecturer: 'Dr. Martin Omondi' },
-  ]);
+  type CourseRow = {id:string;code:string;title:string;credits:number;level:number;dept:string;prereq:string;lecturer:string};
+  const [courses,setCourses]=useState<CourseRow[]>([]);
+  const mapCourse=(c:any):CourseRow=>({id:c.id,code:c.code,title:c.title,credits:c.credit_hours,level:c.level,dept:c.department,prereq:c.prerequisites.join(', ') || 'None',lecturer:c.lecturer});
+  useEffect(()=>{fetch('/api/v1/courses').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);setCourses(d.data.map(mapCourse));}).catch(e=>setError(e.message));},[]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCourse, setNewCourse] = useState({
@@ -29,34 +28,16 @@ export default function CoursesPage() {
     lecturer: 'Staff Assigned',
   });
 
-  const handleAddCourse = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCourse.code || !newCourse.title) return;
-
-    const entry = {
-      id: `crs-${Date.now()}`,
-      code: newCourse.code.toUpperCase().trim(),
-      title: newCourse.title.trim(),
-      dept: newCourse.dept,
-      credits: Number(newCourse.credits),
-      level: Number(newCourse.level),
-      prereq: newCourse.prereq || 'None',
-      lecturer: newCourse.lecturer || 'Staff Assigned',
-    };
-
-    setCourses([entry, ...courses]);
-    setIsModalOpen(false);
-    setNewCourse({
-      code: '',
-      title: '',
-      dept: 'Computer Science',
-      credits: 3,
-      level: 100,
-      prereq: 'None',
-      lecturer: 'Staff Assigned',
-    });
+  const handleAddCourse=async(e:React.FormEvent)=>{
+    e.preventDefault();if(!canWrite)return;
+    try{const r=await fetch('/api/v1/courses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:newCourse.code,title:newCourse.title,credit_hours:newCourse.credits,level:newCourse.level,department:newCourse.dept,prerequisites:newCourse.prereq==='None'?[]:newCourse.prereq.split(',').map(p=>p.trim()),lecturer:newCourse.lecturer})});const d=await r.json();if(!r.ok)throw new Error(d.error);setCourses(prev=>[mapCourse(d.data),...prev]);setIsModalOpen(false);setError('');}catch(e){setError(e instanceof Error?e.message:'Course creation failed.');}
   };
 
+  const registerCourse=async(c:CourseRow)=>{try{const r=await fetch('/api/v1/courses/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({course_code:c.code,course_title:c.title})});const d=await r.json();if(!r.ok)throw new Error(d.error);setError('Registration request submitted for '+c.code);void loadRegistrations();}catch(e){setError(e instanceof Error?e.message:'Registration failed.');}};
+  const [registrations,setRegistrations]=useState<{id:string;course_code:string;admission_number:string;status:string}[]>([]);
+  const loadRegistrations=()=>fetch('/api/v1/courses/register').then(async r=>{const d=await r.json();if(r.ok)setRegistrations(d.data);});
+  useEffect(()=>{void loadRegistrations();},[]);
+  const approveRegistration=async(id:string)=>{try{const r=await fetch('/api/v1/courses/register',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({registration_id:id})});const d=await r.json();if(!r.ok)throw new Error(d.error);await loadRegistrations();}catch(e){setError(e instanceof Error?e.message:'Approval failed.');}};
   const filtered = courses.filter((c) => {
     const matchesSearch =
       c.code.toLowerCase().includes(search.toLowerCase()) ||
@@ -68,6 +49,7 @@ export default function CoursesPage() {
 
   return (
     <div className="space-y-6">
+      {error && <p role="alert" className="text-rose-700">{error}</p>}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-200 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-academic-navy-950 tracking-tight">
@@ -79,6 +61,8 @@ export default function CoursesPage() {
         </div>
 
         <button
+          disabled={!canWrite}
+          hidden={!canWrite} style={{display:canWrite ? undefined : 'none'}}
           onClick={() => setIsModalOpen(true)}
           className="bg-academic-navy-900 hover:bg-academic-navy-800 text-white font-bold px-4 py-2.5 rounded-lg text-sm transition flex items-center space-x-2 shadow-sm"
         >
@@ -146,7 +130,7 @@ export default function CoursesPage() {
                   </td>
                   <td className="px-5 py-3.5 font-mono font-bold text-academic-navy-950">{c.credits} Cr</td>
                   <td className="px-5 py-3.5 font-mono text-xs text-slate-500">{c.prereq}</td>
-                  <td className="px-5 py-3.5 text-xs text-slate-600">{c.lecturer}</td>
+                  <td className="px-5 py-3.5 text-xs text-slate-600">{c.lecturer}{role === 'student' && <button onClick={()=>registerCourse(c)} className="ml-3 underline text-academic-navy-800">Register</button>}</td>
                 </tr>
               ))}
             </tbody>
@@ -154,6 +138,7 @@ export default function CoursesPage() {
         </div>
       </div>
 
+      <section className="bg-white rounded border p-4"><h2 className="font-bold mb-3">Course registrations</h2>{registrations.map(r=><div key={r.id} className="flex gap-3 py-2"><span>{r.admission_number}: {r.course_code} — {r.status}</span>{r.status==='pending'&&['super_admin','admin','registrar'].includes(role)&&<button onClick={()=>approveRegistration(r.id)} className="underline">Approve registration</button>}</div>)}</section>
       {/* Add Course Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">

@@ -1,25 +1,39 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import { GraduationCap, Lock, Mail, ArrowRight, ShieldCheck, Landmark } from 'lucide-react';
 import { UserRole } from '@/types';
 import { ROLE_LABELS } from '@/lib/auth/rbac';
+import { isUserRole } from '@/lib/auth/roles';
 
 const DEMO_PASSWORD = 'DemoPassword2026!';
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialRole = (searchParams.get('role') as UserRole) || 'student';
+  const roleParam = searchParams.get('role');
+  const initialRole = isUserRole(roleParam) ? roleParam : 'student';
+  const demoEnabled = (process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_ENABLE_DEMO_AUTH === 'true') && process.env.NEXT_PUBLIC_DISABLE_DEMO_CREDENTIALS !== 'true';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [selectedRole, setSelectedRole] = useState<UserRole>(initialRole);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let active=true;
+    async function restoreSession(){
+      try{
+        let response=await fetch('/api/v1/auth/me',{cache:'no-store'});
+        if(response.status===401){const refreshed=await fetch('/api/v1/auth/refresh',{method:'POST'});if(refreshed.ok)response=await fetch('/api/v1/auth/me',{cache:'no-store'});}
+        if(response.ok&&active){const target=searchParams.get('redirect');router.replace(target&&/^\/dashboard(?:\/|\?|$)/.test(target)?target:'/dashboard');}
+      }catch{/* Leave the login form available. */}
+    }
+    void restoreSession();return()=>{active=false;};
+  },[router,searchParams]);
 
   const authenticate = async (nextRole: UserRole, nextEmail: string, nextPassword: string) => {
     const response = await fetch('/api/v1/auth/login', {
@@ -39,7 +53,9 @@ function LoginForm() {
     }
 
     // Session is held exclusively in secure httpOnly cookie set by /api/v1/auth/login
-    router.push(`/dashboard?role=${data.user.role}`);
+    const target = searchParams.get('redirect');
+    router.push(target && /^\/dashboard(?:\/|\?|$)/.test(target) ? target : '/dashboard');
+    router.refresh();
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -148,7 +164,7 @@ function LoginForm() {
                   className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-lg pl-10 pr-3.5 py-2.5 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-academic-navy-700 focus:bg-white"
                 />
               </div>
-              <p className="text-[11px] text-slate-500 mt-1.5 flex items-center justify-between">
+              {demoEnabled && <p className="text-[11px] text-slate-500 mt-1.5 flex items-center justify-between">
                 <span>Demo password: <code className="bg-slate-100 px-1.5 py-0.5 rounded text-academic-navy-900 font-mono font-medium">DemoPassword2026!</code></span>
                 <button
                   type="button"
@@ -157,7 +173,7 @@ function LoginForm() {
                 >
                   Autofill
                 </button>
-              </p>
+              </p>}
             </div>
 
             <button

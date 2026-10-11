@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { rotateRefreshToken } from '@/lib/auth/refresh-token';
 import { createSignedToken } from '@/lib/auth/server-auth';
 import { recordAuditEvent } from '@/lib/audit/audit-logger';
+import { validateCsrf } from '@/lib/auth/csrf';
+import { authClient, trustedUser } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
+  if (!validateCsrf(request).valid) return NextResponse.json({ success: false, error: 'Invalid request origin.' }, { status: 403 });
   try {
     const ip =
       request.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
@@ -23,6 +26,18 @@ export async function POST(request: NextRequest) {
         refreshToken = match[1];
       }
     }
+
+    if (!refreshToken) return NextResponse.json({ success: false, error: 'No refresh token provided.' }, { status: 401 });
+    if (!refreshToken.includes('.')) {
+      const { data, error } = await authClient().auth.refreshSession({ refresh_token: refreshToken });
+      const user = data.user ? trustedUser(data.user) : null;
+      if (error || !data.session || !user) return NextResponse.json({ success: false, error: 'Session expired. Please sign in.' }, { status: 401 });
+      const response = NextResponse.json({ success: true, user });
+      response.cookies.set('uams_auth_token', data.session.access_token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: data.session.expires_in });
+      response.cookies.set('uams_refresh_token', data.session.refresh_token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', path: '/', maxAge: 7 * 86400 });
+      return response;
+    }
+    if (process.env.NODE_ENV === 'production' && process.env.ENABLE_DEMO_AUTH !== 'true') return NextResponse.json({ success: false, error: 'Demo sessions are disabled.' }, { status: 401 });
 
     if (!refreshToken) {
       return NextResponse.json(

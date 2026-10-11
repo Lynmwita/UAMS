@@ -15,7 +15,7 @@ let libraryLoans: LibraryLoan[] = [
 ];
 
 export async function GET(req: NextRequest) {
-  const auth = requireServerAuth(req);
+  const auth = await requireServerAuth(req, ['student','admin','super_admin','registrar','hod','lecturer']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
         (user.email === 'student@university.ac.ke' && ln.admission_number === 'BIT/2023/8849')
     );
   }
+  if (user.role === 'lecturer' || user.role === 'hod') filteredLoans = filteredLoans.filter(l => l.student_id === user.id);
 
   return NextResponse.json({
     success: true,
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = requireServerAuth(req, ['student', 'admin', 'super_admin', 'registrar', 'hod']);
+  const auth = await requireServerAuth(req, ['student', 'admin', 'super_admin', 'registrar']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
@@ -113,6 +114,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      if (loan.status === 'returned') return NextResponse.json({success:true,message:'Book already returned.',data:loan});
       loan.status = 'returned';
       loan.return_date = new Date().toISOString().split('T')[0];
 

@@ -24,12 +24,13 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import { UserRole } from '@/types';
+import { canAccessPage } from '@/lib/auth/roles';
 
 interface SidebarProps {
   role?: UserRole;
 }
 
-export default function Sidebar({ role = 'super_admin' }: SidebarProps) {
+export default function Sidebar({ role = 'student' }: SidebarProps) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -52,7 +53,7 @@ export default function Sidebar({ role = 'super_admin' }: SidebarProps) {
   ];
 
   const filteredItems = navigationItems.filter((item) =>
-    item.roles.includes(role)
+    item.href === '/dashboard' || canAccessPage(role, item.href.split('/')[2])
   );
 
   const currentItem = filteredItems.find((item) => item.href === pathname) || filteredItems[0];

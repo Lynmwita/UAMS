@@ -7,7 +7,8 @@ import { recordAuditEvent } from '@/lib/audit/audit-logger';
 const MOCK_INSTITUTIONAL_MFA_SECRET = 'JBSWY3DPEHPK3PXP';
 
 export async function POST(request: NextRequest) {
-  const auth = requireServerAuth(request);
+  if (process.env.NODE_ENV === 'production') return NextResponse.json({ success: false, error: 'The demonstration MFA endpoint is disabled. Configure institutional MFA with Supabase Auth.' }, { status: 503 });
+  const auth = await requireServerAuth(request);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
 
     response.cookies.set('uams_auth_token', stepUpToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: false,
       sameSite: 'lax',
       path: '/',
       maxAge: 900,

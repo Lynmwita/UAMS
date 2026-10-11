@@ -1,20 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/lib/auth/context';
 import { Calendar, Plus, Clock, MapPin, User, X, Filter } from 'lucide-react';
 
 export default function TimetablePage() {
+  const {role}=useAuth();
+  const canSchedule=['super_admin','admin','registrar'].includes(role);
+  const [error,setError]=useState('');
   const [selectedDay, setSelectedDay] = useState('All');
 
-  const [schedule, setSchedule] = useState([
-    { id: '1', day: 'Monday', time: '08:00 - 11:00 AM', courseCode: 'BCS 311', courseTitle: 'Advanced Database Systems', room: 'Lecture Hall 04 (Main Campus)', lecturer: 'Dr. Jane Mwangi' },
-    { id: '2', day: 'Monday', time: '02:00 - 05:00 PM', courseCode: 'BIT 312', courseTitle: 'Distributed Systems & Cloud Computing', room: 'Computing Lab 01', lecturer: 'Prof. David Kamau' },
-    { id: '3', day: 'Tuesday', time: '11:00 - 01:00 PM', courseCode: 'BCS 314', courseTitle: 'Software Engineering Architecture', room: 'Lecture Theater 02', lecturer: 'Eng. Eric Ochieng' },
-    { id: '4', day: 'Wednesday', time: '08:00 - 11:00 AM', courseCode: 'BCS 316', courseTitle: 'Network & System Security', room: 'Cybersecurity Lab 03', lecturer: 'Dr. Jane Mwangi' },
-    { id: '5', day: 'Thursday', time: '02:00 - 05:00 PM', courseCode: 'BBA 201', courseTitle: 'Principles of Financial Accounting', room: 'Lecture Hall 01', lecturer: 'Dr. Martin Omondi' },
-    { id: '6', day: 'Friday', time: '09:00 - 12:00 PM', courseCode: 'BCS 311', courseTitle: 'Database Practical Lab', room: 'Computing Lab 02', lecturer: 'Dr. Jane Mwangi' },
-  ]);
-
+  const [schedule,setSchedule]=useState<{id:string;day:string;time:string;courseCode:string;courseTitle:string;room:string;lecturer:string}[]>([]);
+  useEffect(()=>{fetch('/api/v1/timetable').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);setSchedule(d.data);}).catch(e=>setError(e.message));},[]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newSlot, setNewSlot] = useState({
     day: 'Monday',
@@ -29,23 +26,14 @@ export default function TimetablePage() {
 
   const filteredSchedule = selectedDay === 'All' ? schedule : schedule.filter((s) => s.day === selectedDay);
 
-  const handleAddSlot = (e: React.FormEvent) => {
-    e.preventDefault();
-    const entry = {
-      id: `tt-${Date.now()}`,
-      day: newSlot.day,
-      time: newSlot.time,
-      courseCode: newSlot.courseCode,
-      courseTitle: newSlot.courseTitle,
-      room: newSlot.room,
-      lecturer: newSlot.lecturer,
-    };
-    setSchedule([...schedule, entry]);
-    setIsModalOpen(false);
+  const handleAddSlot=async(e:React.FormEvent)=>{
+    e.preventDefault();if(!canSchedule)return;
+    try{const r=await fetch('/api/v1/timetable',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(newSlot)});const d=await r.json();if(!r.ok)throw new Error(d.error);setSchedule(prev=>[...prev,d.data]);setIsModalOpen(false);setError('');}catch(e){setError(e instanceof Error?e.message:'Timetable update failed.');}
   };
 
   return (
     <div className="space-y-6">
+      {error&&<p role="alert" className="text-rose-700">{error}</p>}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-200 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-academic-navy-950 tracking-tight">
@@ -57,6 +45,7 @@ export default function TimetablePage() {
         </div>
 
         <button
+          hidden={!canSchedule} style={{display:canSchedule ? undefined : 'none'}}
           onClick={() => setIsModalOpen(true)}
           className="bg-academic-navy-900 hover:bg-academic-navy-800 text-white font-bold px-4 py-2.5 rounded-lg text-sm transition flex items-center space-x-2 shadow-sm"
         >

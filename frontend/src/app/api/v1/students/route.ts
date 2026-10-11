@@ -1,65 +1,14 @@
+import { inDepartment } from '@/lib/auth/scope';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireServerAuth, requirePermission } from '@/lib/auth/server-auth';
 import { recordAuditEvent } from '@/lib/audit/audit-logger';
 
 // In-memory student store synchronized with database schema
-let studentsStore = [
-  {
-    id: 'stu-1',
-    user_id: 'usr-student-01',
-    admission_number: 'BIT/2023/8849',
-    first_name: 'Faith',
-    last_name: 'Wanjiku',
-    email: 'faith.wanjiku@student.university.ac.ke',
-    gender: 'female',
-    program_id: 'prog-bit',
-    program_name: 'Bachelor of Science in Information Technology',
-    current_year_of_study: 3,
-    current_semester_number: 1,
-    status: 'active',
-    admission_date: '2023-09-01',
-    cgpa: 3.82,
-    fee_balance: 0,
-  },
-  {
-    id: 'stu-2',
-    user_id: 'usr-student-02',
-    admission_number: 'BCS/2023/1204',
-    first_name: 'Kevin',
-    last_name: 'Otieno',
-    email: 'kevin.otieno@student.university.ac.ke',
-    gender: 'male',
-    program_id: 'prog-bcs',
-    program_name: 'Bachelor of Science in Computer Science',
-    current_year_of_study: 2,
-    current_semester_number: 2,
-    status: 'active',
-    admission_date: '2023-09-01',
-    cgpa: 3.65,
-    fee_balance: 18500,
-  },
-  {
-    id: 'stu-3',
-    user_id: 'usr-student-03',
-    admission_number: 'BBA/2022/4412',
-    first_name: 'Brian',
-    last_name: 'Kiprono',
-    email: 'brian.kiprono@student.university.ac.ke',
-    gender: 'male',
-    program_id: 'prog-bba',
-    program_name: 'Bachelor of Business Administration',
-    current_year_of_study: 4,
-    current_semester_number: 1,
-    status: 'active',
-    admission_date: '2022-09-01',
-    cgpa: 3.48,
-    fee_balance: 0,
-  },
-];
+import { studentsStore } from '@/lib/academic/student-records';
 
 export async function GET(request: NextRequest) {
   // Enforce server-side authentication
-  const auth = requireServerAuth(request);
+  const auth = await requireServerAuth(request, ['student','admin','super_admin','registrar','hod','finance_officer']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
@@ -87,7 +36,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Staff roles (registrar, admin, super_admin, hod, lecturer, finance_officer)
-  let results = [...studentsStore];
+  let results = studentsStore.filter(s => inDepartment(user, s.admission_number));
 
   if (search) {
     results = results.filter(
@@ -110,13 +59,13 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     success: true,
     total: results.length,
-    data: results,
+    data: user.role === 'finance_officer' ? results.map(s => ({ id:s.id, admission_number:s.admission_number, first_name:s.first_name, last_name:s.last_name, email:s.email, fee_balance:s.fee_balance, status:s.status })) : results,
   });
 }
 
 export async function POST(request: NextRequest) {
   // Permission guard: strictly requires students:write permission
-  const auth = requirePermission(request, 'students:write');
+  const auth = await requirePermission(request, 'students:write');
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
@@ -124,13 +73,14 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    if (!body.first_name || !body.last_name || !body.admission_number || !body.program_name) {
+    if (!body || ['first_name','last_name','admission_number','program_name'].some(k=>typeof body[k]!=='string'||!body[k].trim()||body[k].length>255) || (body.fee_balance !== undefined && (!Number.isFinite(Number(body.fee_balance)) || Number(body.fee_balance)<0))) {
       return NextResponse.json(
         { success: false, error: 'Missing required student fields: first_name, last_name, admission_number, program_name' },
         { status: 400 }
       );
     }
 
+    if(studentsStore.some(s=>s.admission_number.toUpperCase()===body.admission_number.trim().toUpperCase()))return NextResponse.json({success:false,error:'Admission number already exists.'},{status:409});
     const newStudent = {
       id: `stu-${Date.now()}`,
       user_id: `usr-${Date.now()}`,
@@ -146,7 +96,7 @@ export async function POST(request: NextRequest) {
       status: body.status || 'active',
       admission_date: new Date().toISOString().split('T')[0],
       cgpa: 0.0,
-      fee_balance: Number(body.fee_balance) || 55000,
+      fee_balance: body.fee_balance === undefined ? 55000 : Number(body.fee_balance),
     };
 
     studentsStore.unshift(newStudent);

@@ -1,3 +1,6 @@
+import { studentsStore } from '@/lib/academic/student-records';
+import { coursesStore } from '@/lib/academic/course-catalog';
+import { canTeachCourse, canReviewCourse } from '@/lib/auth/scope';
 import { NextRequest, NextResponse } from 'next/server';
 import { calculateGradePoint, getAcademicStanding } from '@/lib/academic/gpa';
 import { requireServerAuth } from '@/lib/auth/server-auth';
@@ -47,15 +50,15 @@ let gradesStore = [
     cat_score: 24,
     exam_score: 52,
     total_score: 76,
-    letter_grade: 'B',
-    grade_point: 3.0,
+    letter_grade: 'A',
+    grade_point: 4.0,
     is_submitted: true,
     is_approved: true,
   },
 ];
 
 export async function GET(request: NextRequest) {
-  const auth = requireServerAuth(request);
+  const auth = await requireServerAuth(request, ['student','admin','super_admin','registrar','hod','lecturer']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
@@ -65,13 +68,13 @@ export async function GET(request: NextRequest) {
   const studentId = searchParams.get('student_id');
   const courseCode = searchParams.get('course_code');
 
-  let results = [...gradesStore];
+  let results = gradesStore.filter(g => canTeachCourse(user, g.course_code) && canReviewCourse(user, g.course_code));
   if (user.role === 'student') {
     // Student can strictly see only their own grades (IDOR / BOLA Prevention)
     results = results.filter(
       (g) =>
-        g.student_id === user.id ||
-        (user.email.toLowerCase() === 'student@university.ac.ke' && g.admission_number === 'BIT/2023/8849')
+        g.is_approved && (g.student_id === user.id ||
+        (user.email.toLowerCase() === 'student@university.ac.ke' && g.admission_number === 'BIT/2023/8849'))
     );
   } else {
     if (studentId) {
@@ -89,9 +92,22 @@ export async function GET(request: NextRequest) {
   });
 }
 
+export async function PATCH(request: NextRequest) {
+  const auth = await requireServerAuth(request, ['hod','registrar','admin','super_admin']);
+  if ('errorResponse' in auth) return auth.errorResponse;
+  try {
+    const body = await request.json();
+    const grade = gradesStore.find(g => g.id === body.grade_id);
+    if (!grade || !canReviewCourse(auth.user, grade.course_code)) return NextResponse.json({ success:false, error:'Grade not found in your scope.' }, {status:404});
+    grade.is_approved = true;
+    recordAuditEvent({ actor_email:auth.user.email, actor_role:auth.user.role, action:'GRADE_APPROVED', entity_type:'student_grades', entity_id:grade.id, ip_address:request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown', status:'SUCCESS' });
+    return NextResponse.json({success:true,data:grade});
+  } catch { return NextResponse.json({success:false,error:'Invalid grade approval request.'},{status:400}); }
+}
+
 export async function POST(request: NextRequest) {
   // Only teaching and academic administrators can enter grades
-  const auth = requireServerAuth(request, ['lecturer', 'hod', 'registrar', 'admin', 'super_admin']);
+  const auth = await requireServerAuth(request, ['lecturer', 'super_admin']);
 
   if ('errorResponse' in auth) {
     return auth.errorResponse;
@@ -101,7 +117,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { student_id, student_name, admission_number, course_code, course_title, credit_hours, cat_score, exam_score } = body;
 
-    if (!student_id || !course_code || cat_score === undefined || exam_score === undefined) {
+    if ((!student_id && !admission_number) || !course_code || cat_score === undefined || exam_score === undefined) {
       return NextResponse.json(
         { success: false, error: 'student_id, course_code, cat_score, and exam_score are required' },
         { status: 400 }
@@ -109,19 +125,26 @@ export async function POST(request: NextRequest) {
     }
 
 
-    const cat = Math.min(30, Math.max(0, Number(cat_score)));
-    const exam = Math.min(70, Math.max(0, Number(exam_score)));
+    if (!canTeachCourse(auth.user, course_code)) return NextResponse.json({ success:false, error:'You may only enter marks for your assigned courses.' }, {status:403});
+    const student=studentsStore.find(s=>admission_number ? s.admission_number===admission_number : s.id===student_id);
+    const course=coursesStore.find(c=>c.code===course_code);
+    if(!student||!course||(student_id&&student.id!==student_id))return NextResponse.json({success:false,error:'Student and course must match registered records.'},{status:400});
+    const cat = Number(cat_score);
+    const exam = Number(exam_score);
+    if (!Number.isFinite(cat) || cat < 0 || cat > 30 || !Number.isFinite(exam) || exam < 0 || exam > 70) {
+      return NextResponse.json({ success: false, error: 'CAT must be 0–30 and exam must be 0–70.' }, { status: 400 });
+    }
     const total = cat + exam;
     const { letter, points } = calculateGradePoint(total);
 
     const newGrade = {
       id: `grd-${Date.now()}`,
-      student_id,
-      student_name: student_name || 'Enrolled Student',
-      admission_number: admission_number || 'BIT/2023/8849',
+      student_id: student.id,
+      student_name: student.first_name+' '+student.last_name,
+      admission_number: student.admission_number,
       course_code,
-      course_title: course_title || course_code,
-      credit_hours: Number(credit_hours) || 3,
+      course_title: course.title,
+      credit_hours: course.credit_hours,
       cat_score: cat,
       exam_score: exam,
       total_score: total,

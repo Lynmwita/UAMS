@@ -1,10 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/lib/auth/context';
+import { roleHasPermission } from '@/lib/auth/rbac';
 import { Bookmark, Search, BookOpen, CheckCircle2, AlertCircle, ArrowUpRight, Check, BookMarked } from 'lucide-react';
 import { LibraryBook, LibraryLoan } from '@/types';
 
 export default function LibraryPage() {
+  const {role}=useAuth();
+  const canLoan=role==='student'||roleHasPermission(role,'library:loan');
   const [books, setBooks] = useState<LibraryBook[]>([]);
   const [loans, setLoans] = useState<LibraryLoan[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -167,6 +171,7 @@ export default function LibraryPage() {
                   </div>
                   <button
                     disabled={b.available_copies === 0}
+                    style={{display:canLoan?undefined:'none'}}
                     onClick={() => setBorrowModalBook(b)}
                     className="bg-academic-navy-900 hover:bg-academic-navy-950 disabled:bg-slate-300 text-academic-gold-400 font-bold py-1.5 px-3 rounded-lg text-xs transition shadow flex items-center gap-1"
                   >
@@ -220,6 +225,7 @@ export default function LibraryPage() {
                     <td className="p-3 text-right">
                       {l.status !== 'returned' && (
                         <button
+                          style={{display:canLoan?undefined:'none'}}
                           onClick={() => handleReturn(l.id)}
                           className="bg-slate-800 hover:bg-slate-900 text-white font-bold py-1 px-2.5 rounded text-[11px] transition inline-flex items-center gap-1"
                         >

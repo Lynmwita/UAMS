@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ExamSchedule, ExamClearanceCard } from '@/types';
 import { requireServerAuth, requirePermission } from '@/lib/auth/server-auth';
 import { recordAuditEvent } from '@/lib/audit/audit-logger';
+import { inDepartment } from '@/lib/auth/scope';
 
 let examSchedules: ExamSchedule[] = [
   { id: 'exm-01', course_code: 'BCS 2101', course_title: 'Database Systems & Architecture', exam_date: '2026-10-15', start_time: '09:00 AM', end_time: '12:00 PM', venue: 'Multi-Purpose Hall A', chief_invigilator: 'Dr. Evans Kiprop', total_candidates: 120, status: 'scheduled' },
@@ -34,20 +35,21 @@ let clearanceCards: ExamClearanceCard[] = [
     card_serial_number: 'EXAM-2026-SEP-9102',
     fee_balance: 5000,
     fee_paid_percentage: 92,
-    is_cleared: true,
+    is_cleared: false,
     security_qr_token: 'UAMS-SEC-CLR-BCS-2023-9102-VALID-2026',
     registered_units: 6,
   },
 ];
 
 export async function GET(req: NextRequest) {
-  const auth = requireServerAuth(req);
+  const auth = await requireServerAuth(req, ['student','admin','super_admin','registrar','hod','lecturer']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
 
   const { user } = auth;
-  let filteredCards = [...clearanceCards];
+  let filteredCards = clearanceCards.filter(c => inDepartment(user,c.admission_number));
+  if (user.role === 'lecturer') filteredCards = [];
 
   if (user.role === 'student') {
     filteredCards = filteredCards.filter(
@@ -68,7 +70,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   // Permission guard: strictly requires exams:schedule permission
-  const auth = requirePermission(req, 'exams:schedule');
+  const auth = await requirePermission(req, 'exams:schedule');
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }

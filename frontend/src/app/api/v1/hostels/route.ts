@@ -22,7 +22,7 @@ let hostelAllocations: HostelAllocation[] = [
 ];
 
 export async function GET(req: NextRequest) {
-  const auth = requireServerAuth(req);
+  const auth = await requireServerAuth(req, ['student','admin','super_admin','registrar']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = requirePermission(req, 'hostels:allocate');
+  const auth = await requireServerAuth(req, ['student','registrar','admin']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
@@ -69,6 +69,10 @@ export async function POST(req: NextRequest) {
 
     // IDOR / BOLA Prevention: Students can only allocate rooms for their own profile
     const effectiveStudentId = user.role === 'student' ? user.id : body.student_id || user.id;
+    const bed = Number(bed_number);
+    if (!Number.isInteger(bed) || bed < 1 || bed > selectedRoom.capacity) return NextResponse.json({success:false,error:'Choose a valid bed number.'},{status:400});
+    if (hostelAllocations.some(a => a.status !== 'checked_out' && (a.student_id === effectiveStudentId || (user.role === 'student' && user.email === 'student@university.ac.ke' && a.admission_number === 'BIT/2023/8849')))) return NextResponse.json({success:false,error:'Student already has an active allocation.'},{status:409});
+    if (hostelAllocations.some(a => a.room_id === room_id && a.bed_number === bed && a.status !== 'checked_out')) return NextResponse.json({success:false,error:'This bed is already allocated.'},{status:409});
     const effectiveName =
       user.role === 'student'
         ? user.email === 'student@university.ac.ke'
@@ -90,8 +94,8 @@ export async function POST(req: NextRequest) {
       room_id: room_id || 'rm-101',
       block_name: selectedBlock?.name || 'Main Hall',
       room_number: selectedRoom?.room_number || 'A-101',
-      bed_number: Number(bed_number || 1),
-      payment_status: 'paid',
+      bed_number: bed,
+      payment_status: 'pending',
       status: 'allocated',
     };
 

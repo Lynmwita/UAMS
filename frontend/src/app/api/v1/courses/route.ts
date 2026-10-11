@@ -1,74 +1,11 @@
+import { requireServerAuth, requirePermission } from '@/lib/auth/server-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
-let coursesStore = [
-  {
-    id: 'crs-1',
-    code: 'BCS 311',
-    title: 'Advanced Database Systems',
-    department: 'Computer Science',
-    credit_hours: 3,
-    level: 300,
-    prerequisites: ['BCS 211'],
-    lecturer: 'Dr. Jane Mwangi',
-    capacity: 60,
-    enrolled: 48,
-    is_active: true,
-  },
-  {
-    id: 'crs-2',
-    code: 'BIT 312',
-    title: 'Distributed Systems & Cloud Computing',
-    department: 'Information Technology',
-    credit_hours: 3,
-    level: 300,
-    prerequisites: ['BIT 220'],
-    lecturer: 'Prof. David Kamau',
-    capacity: 65,
-    enrolled: 52,
-    is_active: true,
-  },
-  {
-    id: 'crs-3',
-    code: 'BCS 314',
-    title: 'Software Engineering Architecture',
-    department: 'Computer Science',
-    credit_hours: 4,
-    level: 300,
-    prerequisites: ['BCS 214'],
-    lecturer: 'Eng. Eric Ochieng',
-    capacity: 55,
-    enrolled: 44,
-    is_active: true,
-  },
-  {
-    id: 'crs-4',
-    code: 'BCS 316',
-    title: 'Network & System Security',
-    department: 'Computer Science',
-    credit_hours: 3,
-    level: 300,
-    prerequisites: ['BIT 215'],
-    lecturer: 'Dr. Jane Mwangi',
-    capacity: 50,
-    enrolled: 41,
-    is_active: true,
-  },
-  {
-    id: 'crs-5',
-    code: 'BBA 201',
-    title: 'Principles of Financial Accounting',
-    department: 'Business Administration',
-    credit_hours: 3,
-    level: 200,
-    prerequisites: [],
-    lecturer: 'Dr. Martin Omondi',
-    capacity: 80,
-    enrolled: 72,
-    is_active: true,
-  },
-];
+import { coursesStore } from '@/lib/academic/course-catalog';
 
 export async function GET(request: NextRequest) {
+  const auth = await requirePermission(request, 'courses:read');
+  if ('errorResponse' in auth) return auth.errorResponse;
   const { searchParams } = new URL(request.url);
   const search = searchParams.get('search')?.toLowerCase();
   const level = searchParams.get('level');
@@ -93,15 +30,18 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requirePermission(request, 'courses:write');
+  if ('errorResponse' in auth) return auth.errorResponse;
   try {
     const body = await request.json();
-    if (!body.code || !body.title || !body.credit_hours) {
+    if (typeof body?.code !== 'string' || !body.code.trim() || body.code.length > 20 || typeof body.title !== 'string' || !body.title.trim() || body.title.length > 255 || !Number.isInteger(Number(body.credit_hours)) || Number(body.credit_hours)<1 || Number(body.credit_hours)>24) {
       return NextResponse.json({ success: false, error: 'code, title, and credit_hours are required' }, { status: 400 });
     }
 
+    if(coursesStore.some(c=>c.code.toUpperCase()===body.code.trim().toUpperCase()))return NextResponse.json({success:false,error:'Course code already exists.'},{status:409});
     const newCourse = {
       id: `crs-${Date.now()}`,
-      code: body.code.toUpperCase(),
+      code: body.code.trim().toUpperCase(),
       title: body.title,
       department: body.department || 'Computer Science',
       credit_hours: Number(body.credit_hours),

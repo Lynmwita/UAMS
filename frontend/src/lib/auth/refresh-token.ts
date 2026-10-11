@@ -23,7 +23,8 @@ interface StoredTokenMetadata {
 }
 
 // In-memory token family registry (in enterprise prod, backed by Redis or PostgreSQL)
-const tokenRegistry = new Map<string, StoredTokenMetadata>();
+const runtime = globalThis as typeof globalThis & { __uamsRefreshRegistry?: Map<string, StoredTokenMetadata> };
+const tokenRegistry = runtime.__uamsRefreshRegistry || (runtime.__uamsRefreshRegistry = new Map<string, StoredTokenMetadata>());
 
 /**
  * Signs a refresh token with cryptographic HMAC-SHA256 and records it in the registry.
@@ -79,14 +80,14 @@ export function verifyRefreshToken(rawToken: string): RefreshTokenPayload | null
     .digest('base64url');
 
   if (signature.length !== expectedSig.length) return null;
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))) {
+  if (Buffer.byteLength(signature) !== Buffer.byteLength(expectedSig) || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))) {
     return null;
   }
 
   try {
     const payload: RefreshTokenPayload = JSON.parse(Buffer.from(body, 'base64url').toString('utf-8'));
     const now = Math.floor(Date.now() / 1000);
-    if (payload.exp && payload.exp < now) {
+    if (!Number.isFinite(payload.exp) || payload.exp <= now || !payload.jti || !payload.fid || !payload.id) {
       return null;
     }
     return payload;

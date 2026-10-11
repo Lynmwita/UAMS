@@ -1,99 +1,27 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getPendingSTK, settleSTKPayment } from '@/lib/finance/pending-requests';
+import { NextResponse } from 'next/server';
+import { verifyCallbackSecret, querySTK } from '@/lib/finance/daraja';
+import { readPayment, completePayment, failPayment } from '@/lib/finance/ledger';
 
-/**
- * Safaricom Daraja STK Push Webhook / Callback Handler
- * Receives result payload upon M-Pesa pin entry on mobile device
- * Enforces origin verification against initiated CheckoutRequestIDs
- */
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
+  if (!verifyCallbackSecret(request)) return NextResponse.json({ ResultCode: 1, ResultDesc: 'Unauthorized callback.' }, { status: 401 });
+  let callback;
+  try { callback = (await request.json())?.Body?.stkCallback; } catch { /* Invalid JSON */ }
+  if (!callback || typeof callback.CheckoutRequestID !== 'string' || !Number.isInteger(callback.ResultCode)) return NextResponse.json({ ResultCode: 1, ResultDesc: 'Invalid callback.' }, { status: 400 });
   try {
-    const payload = await request.json();
-    console.log('[Daraja Webhook] Received STK Callback Payload:', JSON.stringify(payload, null, 2));
-
-    const stkCallback = payload?.Body?.stkCallback;
-    if (!stkCallback) {
-      return NextResponse.json({ ResultCode: 1, ResultDesc: 'Invalid payload structure' }, { status: 400 });
-    }
-
-    const { MerchantRequestID, CheckoutRequestID, ResultCode, ResultDesc, CallbackMetadata } = stkCallback;
-
-    if (!CheckoutRequestID) {
-      return NextResponse.json({ ResultCode: 1, ResultDesc: 'Missing CheckoutRequestID' }, { status: 400 });
-    }
-
-    // Origin verification: check if this checkout was initiated by UAMS
-    const pending = getPendingSTK(CheckoutRequestID);
-    if (!pending) {
-      console.warn(`[Daraja Webhook] Rejected unauthorized callback for uninitiated CheckoutRequestID: ${CheckoutRequestID}`);
-      return NextResponse.json(
-        {
-          ResultCode: 1,
-          ResultDesc: 'Rejected: Unrecognized or expired CheckoutRequestID. Callback origin verification failed.',
-        },
-        { status: 400 }
-      );
-    }
-
-    if (ResultCode === 0) {
-      // Payment Successful
-      let mpesaReceiptNumber = '';
-      let amount = 0;
-      let transactionDate = '';
-      let phoneNumber = '';
-
-      if (CallbackMetadata?.Item) {
-        for (const item of CallbackMetadata.Item) {
-          if (item.Name === 'MpesaReceiptNumber') mpesaReceiptNumber = String(item.Value || '');
-          if (item.Name === 'Amount') amount = Number(item.Value) || 0;
-          if (item.Name === 'TransactionDate') transactionDate = item.Value?.toString() || '';
-          if (item.Name === 'PhoneNumber') phoneNumber = item.Value?.toString() || '';
-        }
-      }
-
-      if (!mpesaReceiptNumber) {
-        return NextResponse.json(
-          { ResultCode: 1, ResultDesc: 'Rejected: Missing authentic MpesaReceiptNumber in successful payload.' },
-          { status: 400 }
-        );
-      }
-
-      // Settle against pending ledger with strict amount matching & idempotency check
-      const settlement = settleSTKPayment(CheckoutRequestID, mpesaReceiptNumber, amount);
-      if (!settlement.success) {
-        console.warn(`[Daraja Webhook] Settlement failed for ${CheckoutRequestID}: ${settlement.error}`);
-        return NextResponse.json({
-          ResultCode: 1,
-          ResultDesc: settlement.error || 'Payment settlement validation failed',
-        }, { status: 409 });
-      }
-
-      console.log(`[Daraja Webhook] VERIFIED SETTLED PAYMENT: KES ${amount} | Receipt: ${mpesaReceiptNumber} | Student: ${pending.accountReference}`);
-
-      return NextResponse.json({
-        ResultCode: 0,
-        ResultDesc: 'Payment settled and student account credited successfully',
-        data: {
-          mpesaReceiptNumber,
-          amount,
-          accountReference: pending.accountReference,
-          transactionDate,
-          phoneNumber,
-          merchantRequestId: MerchantRequestID,
-          checkoutRequestId: CheckoutRequestID,
-        },
-      });
-    } else {
-      // Payment Cancelled or Insufficient Funds (ResultCode 1032, 1, etc.)
-      console.warn(`[Daraja Webhook] FAILED / CANCELLED PAYMENT: Code ${ResultCode} - ${ResultDesc}`);
-      return NextResponse.json({
-        ResultCode,
-        ResultDesc: ResultDesc || 'Payment transaction failed or cancelled by user',
-      });
-    }
-  } catch (err: any) {
-    console.error('[Daraja Webhook] Exception:', err);
-    return NextResponse.json({ ResultCode: 1, ResultDesc: err.message }, { status: 500 });
+    const payment = await readPayment(callback.CheckoutRequestID);
+    if (!payment || payment.merchantRequestId !== callback.MerchantRequestID) return NextResponse.json({ ResultCode: 1, ResultDesc: 'Unknown transaction.' }, { status: 400 });
+    if (payment.status === 'settled' || payment.status === 'failed') return NextResponse.json({ ResultCode: 0, ResultDesc: 'Already processed.' });
+    if (callback.ResultCode !== 0) { await failPayment(payment); return NextResponse.json({ ResultCode: 0, ResultDesc: 'Failure recorded.' }); }
+    const items = callback.CallbackMetadata?.Item;
+    if (!Array.isArray(items)) return NextResponse.json({ ResultCode: 1, ResultDesc: 'Missing metadata.' }, { status: 400 });
+    const value = (name: string) => items.find((item: any) => item.Name === name)?.Value;
+    const receipt = value('MpesaReceiptNumber');
+    if (Number(value('Amount')) !== payment.amount || String(value('PhoneNumber')) !== payment.phoneNumber || typeof receipt !== 'string' || !/^[A-Z0-9]{8,20}$/.test(receipt)) return NextResponse.json({ ResultCode: 1, ResultDesc: 'Payment metadata mismatch.' }, { status: 409 });
+    const confirmation = await querySTK(payment.checkoutRequestId);
+    if (String(confirmation.ResultCode) !== '0') return NextResponse.json({ ResultCode: 1, ResultDesc: 'Provider confirmation unavailable.' }, { status: 503 });
+    await completePayment(payment, receipt);
+    return NextResponse.json({ ResultCode: 0, ResultDesc: 'Payment receipt recorded.' });
+  } catch {
+    return NextResponse.json({ ResultCode: 1, ResultDesc: 'Unable to process payment. Retry callback.' }, { status: 503 });
   }
 }
-

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useAuth } from '@/lib/auth/context';
 import {
   Sparkles,
   Send,
@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { UserRole } from '@/types';
 import { ROLE_LABELS } from '@/lib/auth/rbac';
+import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
 
 interface ChatMessage {
   id: string;
@@ -58,8 +59,7 @@ const PRESET_PROMPTS = [
 ];
 
 export default function AIAssistantPage() {
-  const searchParams = useSearchParams();
-  const role = (searchParams.get('role') as UserRole) || 'student';
+  const { role } = useAuth();
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -285,9 +285,13 @@ export default function AIAssistantPage() {
                     </div>
                   </div>
 
-                  <div className="prose prose-sm max-w-none whitespace-pre-wrap font-sans">
-                    {message.content}
-                  </div>
+                  {isUser ? (
+                    <div className="whitespace-pre-wrap font-sans text-sm">
+                      {message.content}
+                    </div>
+                  ) : (
+                    <MarkdownRenderer content={message.content} />
+                  )}
                 </div>
               </div>
             );

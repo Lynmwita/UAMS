@@ -11,7 +11,13 @@ test('production config does not ship a weak default JWT secret', () => {
   delete process.env.NODE_ENV;
   delete require.cache[configModulePath];
 
+  // This checks code defaults independently of the developer's configured .env.
+  const dotenv = require('dotenv');
+  const originalConfig = dotenv.config;
+  dotenv.config = () => ({ parsed: {} });
+
   const { config } = require('../src/config');
+  dotenv.config = originalConfig;
   assert.equal(config.jwtSecret, '');
 
   if (savedJwtSecret) process.env.JWT_SECRET = savedJwtSecret;

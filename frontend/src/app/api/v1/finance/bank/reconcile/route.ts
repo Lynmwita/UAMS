@@ -61,7 +61,7 @@ let bankTransactions: BankTransaction[] = [
 ];
 
 export async function GET(req: Request) {
-  const auth = requirePermission(req, 'finance:read');
+  const auth = await requirePermission(req, 'finance:read');
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
@@ -79,7 +79,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const auth = requirePermission(req, 'finance:reconcile');
+  const auth = await requirePermission(req, 'finance:reconcile');
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
@@ -119,6 +119,7 @@ export async function POST(req: Request) {
     }
 
     if (action === 'manual_entry') {
+      if (typeof reference !== 'string' || !reference.trim() || typeof student_admission_number !== 'string' || !student_admission_number.trim() || !Number.isFinite(Number(amount)) || Number(amount) <= 0) return NextResponse.json({success:false,error:'Reference, student admission number and a positive amount are required.'},{status:400});
       // Idempotency check: prevent duplicate bank reference
       const existing = bankTransactions.find((t) => t.reference.trim().toUpperCase() === String(reference).trim().toUpperCase());
       if (existing) {
@@ -137,8 +138,8 @@ export async function POST(req: Request) {
         transaction_date: new Date().toISOString().split('T')[0],
         student_admission_number,
         student_name: student_name || 'Registered Student',
-        is_reconciled: true,
-        reconciled_by: 'Authorized Finance Officer',
+        is_reconciled: false,
+        reconciled_by: undefined,
         reconciled_at: new Date().toISOString().replace('T', ' ').substring(0, 16),
         notes: notes || 'Manual bank slip entry.',
       };
@@ -146,7 +147,7 @@ export async function POST(req: Request) {
       bankTransactions.unshift(newTx);
       return NextResponse.json({
         success: true,
-        message: `Bank payment ${newTx.reference} recorded and reconciled.`,
+        message: `Bank payment ${newTx.reference} recorded for reconciliation.`,
         data: newTx,
       });
     }

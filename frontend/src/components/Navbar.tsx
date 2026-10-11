@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { GraduationCap, ShieldCheck, User } from 'lucide-react';
 
 interface NavbarProps {
@@ -9,6 +10,8 @@ interface NavbarProps {
 }
 
 export default function Navbar({ userEmail, userRole }: NavbarProps) {
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState('');
   return (
     <header className="bg-academic-navy-950 border-b border-academic-navy-800 text-white sticky top-0 z-50 shadow-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -27,15 +30,6 @@ export default function Navbar({ userEmail, userRole }: NavbarProps) {
         </div>
 
         <div className="flex items-center space-x-4">
-          <a
-            href="/UAMS_Master_Project_Blueprint.pdf"
-            download="UAMS_Master_Project_Blueprint.pdf"
-            className="hidden md:flex items-center space-x-1.5 text-xs font-bold text-academic-gold-300 hover:text-white bg-academic-navy-900 border border-academic-navy-700 px-3 py-1.5 rounded-lg transition"
-            title="Download Master Project Blueprint PDF"
-          >
-            <span>📄 Master Blueprint (PDF)</span>
-          </a>
-
           {userEmail ? (
             <div className="flex items-center space-x-3 text-sm">
               <div className="flex items-center space-x-2 text-slate-300">
@@ -46,16 +40,24 @@ export default function Navbar({ userEmail, userRole }: NavbarProps) {
                 </span>
               </div>
               <button
+                disabled={signingOut}
                 onClick={async () => {
+                  setSigningOut(true);
+                  setSignOutError('');
                   try {
-                    await fetch('/api/v1/auth/logout', { method: 'POST' });
-                  } catch {}
-                  window.location.href = '/login';
+                    const response = await fetch('/api/v1/auth/logout', { method: 'POST' });
+                    if (!response.ok) throw new Error('Sign out failed. Please retry.');
+                    window.location.href = '/login';
+                  } catch {
+                    setSignOutError('Sign out failed. Please retry.');
+                    setSigningOut(false);
+                  }
                 }}
                 className="text-xs bg-academic-crimson-900/30 hover:bg-academic-crimson-900/50 text-rose-300 border border-rose-800/40 px-3 py-1.5 rounded transition font-medium cursor-pointer"
               >
-                Sign Out
+                {signingOut ? 'Signing out...' : 'Sign Out'}
               </button>
+              {signOutError && <span role="alert" className="text-xs text-rose-300">{signOutError}</span>}
             </div>
           ) : (
             <div className="flex items-center space-x-3">

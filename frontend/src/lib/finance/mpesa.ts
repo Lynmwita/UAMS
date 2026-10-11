@@ -6,11 +6,12 @@ export interface MpesaSTKPushRequest {
 }
 
 export function formatKenyanPhoneNumber(phone: string): string {
+  if (typeof phone !== 'string' || !/^\+?[\d\s()-]+$/.test(phone)) throw new Error('Invalid Kenyan mobile number.');
   const cleaned = phone.replace(/[^0-9]/g, '');
-  if (cleaned.startsWith('254') && cleaned.length === 12) {
+  if (/^254[17]\d{8}$/.test(cleaned)) {
     return cleaned;
   }
-  if (cleaned.startsWith('0') && cleaned.length === 10) {
+  if (/^0[17]\d{8}$/.test(cleaned)) {
     return `254${cleaned.substring(1)}`;
   }
   if (cleaned.startsWith('7') || cleaned.startsWith('1')) {
@@ -22,12 +23,13 @@ export function formatKenyanPhoneNumber(phone: string): string {
 }
 
 export function validateSTKPushPayload(payload: MpesaSTKPushRequest): { valid: boolean; error?: string } {
-  if (!payload.amount || payload.amount <= 0) {
-    return { valid: false, error: 'Payment amount must be greater than zero.' };
+  if (!payload || typeof payload.amount !== 'number' || !Number.isSafeInteger(payload.amount) || payload.amount <= 0 || payload.amount > 250000) {
+    return { valid: false, error: 'Payment amount must be a whole number from KES 1 to 250,000.' };
   }
-  if (!payload.accountReference || payload.accountReference.trim().length === 0) {
+  if (typeof payload.accountReference !== 'string' || !/^[A-Za-z0-9/_-]{1,50}$/.test(payload.accountReference)) {
     return { valid: false, error: 'Account/Admission reference is required.' };
   }
+  if (typeof payload.transactionDesc !== 'string' || !payload.transactionDesc.trim()) return { valid: false, error: 'Payment description is required.' };
   try {
     formatKenyanPhoneNumber(payload.phoneNumber);
   } catch (err: any) {

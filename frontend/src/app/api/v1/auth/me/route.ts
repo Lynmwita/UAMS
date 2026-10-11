@@ -7,7 +7,7 @@ import { getAuthenticatedUser } from '@/lib/auth/server-auth';
  * Completely eliminates reliance on browser localStorage for authentication state.
  */
 export async function GET(request: NextRequest) {
-  const user = getAuthenticatedUser(request);
+  const user = await getAuthenticatedUser(request);
 
   if (!user) {
     return NextResponse.json(
@@ -22,8 +22,8 @@ export async function GET(request: NextRequest) {
       id: user.id,
       email: user.email,
       role: user.role,
-      firstName: user.role === 'student' ? 'Faith' : 'Authorized',
-      lastName: user.role === 'student' ? 'Wanjiku' : 'Staff',
+      firstName: user.id === 'usr-student-01' ? 'Faith' : user.email.split('@')[0],
+      lastName: user.id === 'usr-student-01' ? 'Wanjiku' : '',
     },
   });
 }

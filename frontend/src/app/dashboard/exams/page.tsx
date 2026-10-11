@@ -1,10 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/lib/auth/context';
+import { roleHasPermission } from '@/lib/auth/rbac';
 import { FileCheck2, Calendar, ShieldCheck, CheckCircle2, QrCode, AlertTriangle, Printer } from 'lucide-react';
 import { ExamSchedule, ExamClearanceCard } from '@/types';
 
 export default function ExamsPage() {
+  const {role}=useAuth();
+  const canSchedule=roleHasPermission(role,'exams:schedule');
   const [schedules, setSchedules] = useState<ExamSchedule[]>([]);
   const [cards, setCards] = useState<ExamClearanceCard[]>([]);
   const [activeTab, setActiveTab] = useState<'cards' | 'schedules' | 'new_exam'>('cards');
@@ -56,7 +60,7 @@ export default function ExamsPage() {
         setMessage({ type: 'success', text: data.message });
         fetchExamsData();
         setActiveTab('schedules');
-      }
+      } else { setMessage({type:'error',text:data.error || 'Scheduling failed.'}); }
     } catch (err) {
       setMessage({ type: 'error', text: 'Network error occurred.' });
     }
@@ -93,6 +97,7 @@ export default function ExamsPage() {
             Exam Timetable
           </button>
           <button
+            hidden={!canSchedule} style={{display:canSchedule ? undefined : 'none'}}
             onClick={() => setActiveTab('new_exam')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${
               activeTab === 'new_exam' ? 'bg-academic-gold-500 text-slate-900' : 'text-slate-600 hover:text-slate-900'

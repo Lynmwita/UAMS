@@ -4,7 +4,7 @@ import { getAuditLogs } from '@/lib/audit/audit-logger';
 
 export async function GET(request: NextRequest) {
   // Only users with 'audit:read' permission (super_admin, admin, registrar, finance_officer)
-  const auth = requirePermission(request, 'audit:read');
+  const auth = await requirePermission(request, 'audit:read');
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
