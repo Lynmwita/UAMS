@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useAuth } from '@/lib/auth/context';
 import {
   ArrowRight,
   ArrowUpRight,
@@ -23,7 +23,8 @@ import {
   Users,
 } from 'lucide-react';
 import { UserRole } from '@/types';
-import { ROLE_LABELS } from '@/lib/auth/rbac';
+import { canAccessPage } from '@/lib/auth/roles';
+import { ROLE_LABELS, roleHasPermission } from '@/lib/auth/rbac';
 
 const courses = [
   { code: 'CSC101', title: 'Introduction to Computer Science', department: 'Computing', enrolled: '124', status: 'Active' },
@@ -32,8 +33,7 @@ const courses = [
 ];
 
 export default function DashboardExperience() {
-  const searchParams = useSearchParams();
-  const role = (searchParams.get('role') as UserRole) || 'super_admin';
+  const { role } = useAuth();
   const metrics = role === 'student'
     ? [
         { label: 'Semester GPA', value: '3.82', detail: 'Cumulative 3.75', icon: GraduationCap, tone: 'green' },
@@ -53,7 +53,7 @@ export default function DashboardExperience() {
             { label: 'Teaching units', value: '03', detail: 'Across 3 class groups', icon: BookOpen, tone: 'green' },
             { label: 'Enrolled students', value: '240', detail: 'Across all units', icon: Users, tone: 'blue' },
             { label: 'Marks submitted', value: '2 of 3', detail: 'CSC401 needs attention', icon: ClipboardCheck, tone: 'orange' },
-            { label: 'Today’s classes', value: '02', detail: 'Next class at 10:00', icon: CalendarDays, tone: 'rose' },
+            { label: 'Classes today', value: '02', detail: 'Next class at 10:00', icon: CalendarDays, tone: 'rose' },
           ]
         : [
             { label: 'Active students', value: '4,820', detail: '12% above last year', icon: Users, tone: 'green' },
@@ -77,10 +77,10 @@ export default function DashboardExperience() {
         </div>
         <div className="heading-tools">
           <span className="session-pill"><span className="session-dot" /> Semester 1 in session</span>
-          <Link className="search-link" href="/dashboard/students" aria-label="Search student records"><Search size={17} /></Link>
-          <Link className="primary-action" href={role === 'student' ? '/dashboard/finance' : '/dashboard/students'}>
+          {roleHasPermission(role,'students:read') && <Link style={{display:canAccessPage(role,'students')?undefined:'none'}} className="search-link" href="/dashboard/students" aria-label="Search student records"><Search size={17} /></Link>}
+          <Link className="primary-action" href={role === 'student' || role === 'finance_officer' ? '/dashboard/finance' : roleHasPermission(role, 'students:write') ? '/dashboard/students' : '/dashboard/courses'}>
             <FilePlus2 size={16} />
-            {role === 'student' ? 'Make a payment' : 'Register student'}
+            {role === 'student' ? 'Make a payment' : role === 'finance_officer' ? 'Review payments' : roleHasPermission(role, 'students:write') ? 'Register student' : 'View courses'}
           </Link>
         </div>
       </section>
@@ -102,7 +102,7 @@ export default function DashboardExperience() {
         <article className="surface-panel course-panel">
           <div className="panel-heading">
             <div><p className="eyebrow">ACADEMIC OVERVIEW</p><h2>{role === 'student' ? 'Your registered units' : role === 'lecturer' ? 'Your teaching units' : 'Course catalogue'}</h2></div>
-            <Link href="/dashboard/courses" className="text-link">View catalogue <ArrowRight size={15} /></Link>
+            <Link style={{display:canAccessPage(role,'courses')?undefined:'none'}} href="/dashboard/courses" className="text-link">View catalogue <ArrowRight size={15} /></Link>
           </div>
           <div className="table-wrap">
             <table className="overview-table">
@@ -113,7 +113,7 @@ export default function DashboardExperience() {
                   <td className="muted-cell">{course.department}</td>
                   <td className="number-cell">{course.enrolled}</td>
                   <td><span className={`status-badge ${course.status === 'Active' ? 'status-active' : 'status-review'}`}><span />{course.status}</span></td>
-                  <td><Link className="row-action" href="/dashboard/courses" aria-label={`Open ${course.code}`}><MoreHorizontal size={18} /></Link></td>
+                  <td><Link style={{display:canAccessPage(role,'courses')?undefined:'none'}} className="row-action" href="/dashboard/courses" aria-label={`Open ${course.code}`}><MoreHorizontal size={18} /></Link></td>
                 </tr>
               ))}</tbody>
             </table>
@@ -136,25 +136,25 @@ export default function DashboardExperience() {
                 </div>
               ))}
             </div>
-            <Link className="notice-link" href="/dashboard/announcements"><Megaphone size={15} /> All announcements <ArrowRight size={14} /></Link>
+            <Link style={{display:canAccessPage(role,'announcements')?undefined:'none'}} className="notice-link" href="/dashboard/announcements"><Megaphone size={15} /> All announcements <ArrowRight size={14} /></Link>
           </article>
 
           <article className="focus-panel">
             <div className="focus-top"><span className="focus-symbol"><ShieldCheck size={18} /></span><span>INSTITUTIONAL STATUS</span></div>
             <h2>All systems are running smoothly</h2>
             <p>Academic services are available. Last system check completed at 09:42.</p>
-            <Link href="/dashboard/audit">View system activity <ArrowUpRight size={15} /></Link>
+            <Link style={{display:canAccessPage(role,'audit')?undefined:'none'}} href="/dashboard/audit">View system activity <ArrowUpRight size={15} /></Link>
           </article>
         </aside>
       </section>
 
       <section className="shortcut-strip" aria-label="Quick access">
         <div className="shortcut-title"><span className="shortcut-rule" /><span>QUICK ACCESS</span></div>
-        <Link href="/dashboard/students"><Users size={17} /> Student records <ArrowUpRight size={14} /></Link>
-        <Link href="/dashboard/ai"><Sparkles size={17} /> AI Advisor <ArrowUpRight size={14} /></Link>
-        <Link href="/dashboard/finance"><CreditCard size={17} /> Finance desk <ArrowUpRight size={14} /></Link>
-        <Link href="/dashboard/attendance"><ClipboardCheck size={17} /> Attendance <ArrowUpRight size={14} /></Link>
-        <Link href="/dashboard/announcements"><Megaphone size={17} /> Announcements <ArrowUpRight size={14} /></Link>
+        <Link style={{display:canAccessPage(role,'students')?undefined:'none'}} href="/dashboard/students"><Users size={17} /> Student records <ArrowUpRight size={14} /></Link>
+        <Link style={{display:canAccessPage(role,'ai')?undefined:'none'}} href="/dashboard/ai"><Sparkles size={17} /> AI Advisor <ArrowUpRight size={14} /></Link>
+        <Link style={{display:canAccessPage(role,'finance')?undefined:'none'}} href="/dashboard/finance"><CreditCard size={17} /> Finance desk <ArrowUpRight size={14} /></Link>
+        <Link style={{display:canAccessPage(role,'attendance')?undefined:'none'}} href="/dashboard/attendance"><ClipboardCheck size={17} /> Attendance <ArrowUpRight size={14} /></Link>
+        <Link style={{display:canAccessPage(role,'announcements')?undefined:'none'}} href="/dashboard/announcements"><Megaphone size={17} /> Announcements <ArrowUpRight size={14} /></Link>
       </section>
     </div>
   );

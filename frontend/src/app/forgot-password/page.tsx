@@ -7,18 +7,16 @@ import { Mail, ArrowLeft, Send, CheckCircle, ShieldAlert } from 'lucide-react';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
+  const [error,setError]=useState('');
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return;
 
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      setSubmitted(true);
-    }, 800);
+    setLoading(true);setError('');
+    try { const response=await fetch('/api/v1/auth/recovery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});const data=await response.json();if(!response.ok)throw new Error(data.error);setSubmitted(true); } catch(e) { setError(e instanceof Error?e.message:'Recovery request failed.'); } finally { setLoading(false); }
   };
 
   return (
@@ -34,6 +32,7 @@ export default function ForgotPasswordPage() {
             </p>
           </div>
 
+          {error && <p role="alert" className="text-rose-700">{error}</p>}
           {submitted ? (
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 text-center space-y-3">
               <CheckCircle className="w-10 h-10 text-emerald-600 mx-auto" />

@@ -58,7 +58,12 @@ CREATE POLICY "Users can view own profile"
 CREATE POLICY "Users can update own profile"
     ON users
     FOR UPDATE
-    USING (id = auth.uid());
+    USING (id = auth.uid())
+    WITH CHECK (id = auth.uid());
+
+-- Self-service profile updates cannot change role, activation, or password hashes.
+REVOKE UPDATE ON public.users FROM anon, authenticated;
+GRANT UPDATE (first_name, last_name, phone_number, avatar_url) ON public.users TO authenticated;
 
 -- -----------------------------------------------------------------------------
 -- STUDENTS Table Policies

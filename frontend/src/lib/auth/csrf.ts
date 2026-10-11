@@ -13,14 +13,10 @@ export function validateCsrf(request: Request | NextRequest): { valid: boolean; 
     return { valid: true };
   }
 
-  // Exempt external webhooks with separate origin/signature validation (e.g., Safaricom Daraja callback)
   const url = new URL(request.url);
-  if (url.pathname.includes('/finance/mpesa/callback')) {
-    return { valid: true };
-  }
 
   const origin = request.headers.get('origin');
-  const host = request.headers.get('host') || request.headers.get('x-forwarded-host');
+  const expectedOrigin = new URL(process.env.NEXT_PUBLIC_APP_URL || url.origin).origin;
 
   if (!origin) {
     // If no origin header is present, fall back to referer header check
@@ -28,7 +24,7 @@ export function validateCsrf(request: Request | NextRequest): { valid: boolean; 
     if (referer) {
       try {
         const refererUrl = new URL(referer);
-        if (host && refererUrl.host !== host) {
+        if (refererUrl.origin !== expectedOrigin) {
           return { valid: false, error: 'CSRF violation: Referer host does not match target host.' };
         }
         return { valid: true };
@@ -37,7 +33,7 @@ export function validateCsrf(request: Request | NextRequest): { valid: boolean; 
       }
     }
     // For non-browser programmatic clients (e.g., curl/SDK with Bearer token only), allow if not using cookie auth
-    const hasCookie = request.headers.get('cookie')?.includes('uams_auth_token');
+    const hasCookie = /(?:^|;\s*)uams_(auth|refresh)_token=/.test(request.headers.get('cookie') || '');
     if (hasCookie) {
       return { valid: false, error: 'CSRF violation: Cookie-authenticated mutations require Origin header.' };
     }
@@ -46,10 +42,10 @@ export function validateCsrf(request: Request | NextRequest): { valid: boolean; 
 
   try {
     const originUrl = new URL(origin);
-    if (host && originUrl.host !== host) {
+    if (originUrl.origin !== expectedOrigin) {
       return {
         valid: false,
-        error: `CSRF violation: Request origin '${originUrl.host}' does not match server host '${host}'.`,
+        error: 'CSRF violation: Request origin does not match the application origin.',
       };
     }
     return { valid: true };

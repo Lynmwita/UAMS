@@ -1,50 +1,33 @@
 import { NextResponse } from 'next/server';
+import { requireServerAuth } from '@/lib/auth/server-auth';
+import { checkRateLimit } from '@/lib/auth/rate-limiter';
 import { validateSTKPushPayload, formatKenyanPhoneNumber } from '@/lib/finance/mpesa';
-import { registerPendingSTK } from '@/lib/finance/pending-requests';
+import { darajaConfig, initiateSTK } from '@/lib/finance/daraja';
+import { checkLedger, savePayment } from '@/lib/finance/ledger';
+import { studentIdentity, isDemoUser } from '@/lib/auth/scope';
 
 export async function POST(request: Request) {
+  const auth = await requireServerAuth(request, ['student','finance_officer']);
+  if ('errorResponse' in auth) return auth.errorResponse;
+  if (isDemoUser(auth.user) && process.env.MPESA_ENVIRONMENT === 'production') return NextResponse.json({success:false,error:'Live payments require an institutional account. Demo accounts can only use the Daraja sandbox.'},{status:403});
+  const limit = checkRateLimit(`stk:${auth.user.id}`, 3, 60);
+  if (!limit.allowed) return NextResponse.json({ success: false, error: 'Please wait before requesting another payment prompt.' }, { status: 429 });
+  let body;
+  try { body = await request.json(); } catch { return NextResponse.json({ success: false, error: 'Invalid JSON.' }, { status: 400 }); }
+  const validation = validateSTKPushPayload(body);
+  if (!validation.valid) return NextResponse.json({ success: false, error: validation.error }, { status: 400 });
+  if (auth.user.role === 'student') {
+    const identity = await studentIdentity(auth.user);
+    if (!identity || body.accountReference !== identity.admissionNumber) return NextResponse.json({ success: false, error: 'Students may only pay against their own admission number.' }, { status: 403 });
+  }
   try {
-    const body = await request.json();
-    const validation = validateSTKPushPayload(body);
-
-    if (!validation.valid) {
-      return NextResponse.json(
-        { success: false, error: validation.error },
-        { status: 400 }
-      );
-    }
-
-    const formattedPhone = formatKenyanPhoneNumber(body.phoneNumber);
-    const checkoutRequestId = `ws_CO_${Date.now()}_${Math.floor(10000 + Math.random() * 90000)}`;
-    const merchantRequestId = `MR_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
-
-    // Track the authentic pending request so callback can verify it
-    registerPendingSTK({
-      checkoutRequestId,
-      merchantRequestId,
-      accountReference: body.accountReference,
-      phoneNumber: formattedPhone,
-      amount: Number(body.amount),
-    });
-
-    return NextResponse.json({
-      success: true,
-      mode: process.env.MPESA_CONSUMER_KEY ? 'daraja_live' : 'daraja_sandbox',
-      message: `M-Pesa STK prompt dispatched to ${formattedPhone}. Awaiting PIN authorization.`,
-      MerchantRequestID: merchantRequestId,
-      CheckoutRequestID: checkoutRequestId,
-      BusinessShortCode: '522533',
-      AccountReference: body.accountReference,
-      Amount: body.amount,
-      ResponseCode: '0',
-      ResponseDescription: 'Success. Request accepted for processing',
-      CustomerMessage: `STK push prompt sent to ${formattedPhone} for KSh ${body.amount.toLocaleString()} using Paybill 522533 and Account No ${body.accountReference}. Enter your M-Pesa PIN on handset to authorize payment.`,
-    });
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message || 'Internal server error' },
-      { status: 500 }
-    );
+    const config = darajaConfig();
+    await checkLedger();
+    const phoneNumber = formatKenyanPhoneNumber(body.phoneNumber);
+    const result = await initiateSTK({ ...body, phoneNumber });
+    await savePayment({ checkoutRequestId: result.CheckoutRequestID, merchantRequestId: result.MerchantRequestID, accountReference: body.accountReference, phoneNumber, amount: body.amount, userId: auth.user.id });
+    return NextResponse.json({ success: true, CheckoutRequestID: result.CheckoutRequestID, status: 'pending', BusinessShortCode: config.shortcode, CustomerMessage: 'Payment prompt requested. Enter your PIN on your handset. Payment remains pending until confirmation.' });
+  } catch (error) {
+    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Payment service is unavailable.' }, { status: 503 });
   }
 }
-

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useAuth } from '@/lib/auth/context';
 import {
   Sparkles,
   Send,
@@ -59,8 +59,7 @@ const PRESET_PROMPTS = [
 ];
 
 export default function AIAssistantPage() {
-  const searchParams = useSearchParams();
-  const role = (searchParams.get('role') as UserRole) || 'student';
+  const { role } = useAuth();
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     {

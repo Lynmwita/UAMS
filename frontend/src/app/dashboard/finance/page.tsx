@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/lib/auth/context';
+import { roleHasPermission } from '@/lib/auth/rbac';
 import { CreditCard, Smartphone, Building, CheckCircle2, ArrowRight, Copy, Check, Info, Download, FileText, UploadCloud, RefreshCw } from 'lucide-react';
 import { generateFeeStatementPDF } from '@/lib/pdf/generator';
 
@@ -19,6 +21,14 @@ interface BankTransactionItem {
 }
 
 export default function FinancePage() {
+  const { role } = useAuth();
+  const paybill=process.env.NEXT_PUBLIC_MPESA_SHORTCODE || '';
+  const paybillLabel=paybill && !paybill.includes('your_') ? paybill : 'Not configured';
+  const canReconcile = roleHasPermission(role, 'finance:reconcile');
+  const canViewBank = roleHasPermission(role, 'finance:read');
+  const canPay = role === 'student' || role === 'finance_officer' || role === 'super_admin';
+  const [checkoutId,setCheckoutId]=useState<string|null>(null);
+  const [paymentStatus,setPaymentStatus]=useState('');
   const [activeTab, setActiveTab] = useState<'mpesa' | 'bank_recon'>('mpesa');
   const [admissionNo, setAdmissionNo] = useState('BIT/2023/8849');
   const [studentName, setStudentName] = useState('Faith Wanjiku');
@@ -40,7 +50,7 @@ export default function FinancePage() {
   });
 
   useEffect(() => {
-    fetchBankTransactions();
+    if (canViewBank) fetchBankTransactions();
   }, []);
 
   const fetchBankTransactions = async () => {
@@ -115,7 +125,8 @@ export default function FinancePage() {
   ]);
 
   const copyPaybill = () => {
-    navigator.clipboard.writeText('522533');
+    if(paybillLabel==='Not configured')return;
+    navigator.clipboard.writeText(paybill);
     setCopiedPaybill(true);
     setTimeout(() => setCopiedPaybill(false), 2000);
   };
@@ -141,21 +152,8 @@ export default function FinancePage() {
       if (data.success) {
         setMessage({ type: 'success', text: data.CustomerMessage || 'STK Push initiated! M-Pesa prompt sent.' });
 
-        const txAmount = Number(amount);
-        const receiptNo = data.ReceiptNumber || `MP${Date.now().toString().slice(-8)}`;
-
-        const newTx = {
-          ref: receiptNo,
-          student: admissionNo.trim(),
-          desc: 'Tuition Installment via M-Pesa',
-          amount: txAmount,
-          method: 'mpesa',
-          status: 'verified',
-          date: new Date().toISOString().split('T')[0],
-        };
-
-        setTransactions((prev) => [newTx, ...prev]);
-        setAmountPaid((prev) => prev + txAmount);
+        setCheckoutId(data.CheckoutRequestID);
+        setPaymentStatus('pending');
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to initiate STK push.' });
       }
@@ -164,6 +162,23 @@ export default function FinancePage() {
       setMessage({ type: 'error', text: err.message || 'Network connection failed.' });
     }
   };
+
+  useEffect(()=>{
+    if(!checkoutId)return;
+    let mounted=true, attempts=0;
+    const timer=setInterval(async()=>{
+      if(++attempts>60){clearInterval(timer);setMessage({type:'error',text:'Confirmation is delayed. Contact finance with checkout ID '+checkoutId+' before retrying.'});return;}
+      try{const r=await fetch('/api/v1/finance/mpesa/status?checkoutRequestId='+encodeURIComponent(checkoutId),{cache:'no-store'});const d=await r.json();if(!mounted||!r.ok)return;
+        setPaymentStatus(d.status);
+        if(d.status==='settled'){
+          clearInterval(timer);setCheckoutId(null);
+          setTransactions(prev=>prev.some(t=>t.ref===d.receipt)?prev:[{ref:d.receipt,student:d.accountReference,desc:'Confirmed M-Pesa Payment',amount:d.amount,method:'mpesa',status:'verified',date:new Date().toISOString().split('T')[0]},...prev]);
+          setAmountPaid(prev=>prev+d.amount);setMessage({type:'success',text:'Payment confirmed. Receipt: '+d.receipt});
+        }else if(d.status==='failed'||d.status==='expired'){clearInterval(timer);setCheckoutId(null);setMessage({type:'error',text:'Payment '+d.status+'. Your fee balance was not credited.'});}
+      }catch{/* Retry status read without resubmitting a payment. */}
+    },5000);
+    return()=>{mounted=false;clearInterval(timer);};
+  },[checkoutId]);
 
   const handleDownloadFeeStatement = () => {
     const doc = generateFeeStatementPDF({
@@ -185,7 +200,7 @@ export default function FinancePage() {
         date: t.date,
         reference: t.ref,
         description: t.desc,
-        method: t.method === 'mpesa' ? 'M-Pesa (522533)' : 'Bank Transfer',
+        method: t.method === 'mpesa' ? 'M-Pesa' : 'Bank Transfer',
         amount: t.amount,
         status: t.status,
       })),
@@ -196,13 +211,15 @@ export default function FinancePage() {
 
   return (
     <div className="space-y-6">
+      <p className="text-sm text-amber-800">Historical invoices and balances on this screen are demonstration data. New M-Pesa receipts require provider confirmation; invoice allocation must be completed by Finance.</p>
+      {paymentStatus && <p role="status">Payment status: {paymentStatus}</p>}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-slate-200 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-academic-navy-950 tracking-tight">
             Fees & Financial Operations
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Student fee invoicing, Safaricom M-Pesa Paybill (522533), bank slip reconciliation, and institutional ledger.
+            Student fee invoicing, Safaricom M-Pesa payments, bank slip reconciliation, and institutional ledger.
           </p>
         </div>
 
@@ -217,6 +234,7 @@ export default function FinancePage() {
               M-Pesa Collections
             </button>
             <button
+              hidden={!canViewBank} style={{display:canViewBank ? undefined : 'none'}}
               onClick={() => setActiveTab('bank_recon')}
               className={`px-3 py-1.5 text-xs font-bold rounded-md transition ${
                 activeTab === 'bank_recon' ? 'bg-academic-gold-500 text-academic-navy-950' : 'text-slate-600 hover:text-slate-900'
@@ -263,7 +281,7 @@ export default function FinancePage() {
                 <Building className="h-4 w-4 text-academic-navy-900" />
                 Record Bank Deposit / Slip
               </h2>
-              <form onSubmit={handleAddBankSlip} className="space-y-3">
+              <form hidden={!canReconcile} style={{display:canReconcile ? undefined : 'none'}} onSubmit={handleAddBankSlip} className="space-y-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Bank Branch / Institution</label>
                   <select
@@ -369,6 +387,7 @@ export default function FinancePage() {
                         <td className="p-3 text-right">
                           {!tx.is_reconciled && (
                             <button
+                              hidden={!canReconcile} style={{display:canReconcile ? undefined : 'none'}}
                               onClick={() => handleReconcileBankTx(tx.id)}
                               className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-1 px-2.5 rounded text-[10px] transition"
                             >
@@ -395,7 +414,7 @@ export default function FinancePage() {
             </span>
             <h2 className="text-xl font-bold mt-2 text-white">Direct Fee Collection Gateway</h2>
             <p className="text-xs text-slate-300 mt-1">
-              All student tuition and institutional fees are paid via Paybill <strong className="text-academic-gold-300">522533</strong> using your Student Admission Number as the Account Reference.
+              All student tuition and institutional fees are paid via Paybill <strong className="text-academic-gold-300">{paybillLabel}</strong> using your Student Admission Number as the Account Reference.
             </p>
           </div>
 
@@ -403,7 +422,7 @@ export default function FinancePage() {
             <div>
               <div className="text-[11px] uppercase font-bold text-slate-400">Business / Paybill No:</div>
               <div className="text-2xl font-mono font-black text-academic-gold-400 flex items-center gap-2">
-                <span>522533</span>
+                <span>{paybillLabel}</span>
                 <button
                   type="button"
                   onClick={copyPaybill}
@@ -514,7 +533,7 @@ export default function FinancePage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !canPay || !!checkoutId}
               className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 rounded-lg text-sm transition flex items-center justify-center space-x-2 shadow-sm disabled:opacity-50"
             >
               <span>{loading ? 'Sending STK Prompt...' : 'Send M-Pesa STK Prompt'}</span>
@@ -530,7 +549,7 @@ export default function FinancePage() {
             </div>
             <ol className="list-decimal pl-4 space-y-1 text-slate-600">
               <li>Open M-Pesa &rarr; <strong>Lipa na M-Pesa</strong> &rarr; <strong>Paybill</strong>.</li>
-              <li>Enter Business No: <strong className="font-mono text-academic-navy-950">522533</strong>.</li>
+              <li>Enter Business No: <strong className="font-mono text-academic-navy-950">{paybillLabel}</strong>.</li>
               <li>Enter Account No: <strong className="font-mono text-academic-navy-950">{admissionNo || 'Student Admission No'}</strong>.</li>
               <li>Enter Amount and PIN to authorize.</li>
             </ol>
@@ -565,7 +584,7 @@ export default function FinancePage() {
                       <td className="px-4 py-3 font-bold text-academic-navy-950">KES {tx.amount.toLocaleString()}</td>
                       <td className="px-4 py-3">
                         <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                          {tx.method === 'mpesa' ? 'M-Pesa 522533' : 'Bank Slip'}
+                          {tx.method === 'mpesa' ? 'M-Pesa' : 'Bank Slip'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-500">{tx.date}</td>
@@ -582,8 +601,8 @@ export default function FinancePage() {
           </div>
 
           <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>Paybill: 522533 &bull; Safaricom Daraja API Integrated</span>
-            <span className="text-emerald-700 font-semibold">Automated Ledger Reconciliation Active</span>
+            <span>Paybill: {paybillLabel} &bull; M-Pesa configuration required</span>
+            <span className="text-emerald-700 font-semibold">Provider confirmation required</span>
           </div>
         </div>
       </div>

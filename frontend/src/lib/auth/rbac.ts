@@ -40,89 +40,82 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 };
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
-  super_admin: [
-    'students:read',
-    'students:write',
-    'grades:read',
-    'grades:write',
-    'grades:approve',
-    'courses:read',
-    'courses:write',
-    'finance:read',
-    'finance:reconcile',
-    'finance:write',
-    'hostels:read',
-    'hostels:allocate',
-    'library:read',
-    'library:loan',
-    'exams:read',
-    'exams:schedule',
-    'audit:read',
+  "super_admin": [
+    "students:read",
+    "students:write",
+    "grades:read",
+    "grades:write",
+    "grades:approve",
+    "courses:read",
+    "courses:write",
+    "finance:read",
+    "finance:reconcile",
+    "finance:write",
+    "hostels:read",
+    "hostels:allocate",
+    "library:read",
+    "library:loan",
+    "exams:read",
+    "exams:schedule",
+    "audit:read"
   ],
-  admin: [
-    'students:read',
-    'students:write',
-    'grades:read',
-    'grades:write',
-    'grades:approve',
-    'courses:read',
-    'courses:write',
-    'finance:read',
-    'finance:reconcile',
-    'finance:write',
-    'hostels:read',
-    'hostels:allocate',
-    'library:read',
-    'library:loan',
-    'exams:read',
-    'exams:schedule',
-    'audit:read',
+  "admin": [
+    "students:read",
+    "students:write",
+    "grades:read",
+    "grades:approve",
+    "courses:read",
+    "courses:write",
+    "finance:read",
+    "hostels:read",
+    "hostels:allocate",
+    "library:read",
+    "library:loan",
+    "exams:read",
+    "exams:schedule",
+    "audit:read"
   ],
-  registrar: [
-    'students:read',
-    'students:write',
-    'grades:read',
-    'grades:approve',
-    'courses:read',
-    'courses:write',
-    'exams:read',
-    'exams:schedule',
-    'hostels:read',
-    'hostels:allocate',
-    'audit:read',
+  "registrar": [
+    "students:read",
+    "students:write",
+    "grades:read",
+    "grades:approve",
+    "courses:read",
+    "courses:write",
+    "exams:read",
+    "exams:schedule",
+    "hostels:read",
+    "hostels:allocate",
+    "library:read",
+    "library:loan"
   ],
-  hod: [
-    'students:read',
-    'grades:read',
-    'grades:write',
-    'grades:approve',
-    'courses:read',
-    'courses:write',
-    'exams:read',
-    'exams:schedule',
+  "hod": [
+    "students:read",
+    "grades:read",
+    "grades:approve",
+    "courses:read",
+    "exams:read",
+    "library:read"
   ],
-  lecturer: [
-    'grades:read',
-    'grades:write',
-    'courses:read',
-    'exams:read',
+  "lecturer": [
+    "grades:read",
+    "grades:write",
+    "courses:read",
+    "exams:read",
+    "library:read"
   ],
-  finance_officer: [
-    'finance:read',
-    'finance:reconcile',
-    'finance:write',
-    'students:read',
-    'audit:read',
+  "finance_officer": [
+    "finance:read",
+    "finance:reconcile",
+    "finance:write",
+    "students:read"
   ],
-  student: [
-    'courses:read',
-    'courses:write',
-    'hostels:read',
-    'hostels:allocate',
-    'library:read',
-    'library:loan',
-    'exams:read',
-  ],
+  "student": [
+    "courses:read",
+    "hostels:read",
+    "library:read",
+    "exams:read"
+  ]
 };
 
 export function roleHasPermission(role: UserRole, permission: Permission): boolean {
@@ -137,21 +130,5 @@ export function hasPermission(userRole: UserRole, requiredRoles: UserRole[]): bo
 }
 
 export function getRoleDashboardPath(role: UserRole): string {
-  switch (role) {
-    case 'super_admin':
-    case 'admin':
-      return '/dashboard/admin';
-    case 'registrar':
-      return '/dashboard/registrar';
-    case 'hod':
-      return '/dashboard/hod';
-    case 'lecturer':
-      return '/dashboard/lecturer';
-    case 'finance_officer':
-      return '/dashboard/finance';
-    case 'student':
-      return '/dashboard/student';
-    default:
-      return '/dashboard';
-  }
+  return role === 'finance_officer' ? '/dashboard/finance' : '/dashboard';
 }

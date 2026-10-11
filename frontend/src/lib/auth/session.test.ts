@@ -54,17 +54,17 @@ test('cryptographic token verification strictly rejects tampered payloads', () =
   assert.equal(result, null);
 });
 
-test('requireServerAuth rejects unauthenticated requests with 401', () => {
+test('requireServerAuth rejects unauthenticated requests with 401', async () => {
   const dummyReq = new Request('http://localhost:3000/api/v1/students', {
     method: 'GET',
   });
 
-  const authResult = requireServerAuth(dummyReq);
+  const authResult = await requireServerAuth(dummyReq);
   assert.ok('errorResponse' in authResult);
   assert.equal(authResult.errorResponse.status, 401);
 });
 
-test('requireServerAuth rejects unauthorized roles with 403', () => {
+test('requireServerAuth rejects unauthorized roles with 403', async () => {
   const studentToken = createSignedToken({
     id: 'usr-stu-1',
     email: 'student@university.ac.ke',
@@ -78,7 +78,7 @@ test('requireServerAuth rejects unauthorized roles with 403', () => {
     },
   });
 
-  const authResult = requireServerAuth(req, ['finance_officer', 'admin']);
+  const authResult = await requireServerAuth(req, ['finance_officer', 'admin']);
   assert.ok('errorResponse' in authResult);
   assert.equal(authResult.errorResponse.status, 403);
 });
@@ -219,7 +219,7 @@ test('validateCsrf rejects cross-origin mutations and permits same-origin reques
   assert.ok(evilRes.error?.includes('CSRF violation'));
 });
 
-test('requirePermission enforces fine-grained capability checks', () => {
+test('requirePermission enforces fine-grained capability checks', async () => {
   const lecturerToken = createSignedToken({
     id: 'usr-lec-1',
     email: 'lecturer@university.ac.ke',
@@ -231,11 +231,11 @@ test('requirePermission enforces fine-grained capability checks', () => {
   });
 
   // Lecturer has grades:write
-  const allowed = requirePermission(lecturerReq, 'grades:write');
+  const allowed = await requirePermission(lecturerReq, 'grades:write');
   assert.ok('user' in allowed);
 
   // Lecturer lacks finance:reconcile
-  const blocked = requirePermission(lecturerReq, 'finance:reconcile');
+  const blocked = await requirePermission(lecturerReq, 'finance:reconcile');
   assert.ok('errorResponse' in blocked);
   assert.equal(blocked.errorResponse.status, 403);
 });
@@ -290,7 +290,7 @@ test('auth/me route verifies cookie-only sessions and logout clears cookie', asy
   assert.equal(authData.user.role, 'student');
 
   // Logout clears session cookie
-  const logoutRes = await postLogout();
+  const logoutRes = await postLogout(new Request('http://localhost:3000/api/v1/auth/logout', {method:'POST'}));
   assert.equal(logoutRes.status, 200);
   const cookieHeader = logoutRes.headers.get('set-cookie');
   assert.ok(cookieHeader?.includes('uams_auth_token=;'));
@@ -396,6 +396,7 @@ test('refresh and mfa API routes handle authentication cycles securely', async (
     method: 'POST',
     headers: {
       Cookie: `uams_refresh_token=${validRefreshToken}`,
+      Origin:'http://localhost:3000',
     },
   });
 

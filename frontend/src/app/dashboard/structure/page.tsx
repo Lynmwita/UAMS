@@ -1,18 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Building2, Plus, School, BookOpen, Layers, X, Check } from 'lucide-react';
 
 export default function StructurePage() {
   const [activeTab, setActiveTab] = useState<'schools' | 'departments' | 'programs'>('schools');
 
-  const [schools, setSchools] = useState([
-    { id: '1', code: 'SOICT', name: 'School of Information Communication & Technology', dean: 'Prof. Alice Njuguna', deanEmail: 'dean.soict@university.ac.ke', depts: 3, programs: 7 },
-    { id: '2', code: 'SOBE', name: 'School of Business & Economics', dean: 'Dr. Martin Omondi', deanEmail: 'dean.sobe@university.ac.ke', depts: 2, programs: 5 },
-    { id: '3', code: 'SOET', name: 'School of Engineering & Technology', dean: 'Eng. Samuel Githae', deanEmail: 'dean.soet@university.ac.ke', depts: 3, programs: 6 },
-    { id: '4', code: 'SOEAS', name: 'School of Education, Arts & Social Sciences', dean: 'Dr. Beatrice Wanyama', deanEmail: 'dean.soeas@university.ac.ke', depts: 2, programs: 4 },
-  ]);
-
+  const [error,setError]=useState('');
+  const [schools,setSchools]=useState<{id:string;code:string;name:string;dean:string;deanEmail:string;depts:number;programs:number}[]>([]);
+  const mapSchool=(s:any)=>({id:s.id,code:s.code,name:s.name,dean:s.dean,deanEmail:s.dean_email,depts:s.departments_count,programs:s.programs_count});
+  useEffect(()=>{fetch('/api/v1/schools').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);setSchools(d.data.map(mapSchool));}).catch(e=>setError(e.message));},[]);
   const [departments, setDepartments] = useState([
     { id: 'd1', code: 'DCS', name: 'Department of Computer Science', school: 'SOICT', hod: 'Dr. Jane Mwangi', lecturers: 14, programs: 3 },
     { id: 'd2', code: 'DIT', name: 'Department of Information Technology', school: 'SOICT', hod: 'Prof. David Kamau', lecturers: 12, programs: 2 },
@@ -36,27 +33,14 @@ export default function StructurePage() {
     deanEmail: '',
   });
 
-  const handleAddSchool = (e: React.FormEvent) => {
+  const handleAddSchool=async(e:React.FormEvent)=>{
     e.preventDefault();
-    if (!newSchool.code || !newSchool.name) return;
-
-    const entry = {
-      id: `sch-${Date.now()}`,
-      code: newSchool.code.toUpperCase(),
-      name: newSchool.name,
-      dean: newSchool.dean || 'Pending Appointment',
-      deanEmail: newSchool.deanEmail || '',
-      depts: 1,
-      programs: 1,
-    };
-
-    setSchools([...schools, entry]);
-    setIsModalOpen(false);
-    setNewSchool({ code: '', name: '', dean: '', deanEmail: '' });
+    try{const r=await fetch('/api/v1/schools',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:newSchool.code,name:newSchool.name,dean:newSchool.dean,dean_email:newSchool.deanEmail})});const d=await r.json();if(!r.ok)throw new Error(d.error);setSchools(prev=>[...prev,mapSchool(d.data)]);setIsModalOpen(false);setError('');}catch(e){setError(e instanceof Error?e.message:'School creation failed.');}
   };
 
   return (
     <div className="space-y-6">
+      {error&&<p role="alert" className="text-rose-700">{error}</p>}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-200 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-academic-navy-950 tracking-tight">

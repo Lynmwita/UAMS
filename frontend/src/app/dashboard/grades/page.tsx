@@ -1,18 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/lib/auth/context';
+import { roleHasPermission } from '@/lib/auth/rbac';
 import { Award, CheckCircle2, FileSpreadsheet, Download, Plus, X, Printer } from 'lucide-react';
 import { generateTranscriptPDF } from '@/lib/pdf/generator';
 import { calculateGradePoint, getAcademicStanding } from '@/lib/academic/gpa';
 
 export default function GradesPage() {
-  const [grades, setGrades] = useState([
-    { id: '1', student: 'Faith Wanjiku', adm: 'BIT/2023/8849', course: 'BCS 311', courseTitle: 'Advanced Database Systems', credits: 3, cat: 28, exam: 62, total: 90, grade: 'A', gpa: 4.0, status: 'Approved' },
-    { id: '2', student: 'Faith Wanjiku', adm: 'BIT/2023/8849', course: 'BIT 312', courseTitle: 'Distributed Systems & Cloud Computing', credits: 3, cat: 26, exam: 58, total: 84, grade: 'A', gpa: 4.0, status: 'Approved' },
-    { id: '3', student: 'Faith Wanjiku', adm: 'BIT/2023/8849', course: 'BCS 314', courseTitle: 'Software Engineering Architecture', credits: 4, cat: 24, exam: 52, total: 76, grade: 'B', gpa: 3.0, status: 'Approved' },
-    { id: '4', student: 'Kevin Otieno', adm: 'BCS/2023/1204', course: 'BCS 311', courseTitle: 'Advanced Database Systems', credits: 3, cat: 22, exam: 48, total: 70, grade: 'B', gpa: 3.0, status: 'Submitted' },
-    { id: '5', student: 'Brian Kiprono', adm: 'BBA/2022/4412', course: 'BBA 201', courseTitle: 'Principles of Financial Accounting', credits: 3, cat: 27, exam: 61, total: 88, grade: 'A', gpa: 4.0, status: 'Approved' },
-  ]);
+  const { role } = useAuth();
+  const canWrite = roleHasPermission(role, 'grades:write');
+  const [error, setError] = useState('');
+  type GradeRow={id:string;student:string;adm:string;course:string;courseTitle:string;credits:number;cat:number;exam:number;total:number;grade:string;gpa:number;status:string};
+  const [grades,setGrades]=useState<GradeRow[]>([]);
+  const mapGrade=(g:any):GradeRow=>({id:g.id,student:g.student_name,adm:g.admission_number,course:g.course_code,courseTitle:g.course_title,credits:g.credit_hours,cat:g.cat_score,exam:g.exam_score,total:g.total_score,grade:g.letter_grade,gpa:g.grade_point,status:g.is_approved?'Approved':'Submitted'});
+  useEffect(()=>{fetch('/api/v1/grades/enter').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);setGrades(d.data.map(mapGrade));}).catch(e=>setError(e.message));},[]);
+  const approveGrade=async(id:string)=>{try{const r=await fetch('/api/v1/grades/enter',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({grade_id:id})});const d=await r.json();if(!r.ok)throw new Error(d.error);setGrades(prev=>prev.map(g=>g.id===id?mapGrade(d.data):g));}catch(e){setError(e instanceof Error?e.message:'Approval failed.');}};
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newGrade, setNewGrade] = useState({
@@ -30,24 +33,9 @@ export default function GradesPage() {
   const totalVal = Math.min(100, Math.max(0, catVal + examVal));
   const { letter, points } = calculateGradePoint(totalVal);
 
-  const handleAddGrade = (e: React.FormEvent) => {
-    e.preventDefault();
-    const entry = {
-      id: `grd-${Date.now()}`,
-      student: newGrade.student,
-      adm: newGrade.adm,
-      course: newGrade.course,
-      courseTitle: newGrade.courseTitle,
-      credits: Number(newGrade.credits),
-      cat: catVal,
-      exam: examVal,
-      total: totalVal,
-      grade: letter,
-      gpa: points,
-      status: 'Submitted',
-    };
-    setGrades([entry, ...grades]);
-    setIsModalOpen(false);
+  const handleAddGrade=async(e:React.FormEvent)=>{
+    e.preventDefault();if(!canWrite)return;
+    try{const r=await fetch('/api/v1/grades/enter',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({student_name:newGrade.student,admission_number:newGrade.adm,course_code:newGrade.course,course_title:newGrade.courseTitle,credit_hours:newGrade.credits,cat_score:catVal,exam_score:examVal})});const d=await r.json();if(!r.ok)throw new Error(d.error);setGrades(prev=>[mapGrade(d.data),...prev]);setIsModalOpen(false);setError('');}catch(e){setError(e instanceof Error?e.message:'Grade entry failed.');}
   };
 
   const handleDownloadTranscript = () => {
@@ -90,11 +78,12 @@ export default function GradesPage() {
       academicStanding: standing,
     });
 
-    doc.save('Official_Academic_Transcript_BIT_2023_8849.pdf');
+    doc.save('Academic_Results_Preview_BIT_2023_8849.pdf');
   };
 
   return (
     <div className="space-y-6">
+      {error && <p role="alert" className="text-rose-700">{error}</p>}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-200 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-academic-navy-950 tracking-tight">
@@ -106,16 +95,18 @@ export default function GradesPage() {
         </div>
 
         <div className="flex items-center space-x-3">
-          <button
+          {['super_admin','admin','registrar','student'].includes(role) && <button
             onClick={handleDownloadTranscript}
             className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold px-4 py-2.5 rounded-lg text-sm transition flex items-center space-x-2 shadow-sm"
           >
             <Download className="h-4 w-4 text-academic-navy-700" />
-            <span>Download Official Transcript PDF</span>
-          </button>
+            <span>Download Results Preview PDF</span>
+          </button>}
 
           <button
-            onClick={() => setIsModalOpen(true)}
+            disabled={!canWrite}
+          hidden={!canWrite} style={{display:canWrite ? undefined : 'none'}}
+          onClick={() => setIsModalOpen(true)}
             className="bg-academic-navy-900 hover:bg-academic-navy-800 text-white font-bold px-4 py-2.5 rounded-lg text-sm transition flex items-center space-x-2 shadow-sm"
           >
             <FileSpreadsheet className="h-4 w-4 text-academic-gold-400" />
@@ -138,8 +129,8 @@ export default function GradesPage() {
         </div>
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <p className="text-xs font-semibold text-slate-500 uppercase">Senate Verification</p>
-          <p className="text-lg font-bold text-emerald-600 mt-1">4 Units Sealed & Approved</p>
-          <p className="text-xs text-slate-400 mt-1">Digital security signature enabled</p>
+          <p className="text-lg font-bold text-emerald-600 mt-1">{grades.filter(g=>g.status==='Approved').length} Approved Results</p>
+          <p className="text-xs text-slate-400 mt-1">Results are limited to your permitted scope</p>
         </div>
       </div>
 
@@ -192,6 +183,7 @@ export default function GradesPage() {
                       }`}
                     >
                       {g.status}
+                        {g.status !== 'Approved' && roleHasPermission(role, 'grades:approve') && <button onClick={()=>approveGrade(g.id)} className="ml-2 underline">Approve</button>}
                     </span>
                   </td>
                 </tr>

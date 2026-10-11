@@ -141,12 +141,14 @@ app.post('/api/v1/auth/login', async (req, res) => {
   }
 });
 
-app.get('/api/v1/students', requireRole(['student', 'admin', 'super_admin', 'registrar', 'hod', 'lecturer', 'finance_officer']), (req, res) => {
+app.get('/api/v1/students', requireRole(['student', 'admin', 'super_admin', 'registrar', 'hod', 'finance_officer']), (req, res) => {
   if (req.user.role === 'student') {
     const studentSelf = students.filter((s) => s.admission_number === 'BIT/2023/8849');
     return res.json({ success: true, count: studentSelf.length, data: studentSelf, role_context: 'student_self' });
   }
-  res.json({ success: true, count: students.length, data: students });
+  const scoped=req.user.role==='hod'?students.filter(s=>s.admission_number.startsWith('BCS/')):students;
+  const data=req.user.role==='finance_officer'?scoped.map(s=>({id:s.id,admission_number:s.admission_number,first_name:s.first_name,last_name:s.last_name,fee_balance:s.fee_balance})):scoped;
+  res.json({ success: true, count:data.length, data });
 });
 
 app.post('/api/v1/students', requireRole(['admin', 'super_admin', 'registrar']), (req, res) => {
@@ -175,16 +177,20 @@ app.get('/api/v1/courses', requireRole(['student', 'admin', 'super_admin', 'regi
 app.get('/api/v1/grades', requireRole(['student', 'admin', 'super_admin', 'registrar', 'hod', 'lecturer']), (req, res) => {
   if (req.user.role === 'student') {
     // IDOR / BOLA Guard: Students can only view their own transcript
-    const myGrades = grades.filter((g) => g.admission_number === 'BIT/2023/8849');
+    const myGrades = grades.filter((g) => g.admission_number === 'BIT/2023/8849' && g.status === 'Approved');
     return res.json({ success: true, data: myGrades });
   }
   const { admission_number } = req.query;
-  const filtered = admission_number ? grades.filter((g) => g.admission_number === admission_number) : grades;
+  let filtered = admission_number ? grades.filter((g) => g.admission_number === admission_number) : grades;
+  if(req.user.role==='hod')filtered=filtered.filter(g=>g.admission_number.startsWith('BCS/'));
+  if(req.user.role==='lecturer')filtered=filtered.filter(g=>['BCS 311','BCS 316'].includes(g.course_code));
   res.json({ success: true, data: filtered });
 });
 
-app.post('/api/v1/grades/enter', requireRole(['lecturer', 'registrar', 'hod', 'admin', 'super_admin']), (req, res) => {
+app.post('/api/v1/grades/enter', requireRole(['lecturer', 'super_admin']), (req, res) => {
   const { admission_number, course_code, cat, exam } = req.body;
+  if(!admission_number||!course_code||!Number.isFinite(Number(cat))||Number(cat)<0||Number(cat)>30||!Number.isFinite(Number(exam))||Number(exam)<0||Number(exam)>70) return res.status(400).json({success:false,error:'Invalid grade scores.'});
+  if(req.user.role==='lecturer'&&!['BCS 311','BCS 316'].includes(course_code)) return res.status(403).json({success:false,error:'Course not assigned to you.'});
   const total = Number(cat) + Number(exam);
   let grade = 'E';
   let gpa = 0.0;
@@ -208,26 +214,8 @@ app.post('/api/v1/grades/enter', requireRole(['lecturer', 'registrar', 'hod', 'a
   res.status(201).json({ success: true, data: newGrade });
 });
 
-app.post('/api/v1/finance/mpesa/stkpush', requireRole(['student', 'finance_officer', 'admin', 'super_admin']), (req, res) => {
-  const { phoneNumber, amount, accountReference } = req.body;
-  const receipt = `QHJ${Math.floor(1000000 + Math.random() * 9000000)}`;
-  const newTx = {
-    ref: receipt,
-    student: accountReference || 'BIT/2023/8849',
-    amount: Number(amount) || 15000,
-    channel: 'M-Pesa (522533)',
-    date: new Date().toISOString().split('T')[0],
-    status: 'verified',
-  };
-  transactions.unshift(newTx);
-  res.json({
-    success: true,
-    MerchantRequestID: `MR-${Date.now()}`,
-    CheckoutRequestID: `ws_CO_${Date.now()}`,
-    ResponseDescription: 'Success. Request accepted for processing',
-    CustomerMessage: `Success. Prompt sent for Paybill 522533, Account: ${accountReference}`,
-    ReceiptNumber: receipt,
-  });
+app.post('/api/v1/finance/mpesa/stkpush', requireRole(['student','finance_officer','super_admin']), (req,res)=>{
+  res.status(410).json({success:false,error:'Use the Next.js UAMS payment endpoint. This legacy API no longer simulates payment success.'});
 });
 
 let hostelAllocations = [
@@ -249,11 +237,11 @@ let notificationLogs = [
 ];
 
 // Extended Module Endpoints
-app.get('/api/v1/hostels', (req, res) => {
-  res.json({ success: true, data: { allocations: hostelAllocations } });
+app.get('/api/v1/hostels', requireRole(['student','registrar','admin','super_admin']), (req, res) => {
+  res.json({ success: true, data: { allocations: req.user.role==='student'?hostelAllocations.filter(a=>a.admission_number==='BIT/2023/8849'):hostelAllocations } });
 });
 
-app.post('/api/v1/hostels/allocate', (req, res) => {
+app.post('/api/v1/hostels/allocate', requireRole(['registrar','admin','super_admin']), (req, res) => {
   const { student_name, admission_number, room, hall, bed } = req.body;
   const newAllocation = {
     id: `alc-${Date.now()}`,
@@ -268,19 +256,19 @@ app.post('/api/v1/hostels/allocate', (req, res) => {
   res.status(201).json({ success: true, data: newAllocation });
 });
 
-app.get('/api/v1/library/books', (req, res) => {
+app.get('/api/v1/library/books', requireRole(['student','registrar','hod','lecturer','admin','super_admin']), (req, res) => {
   res.json({ success: true, count: libraryBooks.length, data: libraryBooks });
 });
 
-app.get('/api/v1/exams', (req, res) => {
+app.get('/api/v1/exams', requireRole(['student','registrar','hod','lecturer','admin','super_admin']), (req, res) => {
   res.json({ success: true, count: examSchedules.length, data: examSchedules });
 });
 
-app.get('/api/v1/notifications', (req, res) => {
+app.get('/api/v1/notifications', requireRole(['registrar','finance_officer','admin','super_admin']), (req, res) => {
   res.json({ success: true, count: notificationLogs.length, data: notificationLogs });
 });
 
-app.post('/api/v1/notifications/send', (req, res) => {
+app.post('/api/v1/notifications/send', requireRole(['registrar','finance_officer','admin','super_admin']), (req, res) => {
   const { recipient, message, channel } = req.body;
   const newNotification = {
     id: `ntf-${Date.now()}`,
@@ -296,9 +284,10 @@ app.post('/api/v1/notifications/send', (req, res) => {
 // ---------------------------------------------------------------------------
 // NVIDIA NIM AI Advisor Endpoint
 // ---------------------------------------------------------------------------
-app.post('/api/v1/ai/chat', async (req, res) => {
+app.post('/api/v1/ai/chat', requireRole(['student','lecturer','hod','registrar','finance_officer','admin','super_admin']), async (req, res) => {
   try {
-    const { messages = [], userRole = 'student', userName = 'Scholar' } = req.body;
+    const { messages = [] } = req.body;
+    const userRole=req.user.role, userName=req.user.email;
     const apiKey = process.env.NVIDIA_API_KEY;
     const baseUrl = process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1';
     const model = process.env.NVIDIA_MODEL || 'meta/llama-3.2-11b-vision-instruct';

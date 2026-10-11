@@ -1,96 +1,51 @@
 'use client';
-
-import { Suspense, useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import Sidebar from '@/components/Sidebar';
-import { UserRole } from '@/types';
 import { ROLE_LABELS } from '@/lib/auth/rbac';
+import { AuthContext } from '@/lib/auth/context';
+import { canAccessPage } from '@/lib/auth/roles';
 import type { AuthSession } from '@/lib/auth/session';
 
-function DashboardShell({ children }: { children: React.ReactNode }) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const pathname = usePathname();
   const [session, setSession] = useState<AuthSession | null>(null);
-  const [isVerifying, setIsVerifying] = useState(true);
-
   useEffect(() => {
-    let isMounted = true;
-    async function verifySession() {
+    let mounted = true;
+    async function verify() {
       try {
-        const res = await fetch('/api/v1/auth/me');
-        if (!res.ok) {
-          router.replace('/login?redirect=/dashboard');
-          return;
+        let res = await fetch('/api/v1/auth/me', { cache: 'no-store' });
+        if (res.status === 401) {
+          const refreshed = await fetch('/api/v1/auth/refresh', { method: 'POST' });
+          if (refreshed.ok) res = await fetch('/api/v1/auth/me', { cache: 'no-store' });
         }
         const data = await res.json();
-        if (isMounted) {
-          if (data?.success && data?.user) {
-            setSession({
-              id: data.user.id,
-              email: data.user.email,
-              role: data.user.role,
-              firstName: data.user.firstName,
-              lastName: data.user.lastName,
-              authenticatedAt: new Date().toISOString(),
-            });
-            setIsVerifying(false);
-          } else {
-            router.replace('/login?redirect=/dashboard');
-          }
-        }
+        if (!res.ok || !data.success) throw new Error('Session expired');
+        if (mounted) setSession({ ...data.user, authenticatedAt: new Date().toISOString() });
       } catch {
-        router.replace('/login?redirect=/dashboard');
+        if (mounted) { setSession(null); router.replace(`/login?redirect=${encodeURIComponent(pathname)}`); }
       }
     }
-    verifySession();
-    return () => {
-      isMounted = false;
-    };
-  }, [router]);
-
-  if (isVerifying) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-700">
-        <div className="text-center space-y-3">
-          <div className="w-8 h-8 border-4 border-academic-navy-900 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="text-sm font-medium">Verifying institutional credentials...</p>
+    void verify();
+    const timer = setInterval(() => void verify(), 5 * 60 * 1000);
+    return () => { mounted = false; clearInterval(timer); };
+  }, [pathname, router]);
+  if (!session) return <div className="min-h-screen flex items-center justify-center">Verifying institutional credentials...</div>;
+  const module = pathname.split('/')[2];
+  return (
+    <AuthContext.Provider value={session}>
+      <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
+        <Navbar userEmail={session.email} userRole={ROLE_LABELS[session.role]} />
+        <div className="flex-1 flex flex-col md:flex-row">
+          <Sidebar role={session.role} />
+          <main className="min-w-0 w-full max-w-7xl mx-auto flex-1 p-4 sm:p-8 overflow-y-auto">
+            <p className="mb-4 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Academic records are demonstration data until institutional database adapters are configured. Payment prompts remain pending until Safaricom confirmation.</p>
+            {!module || canAccessPage(session.role, module) ? children : <p role="alert">Your role does not have access to this page.</p>}
+          </main>
         </div>
       </div>
-    );
-  }
-
-  // Derive role securely:
-  // Administrative roles may preview subordinate views via ?role=, but standard roles cannot escalate
-  const requestedRole = searchParams.get('role') as UserRole;
-  let activeRole: UserRole = session?.role || 'student';
-
-  if (requestedRole && (session?.role === 'super_admin' || session?.role === 'admin')) {
-    activeRole = requestedRole;
-  }
-
-  return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
-      <Navbar userEmail={session?.email || `${activeRole}@university.ac.ke`} userRole={ROLE_LABELS[activeRole]} />
-      <div className="flex-1 flex flex-col md:flex-row">
-        <Sidebar role={activeRole} />
-        <main className="min-w-0 w-full max-w-7xl mx-auto flex-1 p-4 sm:p-8 overflow-y-auto">
-          {children}
-        </main>
-      </div>
-    </div>
+    </AuthContext.Provider>
   );
 }
-
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-50 text-slate-900 p-8">Loading academic portal...</div>}>
-      <DashboardShell>{children}</DashboardShell>
-    </Suspense>
-  );
-}
-

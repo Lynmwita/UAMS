@@ -74,6 +74,7 @@ export function settleSTKPayment(
   if (req.status === 'settled') {
     return { success: false, error: 'Transaction has already been settled (Idempotency violation).' };
   }
+  if (req.status !== 'pending') return { success: false, error: 'Transaction is not pending.' };
 
   if (processedReceipts.has(receiptNumber)) {
     return { success: false, error: `Duplicate M-Pesa receipt number ${receiptNumber}. Payment rejected.` };

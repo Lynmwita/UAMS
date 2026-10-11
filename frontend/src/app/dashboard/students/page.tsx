@@ -1,20 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/lib/auth/context';
+import { roleHasPermission } from '@/lib/auth/rbac';
 import { Users, Search, Plus, Filter, CheckCircle2, ShieldAlert, Download, X, Award, FileText, CreditCard } from 'lucide-react';
 import { generateExamCardPDF, generateStudentIDCardPDF } from '@/lib/pdf/generator';
 
 export default function StudentsPage() {
+  const { role } = useAuth();
+  const canWrite = roleHasPermission(role, 'students:write');
+  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  const [students, setStudents] = useState([
-    { id: '1', admissionNo: 'BIT/2023/8849', name: 'Faith Wanjiku', program: 'BSc Information Technology', year: 3, semester: 1, status: 'active', gpa: 3.82, feeBalance: 0, feeCleared: true },
-    { id: '2', admissionNo: 'BCS/2023/1204', name: 'Kevin Otieno', program: 'BSc Computer Science', year: 2, semester: 2, status: 'active', gpa: 3.65, feeBalance: 18500, feeCleared: false },
-    { id: '3', admissionNo: 'BBA/2022/4412', name: 'Brian Kiprono', program: 'Bachelor of Business Administration', year: 4, semester: 1, status: 'active', gpa: 3.48, feeBalance: 0, feeCleared: true },
-    { id: '4', admissionNo: 'BSE/2024/0112', name: 'David Mutua', program: 'BSc Software Engineering', year: 1, semester: 2, status: 'active', gpa: 3.40, feeBalance: 25000, feeCleared: false },
-    { id: '5', admissionNo: 'BDS/2023/0204', name: 'Mercy Achieng', program: 'BSc Data Science', year: 3, semester: 1, status: 'active', gpa: 3.91, feeBalance: 0, feeCleared: true },
-  ]);
+  type StudentRow = { id:string; admissionNo:string; name:string; program:string; year:number; semester:number; status:string; gpa:number; feeBalance:number; feeCleared:boolean };
+  const [students, setStudents] = useState<StudentRow[]>([]);
+  const mapStudent = (s:any):StudentRow => ({ id:s.id, admissionNo:s.admission_number, name:s.first_name+' '+s.last_name, program:s.program_name || 'Billing record', year:s.current_year_of_study || 0, semester:s.current_semester_number || 0, status:s.status, gpa:s.cgpa || 0, feeBalance:s.fee_balance, feeCleared:s.fee_balance === 0 });
+  useEffect(() => { fetch('/api/v1/students').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);setStudents(d.data.map(mapStudent));}).catch(e=>setError(e.message)); }, []);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newStudent, setNewStudent] = useState({
@@ -26,26 +28,15 @@ export default function StudentsPage() {
     feeBalance: 55000,
   });
 
-  const handleRegisterStudent = (e: React.FormEvent) => {
+  const handleRegisterStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStudent.name || !newStudent.admissionNo) return;
-
-    const studentObj = {
-      id: `stu-${Date.now()}`,
-      admissionNo: newStudent.admissionNo.trim(),
-      name: newStudent.name.trim(),
-      program: newStudent.program,
-      year: Number(newStudent.year),
-      semester: Number(newStudent.semester),
-      status: 'active',
-      gpa: 0.0,
-      feeBalance: Number(newStudent.feeBalance),
-      feeCleared: Number(newStudent.feeBalance) === 0,
-    };
-
-    setStudents([studentObj, ...students]);
-    setIsModalOpen(false);
-    setNewStudent({ name: '', admissionNo: '', program: 'BSc Computer Science', year: 1, semester: 1, feeBalance: 55000 });
+    if (!canWrite) return;
+    try {
+      const [first_name, ...rest] = newStudent.name.trim().split(/\s+/);
+      const r=await fetch('/api/v1/students',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({first_name,last_name:rest.join(' ') || first_name,admission_number:newStudent.admissionNo,program_name:newStudent.program,current_year_of_study:newStudent.year,current_semester_number:newStudent.semester,fee_balance:newStudent.feeBalance})});
+      const d=await r.json(); if(!r.ok)throw new Error(d.error);
+      setStudents(prev=>[mapStudent(d.data),...prev]);setIsModalOpen(false);setError('');
+    } catch(e) { setError(e instanceof Error ? e.message : 'Student registration failed.'); }
   };
 
   const handleDownloadExamCard = (student: typeof students[0]) => {
@@ -95,6 +86,7 @@ export default function StudentsPage() {
 
   return (
     <div className="space-y-6">
+      {error && <p role="alert" className="text-rose-700">{error}</p>}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-200 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-academic-navy-950 tracking-tight">
@@ -106,6 +98,8 @@ export default function StudentsPage() {
         </div>
 
         <button
+          disabled={!canWrite}
+          hidden={!canWrite} style={{display:canWrite ? undefined : 'none'}}
           onClick={() => setIsModalOpen(true)}
           className="bg-academic-navy-900 hover:bg-academic-navy-800 text-white font-bold px-4 py-2.5 rounded-lg text-sm transition flex items-center space-x-2 shadow-sm"
         >
@@ -151,11 +145,11 @@ export default function StudentsPage() {
               <tr>
                 <th className="px-5 py-3.5">Admission No</th>
                 <th className="px-5 py-3.5">Full Name</th>
-                <th className="px-5 py-3.5">Degree Program</th>
-                <th className="px-5 py-3.5">Level</th>
-                <th className="px-5 py-3.5">CGPA</th>
+                {role !== 'finance_officer' && <th className="px-5 py-3.5">Degree Program</th>}
+                {role !== 'finance_officer' && <th className="px-5 py-3.5">Level</th>}
+                {role !== 'finance_officer' && <th className="px-5 py-3.5">CGPA</th>}
                 <th className="px-5 py-3.5">Fee Balance</th>
-                <th className="px-5 py-3.5 text-center">Student Credentials</th>
+                {role !== 'finance_officer' && <th className="px-5 py-3.5 text-center">Student Credentials</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -163,9 +157,9 @@ export default function StudentsPage() {
                 <tr key={s.id} className="hover:bg-slate-50/60 transition">
                   <td className="px-5 py-3.5 font-mono font-semibold text-academic-navy-800">{s.admissionNo}</td>
                   <td className="px-5 py-3.5 font-medium text-slate-900">{s.name}</td>
-                  <td className="px-5 py-3.5 text-slate-600">{s.program}</td>
-                  <td className="px-5 py-3.5 text-slate-500">Year {s.year}, Sem {s.semester}</td>
-                  <td className="px-5 py-3.5 font-bold text-academic-navy-950">{s.gpa > 0 ? s.gpa.toFixed(2) : 'N/A'}</td>
+                  {role !== 'finance_officer' && <td className="px-5 py-3.5 text-slate-600">{s.program}</td>}
+                  {role !== 'finance_officer' && <td className="px-5 py-3.5 text-slate-500">Year {s.year}, Sem {s.semester}</td>}
+                  {role !== 'finance_officer' && <td className="px-5 py-3.5 font-bold text-academic-navy-950">{s.gpa > 0 ? s.gpa.toFixed(2) : 'N/A'}</td>}
                   <td className="px-5 py-3.5 font-medium">
                     {s.feeCleared ? (
                       <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
@@ -180,6 +174,7 @@ export default function StudentsPage() {
                   <td className="px-5 py-3.5 text-center">
                     <div className="flex items-center justify-center space-x-2">
                       <button
+                        hidden={role === 'finance_officer'} style={{display:role === 'finance_officer' ? 'none' : undefined}}
                         onClick={() => handleDownloadIDCard(s)}
                         className="inline-flex items-center space-x-1 text-xs font-semibold px-2.5 py-1 rounded bg-academic-navy-50 hover:bg-academic-navy-100 text-academic-navy-800 border border-academic-navy-200 transition"
                         title="Download PVC Student ID Card PDF"
@@ -189,6 +184,8 @@ export default function StudentsPage() {
                       </button>
 
                       <button
+                        hidden={!canWrite} style={{display:canWrite ? undefined : 'none'}}
+                        disabled={!s.feeCleared}
                         onClick={() => handleDownloadExamCard(s)}
                         className="inline-flex items-center space-x-1 text-xs font-semibold px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
                         title="Download Exam Clearance Card PDF"

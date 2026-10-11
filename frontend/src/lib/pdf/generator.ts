@@ -117,7 +117,7 @@ export function generateTranscriptPDF(data: {
   academicStanding: string;
 }) {
   const doc = new jsPDF('p', 'mm', 'a4');
-  addHeader(doc, 'OFFICIAL ACADEMIC TRANSCRIPT');
+  addHeader(doc, 'ACADEMIC RESULTS PREVIEW');
 
   // Student Details Box
   doc.setFillColor(248, 250, 252);

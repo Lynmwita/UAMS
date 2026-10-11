@@ -1,5 +1,7 @@
+import { coursesStore } from '@/lib/academic/course-catalog';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireServerAuth } from '@/lib/auth/server-auth';
+import { canTeachCourse, canReviewCourse } from '@/lib/auth/scope';
 
 let registrationsStore = [
   {
@@ -26,13 +28,13 @@ let registrationsStore = [
 ];
 
 export async function GET(request: NextRequest) {
-  const auth = requireServerAuth(request);
+  const auth = await requireServerAuth(request, ['student','admin','super_admin','registrar','hod','lecturer']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
 
   const { user } = auth;
-  let results = [...registrationsStore];
+  let results = registrationsStore.filter(r => canTeachCourse(user,r.course_code) && canReviewCourse(user,r.course_code));
 
   if (user.role === 'student') {
     results = results.filter(
@@ -47,8 +49,21 @@ export async function GET(request: NextRequest) {
   });
 }
 
+export async function PATCH(request: NextRequest) {
+  const auth = await requireServerAuth(request,['registrar','admin','super_admin']);
+  if ('errorResponse' in auth) return auth.errorResponse;
+  try {
+    const body = await request.json();
+    const registration = registrationsStore.find(r=>r.id===body.registration_id);
+    if (!registration) return NextResponse.json({success:false,error:'Registration not found.'},{status:404});
+    registration.status='approved';
+    registration.approved_by=auth.user.email;
+    return NextResponse.json({success:true,data:registration});
+  } catch { return NextResponse.json({success:false,error:'Invalid registration approval.'},{status:400}); }
+}
+
 export async function POST(request: NextRequest) {
-  const auth = requireServerAuth(request, ['student', 'registrar', 'admin', 'super_admin']);
+  const auth = await requireServerAuth(request, ['student', 'registrar', 'admin', 'super_admin']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
@@ -63,6 +78,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'course_code is required' }, { status: 400 });
     }
 
+    if(!coursesStore.some(c=>c.code===course_code&&c.is_active))return NextResponse.json({success:false,error:'Choose an active course from the catalogue.'},{status:400});
     // IDOR / BOLA Prevention: Students cannot submit registrations on behalf of other students
     const effectiveStudentId = user.role === 'student' ? user.id : body.student_id || user.id;
     const effectiveAdmission =
@@ -88,6 +104,8 @@ export async function POST(request: NextRequest) {
       status: 'pending',
       registered_at: new Date().toISOString(),
     };
+
+    if (registrationsStore.some(r => r.course_code === course_code && (r.student_id === effectiveStudentId || r.admission_number === effectiveAdmission))) return NextResponse.json({success:false,error:'This course is already registered.'},{status:409});
 
     registrationsStore.push(registration);
     return NextResponse.json(

@@ -40,7 +40,7 @@ let notificationLogs: NotificationLog[] = [
 ];
 
 export async function GET(req: NextRequest) {
-  const auth = requireServerAuth(req);
+  const auth = await requireServerAuth(req, ['super_admin','admin','registrar','finance_officer']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   // Staff authorization required for sending notifications
-  const auth = requireServerAuth(req, ['super_admin', 'admin', 'registrar', 'finance_officer', 'hod']);
+  const auth = await requireServerAuth(req, ['super_admin', 'admin', 'registrar', 'finance_officer']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
       subject,
       message_content,
       provider: 'africas_talking',
-      status: 'delivered',
+      status: 'queued',
       created_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
     };
 
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `SMS/Notification successfully dispatched to ${newLog.recipient_identifier}.`,
+      message: `Notification queued for ${newLog.recipient_identifier}. Delivery provider is not configured.`,
       data: newLog,
     });
   } catch (error) {

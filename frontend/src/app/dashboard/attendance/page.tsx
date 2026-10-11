@@ -1,19 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/lib/auth/context';
 import { CalendarCheck, Plus, QrCode, CheckCircle2, XCircle, Clock, AlertTriangle, X, Check, Users, Sparkles } from 'lucide-react';
 
 export default function AttendancePage() {
-  const [sessions, setSessions] = useState([
-    { id: '1', date: '2026-10-03', course: 'BCS 311', courseTitle: 'Advanced Database Systems', topic: 'Distributed Consensus & Raft Protocol', lecturer: 'Dr. Jane Mwangi', present: 45, total: 48, percentage: '93.8%' },
-    { id: '2', date: '2026-10-02', course: 'BIT 312', courseTitle: 'Distributed Systems', topic: 'B-Tree Indexing and Query Plans', lecturer: 'Prof. David Kamau', present: 50, total: 52, percentage: '96.2%' },
-    { id: '3', date: '2026-10-01', course: 'BCS 314', courseTitle: 'Software Architecture', topic: 'Microservices & Event-Driven Architecture', lecturer: 'Eng. Eric Ochieng', present: 41, total: 44, percentage: '93.2%' },
-  ]);
-
+  const { role } = useAuth();
+  const canWrite = role === 'lecturer' || role === 'super_admin';
+  const [error,setError]=useState('');
+  const [sessions,setSessions]=useState<{id:string;date:string;course:string;courseTitle:string;topic:string;lecturer:string;present:number;total:number;percentage:string}[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [qrCountdown, setQrCountdown] = useState(600); // 10 minutes
-  const [liveCheckins, setLiveCheckins] = useState<string[]>(['Faith Wanjiku (BIT/2023/8849)', 'Kevin Otieno (BCS/2023/1204)']);
+  const [liveCheckins, setLiveCheckins] = useState<string[]>([]);
 
   const [sessionForm, setSessionForm] = useState({
     course: 'BCS 311',
@@ -23,14 +22,8 @@ export default function AttendancePage() {
     date: new Date().toISOString().split('T')[0],
   });
 
-  const [studentRoll, setStudentRoll] = useState([
-    { id: '1', adm: 'BIT/2023/8849', name: 'Faith Wanjiku', status: 'present' as 'present' | 'absent' | 'late' | 'excused' },
-    { id: '2', adm: 'BCS/2023/1204', name: 'Kevin Otieno', status: 'present' as 'present' | 'absent' | 'late' | 'excused' },
-    { id: '3', adm: 'BBA/2022/4412', name: 'Brian Kiprono', status: 'present' as 'present' | 'absent' | 'late' | 'excused' },
-    { id: '4', adm: 'BSE/2024/0112', name: 'David Mutua', status: 'late' as 'present' | 'absent' | 'late' | 'excused' },
-    { id: '5', adm: 'BDS/2023/0204', name: 'Mercy Achieng', status: 'present' as 'present' | 'absent' | 'late' | 'excused' },
-  ]);
-
+  const [studentRoll,setStudentRoll]=useState<{id:string;adm:string;name:string;status:'present'|'absent'|'late'|'excused'}[]>([]);
+  useEffect(()=>{fetch('/api/v1/attendance').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);setSessions(d.data.sessions);setStudentRoll(d.data.roster);}).catch(e=>setError(e.message));},[]);
   // Simulate QR Code countdown
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -43,6 +36,7 @@ export default function AttendancePage() {
   }, [isQrModalOpen, qrCountdown]);
 
   const toggleStudentStatus = (id: string, newStatus: 'present' | 'absent' | 'late' | 'excused') => {
+    if (!canWrite) return;
     setStudentRoll((prev) =>
       prev.map((s) => (s.id === id ? { ...s, status: newStatus } : s))
     );
@@ -59,34 +53,9 @@ export default function AttendancePage() {
     ]);
   };
 
-  const handleSaveAttendance = (e: React.FormEvent) => {
-    e.preventDefault();
-    const presentCount = studentRoll.filter((s) => s.status === 'present' || s.status === 'late').length;
-    const totalCount = studentRoll.length;
-    const pct = ((presentCount / totalCount) * 100).toFixed(1) + '%';
-
-    const newSession = {
-      id: `ses-${Date.now()}`,
-      date: sessionForm.date,
-      course: sessionForm.course,
-      courseTitle: sessionForm.courseTitle,
-      topic: sessionForm.topic || 'Class Lecture & Practical Lab',
-      lecturer: sessionForm.lecturer,
-      present: presentCount,
-      total: totalCount,
-      percentage: pct,
-    };
-
-    setSessions([newSession, ...sessions]);
-    setIsModalOpen(false);
-    setIsQrModalOpen(false);
-    setSessionForm({
-      course: 'BCS 311',
-      courseTitle: 'Advanced Database Systems',
-      topic: '',
-      lecturer: 'Dr. Jane Mwangi',
-      date: new Date().toISOString().split('T')[0],
-    });
+  const handleSaveAttendance=async(e:React.FormEvent)=>{
+    e.preventDefault();if(!canWrite)return;
+    try{const r=await fetch('/api/v1/attendance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...sessionForm,roster:studentRoll})});const d=await r.json();if(!r.ok)throw new Error(d.error);setSessions(prev=>[d.data,...prev]);setIsModalOpen(false);setError('');}catch(e){setError(e instanceof Error?e.message:'Attendance submission failed.');}
   };
 
   const formatCountdown = (seconds: number) => {
@@ -97,18 +66,23 @@ export default function AttendancePage() {
 
   return (
     <div className="space-y-6">
+      {error && <p role="alert" className="text-rose-700">{error}</p>}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-200 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-academic-navy-950 tracking-tight">
             Class Attendance Management
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Dynamic QR lecture check-in, attendance session rosters, and 75% exam sitting threshold tracking.
+            Attendance rosters and exam sitting threshold tracking. Live QR check-in is not configured.
           </p>
         </div>
 
         <div className="flex items-center space-x-3">
           <button
+            hidden
+            style={{display:'none'}}
+            disabled
+            title="Live QR check-in is not configured"
             onClick={() => {
               setQrCountdown(600);
               setIsQrModalOpen(true);
@@ -120,6 +94,7 @@ export default function AttendancePage() {
           </button>
 
           <button
+            hidden={!canWrite} style={{display:canWrite ? undefined : 'none'}}
             onClick={() => setIsModalOpen(true)}
             className="bg-academic-navy-900 hover:bg-academic-navy-800 text-white font-bold px-4 py-2.5 rounded-lg text-sm transition flex items-center space-x-2 shadow-sm"
           >

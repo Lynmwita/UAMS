@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { UserRole } from '@/types';
-import { normalizeRole } from './session';
+import { isUserRole } from './roles';
+import { authClient, trustedUser } from '@/lib/supabase/server';
+import { roleHasPermission } from './rbac';
 import { validateCsrf } from './csrf';
 
-let ephemeralDevSecret: string | null = null;
+const runtime = globalThis as typeof globalThis & { __uamsDevSecret?: string; __uamsRevokedAccess?: Map<string,number> };
+const revokedAccess = runtime.__uamsRevokedAccess || (runtime.__uamsRevokedAccess = new Map());
+export function revokeAccessToken(token: string) {
+  const payload = verifySignedToken(token);
+  if (payload) revokedAccess.set(token,payload.exp);
+}
 
 export function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -15,10 +22,10 @@ export function getJwtSecret(): string {
       );
     }
     // Dynamic runtime secret: zero static fallback secrets in source code
-    if (!ephemeralDevSecret) {
-      ephemeralDevSecret = crypto.randomBytes(32).toString('hex');
+    if (!runtime.__uamsDevSecret) {
+      runtime.__uamsDevSecret = crypto.randomBytes(32).toString('hex');
     }
-    return ephemeralDevSecret;
+    return runtime.__uamsDevSecret;
   }
   if (secret.length < 32 && process.env.NODE_ENV === 'production') {
     throw new Error('FATAL SECURITY VIOLATION: JWT_SECRET must be at least 32 characters in production.');
@@ -57,6 +64,7 @@ export function createSignedToken(payload: Omit<TokenPayload, 'exp' | 'iat'>, ex
  */
 export function verifySignedToken(token: string): TokenPayload | null {
   if (!token || typeof token !== 'string') return null;
+  if (revokedAccess.has(token)) return null;
 
   const parts = token.split('.');
   if (parts.length !== 3) return null;
@@ -71,6 +79,7 @@ export function verifySignedToken(token: string): TokenPayload | null {
   if (signature.length !== expectedSig.length) return null;
   const sigBuf = Buffer.from(signature);
   const expectedBuf = Buffer.from(expectedSig);
+  if (sigBuf.length !== expectedBuf.length) return null;
   if (!crypto.timingSafeEqual(sigBuf, expectedBuf)) {
     return null;
   }
@@ -78,7 +87,12 @@ export function verifySignedToken(token: string): TokenPayload | null {
   try {
     const payload: TokenPayload = JSON.parse(Buffer.from(body, 'base64url').toString('utf-8'));
     const now = Math.floor(Date.now() / 1000);
-    if (payload.exp && payload.exp < now) {
+    const decodedHeader = JSON.parse(Buffer.from(header, 'base64url').toString('utf-8'));
+    if (decodedHeader.alg !== 'HS256' || decodedHeader.typ !== 'JWT' ||
+      !payload || typeof payload.id !== 'string' || !payload.id ||
+      typeof payload.email !== 'string' || !payload.email || !isUserRole(payload.role) ||
+      !Number.isFinite(payload.exp) || payload.exp <= now ||
+      !Number.isFinite(payload.iat) || payload.iat > now || payload.iat >= payload.exp) {
       return null; // Expired
     }
     return payload;
@@ -90,7 +104,7 @@ export function verifySignedToken(token: string): TokenPayload | null {
 /**
  * Extracts and authenticates user from Authorization header or cookie.
  */
-export function getAuthenticatedUser(request: Request | NextRequest): TokenPayload | null {
+export async function getAuthenticatedUser(request: Request | NextRequest): Promise<TokenPayload | null> {
   let token: string | null = null;
 
   const authHeader = request.headers.get('authorization');
@@ -103,24 +117,34 @@ export function getAuthenticatedUser(request: Request | NextRequest): TokenPaylo
   // Also check standard cookie header
   if (!token) {
     const cookieHeader = request.headers.get('cookie') || '';
-    const match = cookieHeader.match(/uams_auth_token=([^;]+)/);
+    const match = cookieHeader.match(/(?:^|;\s*)uams_auth_token=([^;]+)/);
     if (match) {
       token = match[1];
     }
   }
 
   if (!token) return null;
-  return verifySignedToken(token);
+  // Custom signed tokens are restricted to the explicitly enabled demonstration environment.
+  if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEMO_AUTH === 'true') {
+    const demoUser = verifySignedToken(token);
+    if (demoUser) return demoUser;
+  }
+  try {
+    const { data, error } = await authClient().auth.getUser(token);
+    return error || !data.user ? null : trustedUser(data.user);
+  } catch {
+    return null;
+  }
 }
 
 /**
  * Guard helper: verifies request has a valid token and optionally checks role authorization.
  */
-export function requireServerAuth(
+export async function requireServerAuth(
   request: Request | NextRequest,
   allowedRoles?: UserRole[]
-): { user: TokenPayload } | { errorResponse: NextResponse } {
-  const user = getAuthenticatedUser(request);
+): Promise<{ user: TokenPayload } | { errorResponse: NextResponse }> {
+  const user = await getAuthenticatedUser(request);
 
   if (!user) {
     return {
@@ -129,6 +153,13 @@ export function requireServerAuth(
         { status: 401 }
       ),
     };
+  }
+
+  // These modules still use demonstration stores. Institutional accounts must never
+  // read fixture records or receive false persistence claims.
+  const modulePath = new URL(request.url).pathname;
+  if (!user.id.startsWith('usr-') && /^\/api\/v1\/(students|schools|courses|grades|attendance|hostels|library|exams|notifications|announcements|timetable|audit|finance\/bank)(\/|$)/.test(modulePath)) {
+    return { errorResponse: NextResponse.json({ success:false, error:'This module requires an institutional database adapter. Demonstration records are unavailable to institutional accounts.' }, {status:503}) };
   }
 
   // Enforce CSRF protection for authenticated state-changing requests
@@ -143,8 +174,7 @@ export function requireServerAuth(
   }
 
   if (allowedRoles && allowedRoles.length > 0) {
-    const canonicalRole = normalizeRole(user.role);
-    const hasRole = allowedRoles.some((r) => normalizeRole(r) === canonicalRole || canonicalRole === 'super_admin');
+    const hasRole = allowedRoles.includes(user.role) || user.role === 'super_admin';
     if (!hasRole) {
       return {
         errorResponse: NextResponse.json(
@@ -161,16 +191,15 @@ export function requireServerAuth(
 /**
  * Validates that an authenticated request holds a fine-grained permission.
  */
-export function requirePermission(
+export async function requirePermission(
   request: Request | NextRequest,
   permission: import('./rbac').Permission
-): { user: TokenPayload } | { errorResponse: NextResponse } {
-  const auth = requireServerAuth(request);
+): Promise<{ user: TokenPayload } | { errorResponse: NextResponse }> {
+  const auth = await requireServerAuth(request);
   if ('errorResponse' in auth) {
     return auth;
   }
 
-  const { roleHasPermission } = require('./rbac');
   if (!roleHasPermission(auth.user.role, permission)) {
     return {
       errorResponse: NextResponse.json(

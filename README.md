@@ -50,3 +50,6 @@ uams/
 ## Contributing
 
 This project is currently in its initial setup phase. Future updates will include the core application architecture, authentication, and administrative modules.
+# Role permissions and payment setup
+
+See [the role access plan](docs/ROLE_ACCESS_PLAN.md) for the implemented permissions, verification commands, STK Push configuration, and remaining institutional database work.

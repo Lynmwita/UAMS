@@ -1,3 +1,4 @@
+import { requireServerAuth, requirePermission } from '@/lib/auth/server-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 const schoolsStore = [
@@ -43,7 +44,9 @@ const schoolsStore = [
   },
 ];
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const auth = await requireServerAuth(request, ['super_admin','admin','registrar']);
+  if ('errorResponse' in auth) return auth.errorResponse;
   return NextResponse.json({
     success: true,
     total: schoolsStore.length,
@@ -52,15 +55,18 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireServerAuth(request, ['super_admin','admin','registrar']);
+  if ('errorResponse' in auth) return auth.errorResponse;
   try {
     const body = await request.json();
-    if (!body.code || !body.name) {
+    if (typeof body?.code !== 'string' || !body.code.trim() || body.code.length > 20 || typeof body.name !== 'string' || !body.name.trim() || body.name.length > 255) {
       return NextResponse.json({ success: false, error: 'code and name are required' }, { status: 400 });
     }
 
+    if (schoolsStore.some(s=>s.code.toUpperCase()===body.code.trim().toUpperCase())) return NextResponse.json({success:false,error:'School code already exists.'},{status:409});
     const newSchool = {
       id: `sch-${Date.now()}`,
-      code: body.code.toUpperCase(),
+      code: body.code.trim().toUpperCase(),
       name: body.name,
       dean: body.dean || 'Pending Appointment',
       dean_email: body.dean_email || '',

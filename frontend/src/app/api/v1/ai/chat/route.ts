@@ -1,3 +1,4 @@
+import { requireServerAuth } from '@/lib/auth/server-auth';
 import { NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/auth/rate-limiter';
 
@@ -23,6 +24,8 @@ Institutional Knowledge Base:
 - Tone: Professional, encouraging, clear, and structured using clean markdown bullet points and bold headers.`;
 
 export async function POST(request: Request) {
+  const auth = await requireServerAuth(request);
+  if ('errorResponse' in auth) return auth.errorResponse;
   try {
     const ip =
       request.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
@@ -41,9 +44,11 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { messages = [], userRole = 'student', userName = 'Scholar' } = body;
+    const { messages = [] } = body;
+    const userRole = auth.user.role;
+    const userName = auth.user.email;
 
-    if (!Array.isArray(messages) || messages.length === 0) {
+    if (!Array.isArray(messages) || messages.length === 0 || messages.length > 30 || messages.some((m: any) => !m || !['user','assistant'].includes(m.role) || typeof m.content !== 'string' || m.content.length > 8000)) {
       return NextResponse.json(
         { success: false, error: 'At least one prompt message is required.' },
         { status: 400 }
