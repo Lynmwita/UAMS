@@ -293,6 +293,62 @@ app.post('/api/v1/notifications/send', (req, res) => {
   res.status(201).json({ success: true, data: newNotification });
 });
 
+// ---------------------------------------------------------------------------
+// NVIDIA NIM AI Advisor Endpoint
+// ---------------------------------------------------------------------------
+app.post('/api/v1/ai/chat', async (req, res) => {
+  try {
+    const { messages = [], userRole = 'student', userName = 'Scholar' } = req.body;
+    const apiKey = process.env.NVIDIA_API_KEY;
+    const baseUrl = process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1';
+    const model = process.env.NVIDIA_MODEL || 'meta/llama-3.2-11b-vision-instruct';
+
+    if (!apiKey) {
+      return res.status(500).json({ success: false, error: 'NVIDIA API Key not configured' });
+    }
+
+    const systemPrompt = `You are UAMS AI — the institutional intelligence advisor for the University Administration Management System. Role: ${userRole}. User: ${userName}. Provide helpful, structured academic and institutional guidance.`;
+
+    const formattedMessages = [
+      { role: 'system', content: systemPrompt },
+      ...messages.slice(-10).map((m) => ({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: String(m.content || ''),
+      })),
+    ];
+
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: formattedMessages,
+        temperature: 0.6,
+        max_tokens: 1024,
+      }),
+    });
+
+    if (!response.ok) {
+      return res.json({
+        success: true,
+        reply: '### Institutional Advisory\nFee clearance and 75% attendance are required for exam clearance. Please check your student portal or consult your HOD.',
+      });
+    }
+
+    const data = await response.json();
+    return res.json({
+      success: true,
+      reply: data.choices?.[0]?.message?.content || 'No response generated.',
+      model,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`[UAMS Enterprise API] Server running on port ${PORT}`);

@@ -18,6 +18,7 @@ import {
   MoreHorizontal,
   Search,
   ShieldCheck,
+  Sparkles,
   TrendingUp,
   Users,
 } from 'lucide-react';
@@ -150,6 +151,7 @@ export default function DashboardExperience() {
       <section className="shortcut-strip" aria-label="Quick access">
         <div className="shortcut-title"><span className="shortcut-rule" /><span>QUICK ACCESS</span></div>
         <Link href="/dashboard/students"><Users size={17} /> Student records <ArrowUpRight size={14} /></Link>
+        <Link href="/dashboard/ai"><Sparkles size={17} /> AI Advisor <ArrowUpRight size={14} /></Link>
         <Link href="/dashboard/finance"><CreditCard size={17} /> Finance desk <ArrowUpRight size={14} /></Link>
         <Link href="/dashboard/attendance"><ClipboardCheck size={17} /> Attendance <ArrowUpRight size={14} /></Link>
         <Link href="/dashboard/announcements"><Megaphone size={17} /> Announcements <ArrowUpRight size={14} /></Link>

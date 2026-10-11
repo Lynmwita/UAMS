@@ -18,6 +18,7 @@ import {
   Bookmark,
   FileCheck2,
   Send,
+  Sparkles,
   Menu,
   ChevronDown,
   ChevronUp,
@@ -34,6 +35,7 @@ export default function Sidebar({ role = 'super_admin' }: SidebarProps) {
 
   const navigationItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student'] },
+    { name: 'AI Advisor', href: '/dashboard/ai', icon: Sparkles, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student'] },
     { name: 'Schools & Depts', href: '/dashboard/structure', icon: Building2, roles: ['super_admin', 'admin', 'registrar'] },
     { name: 'Students', href: '/dashboard/students', icon: Users, roles: ['super_admin', 'admin', 'registrar', 'hod'] },
     { name: 'Courses & Catalog', href: '/dashboard/courses', icon: BookOpen, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student'] },

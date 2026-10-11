@@ -64,8 +64,12 @@ CREATE TABLE IF NOT EXISTS library_books (
     shelf_location VARCHAR(50), -- e.g. FL2-ST4-B
     is_ebook_available BOOLEAN DEFAULT FALSE,
     ebook_url TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ensure is_active column exists even if table was already created
+ALTER TABLE library_books ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
 
 CREATE TABLE IF NOT EXISTS library_loans (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -158,70 +162,96 @@ ALTER TABLE hostel_rooms ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hostel_allocations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE library_books ENABLE ROW LEVEL SECURITY;
 ALTER TABLE library_loans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE library_fines ENABLE ROW LEVEL SECURITY;
 ALTER TABLE exam_schedules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE exam_clearance_cards ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notification_logs ENABLE ROW LEVEL SECURITY;
 
 -- 1. Hostel Policies
+DROP POLICY IF EXISTS "Public read for active hostel blocks" ON hostel_blocks;
 CREATE POLICY "Public read for active hostel blocks"
     ON hostel_blocks FOR SELECT
     USING (is_active = TRUE OR auth_user_role() IN ('super_admin', 'admin', 'registrar'));
 
+DROP POLICY IF EXISTS "Admins and registrars manage hostel blocks" ON hostel_blocks;
 CREATE POLICY "Admins and registrars manage hostel blocks"
     ON hostel_blocks FOR ALL
     USING (auth_user_role() IN ('super_admin', 'admin', 'registrar'));
 
+DROP POLICY IF EXISTS "Public read for hostel rooms" ON hostel_rooms;
 CREATE POLICY "Public read for hostel rooms"
     ON hostel_rooms FOR SELECT
     USING (is_available = TRUE OR auth_user_role() IN ('super_admin', 'admin', 'registrar'));
 
+DROP POLICY IF EXISTS "Admins manage hostel rooms" ON hostel_rooms;
 CREATE POLICY "Admins manage hostel rooms"
     ON hostel_rooms FOR ALL
     USING (auth_user_role() IN ('super_admin', 'admin', 'registrar'));
 
+DROP POLICY IF EXISTS "Students view own hostel allocation" ON hostel_allocations;
 CREATE POLICY "Students view own hostel allocation"
     ON hostel_allocations FOR SELECT
     USING (student_id = auth_student_id() OR auth_user_role() IN ('super_admin', 'admin', 'registrar', 'dean'));
 
+DROP POLICY IF EXISTS "Admins and registrars manage hostel allocations" ON hostel_allocations;
 CREATE POLICY "Admins and registrars manage hostel allocations"
     ON hostel_allocations FOR ALL
     USING (auth_user_role() IN ('super_admin', 'admin', 'registrar'));
 
 -- 2. Library Policies
+DROP POLICY IF EXISTS "Public read for active library books" ON library_books;
 CREATE POLICY "Public read for active library books"
     ON library_books FOR SELECT
     USING (is_active = TRUE OR auth_user_role() IN ('super_admin', 'admin', 'librarian'));
 
+DROP POLICY IF EXISTS "Admins manage library catalog" ON library_books;
 CREATE POLICY "Admins manage library catalog"
     ON library_books FOR ALL
     USING (auth_user_role() IN ('super_admin', 'admin', 'librarian'));
 
+DROP POLICY IF EXISTS "Students view own library loans" ON library_loans;
 CREATE POLICY "Students view own library loans"
     ON library_loans FOR SELECT
     USING (student_id = auth_student_id() OR auth_user_role() IN ('super_admin', 'admin', 'librarian'));
 
+DROP POLICY IF EXISTS "Librarians manage library circulation" ON library_loans;
 CREATE POLICY "Librarians manage library circulation"
     ON library_loans FOR ALL
     USING (auth_user_role() IN ('super_admin', 'admin', 'librarian'));
 
+DROP POLICY IF EXISTS "Students view own library fines" ON library_fines;
+CREATE POLICY "Students view own library fines"
+    ON library_fines FOR SELECT
+    USING (student_id = auth_student_id() OR auth_user_role() IN ('super_admin', 'admin', 'librarian', 'finance_officer'));
+
+DROP POLICY IF EXISTS "Librarians and finance manage library fines" ON library_fines;
+CREATE POLICY "Librarians and finance manage library fines"
+    ON library_fines FOR ALL
+    USING (auth_user_role() IN ('super_admin', 'admin', 'librarian', 'finance_officer'));
+
 -- 3. Exam Schedule & Clearance Policies
+DROP POLICY IF EXISTS "Authenticated users view exam schedules" ON exam_schedules;
 CREATE POLICY "Authenticated users view exam schedules"
     ON exam_schedules FOR SELECT
     USING (status != 'draft' OR auth_user_role() IN ('super_admin', 'admin', 'registrar', 'dean', 'lecturer'));
 
+DROP POLICY IF EXISTS "Registrars and deans manage exam schedules" ON exam_schedules;
 CREATE POLICY "Registrars and deans manage exam schedules"
     ON exam_schedules FOR ALL
     USING (auth_user_role() IN ('super_admin', 'admin', 'registrar', 'dean'));
 
+DROP POLICY IF EXISTS "Students view own exam clearance card" ON exam_clearance_cards;
 CREATE POLICY "Students view own exam clearance card"
     ON exam_clearance_cards FOR SELECT
     USING (student_id = auth_student_id() OR auth_user_role() IN ('super_admin', 'admin', 'registrar', 'finance_officer'));
 
+DROP POLICY IF EXISTS "Registrars and finance manage exam clearance cards" ON exam_clearance_cards;
 CREATE POLICY "Registrars and finance manage exam clearance cards"
     ON exam_clearance_cards FOR ALL
     USING (auth_user_role() IN ('super_admin', 'admin', 'registrar', 'finance_officer'));
 
 -- 4. Notification Policies
+DROP POLICY IF EXISTS "Users view relevant notifications" ON notification_logs;
 CREATE POLICY "Users view relevant notifications"
     ON notification_logs FOR SELECT
     USING (
@@ -229,6 +259,7 @@ CREATE POLICY "Users view relevant notifications"
         OR auth_user_role() IN ('super_admin', 'admin', 'registrar', 'finance_officer')
     );
 
+DROP POLICY IF EXISTS "Staff dispatch notifications" ON notification_logs;
 CREATE POLICY "Staff dispatch notifications"
     ON notification_logs FOR INSERT
     WITH CHECK (auth_user_role() IN ('super_admin', 'admin', 'registrar', 'finance_officer', 'hod'));
