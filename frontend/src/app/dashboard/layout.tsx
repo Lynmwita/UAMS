@@ -6,7 +6,7 @@ import Navbar from '@/components/Navbar';
 import Sidebar from '@/components/Sidebar';
 import { UserRole } from '@/types';
 import { ROLE_LABELS } from '@/lib/auth/rbac';
-import { AuthSession } from '@/lib/auth/session';
+import type { AuthSession } from '@/lib/auth/session';
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();

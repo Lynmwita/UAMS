@@ -7,7 +7,8 @@ import Navbar from '@/components/Navbar';
 import { GraduationCap, Lock, Mail, ArrowRight, ShieldCheck, Landmark } from 'lucide-react';
 import { UserRole } from '@/types';
 import { ROLE_LABELS } from '@/lib/auth/rbac';
-import { DEMO_PASSWORD, saveSession } from '@/lib/auth/session';
+
+const DEMO_PASSWORD = 'DemoPassword2026!';
 
 function LoginForm() {
   const router = useRouter();
