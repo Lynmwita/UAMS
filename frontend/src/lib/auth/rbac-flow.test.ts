@@ -62,6 +62,17 @@ test('login derives the role from credentials, rejects mismatches, and keeps tok
   }
   const mismatch=await login(new Request('http://localhost:3000/api/v1/auth/login',{method:'POST',body:JSON.stringify({email:'student@university.ac.ke',password:'DemoPassword2026!',role:'super_admin'})}));
   assert.equal(mismatch.status,401);
+  const mismatchBody = await mismatch.json();
+  assert.match(mismatchBody.error, /Portal Role mismatch.*registered as Student.*Super Administrator.*selected/i);
+
+  const wrongPass = await login(new Request('http://localhost:3000/api/v1/auth/login',{method:'POST',body:JSON.stringify({email:'student@university.ac.ke',password:'WrongPassword999!',role:'student'})}));
+  assert.equal(wrongPass.status, 401);
+  const wrongPassBody = await wrongPass.json();
+  assert.match(wrongPassBody.error, /Incorrect password.*DemoPassword2026!/i);
+
+  const missingEmail = await login(new Request('http://localhost:3000/api/v1/auth/login',{method:'POST',body:JSON.stringify({email:'',password:'DemoPassword2026!',role:'student'})}));
+  assert.equal(missingEmail.status, 400);
+  assert.match((await missingEmail.json()).error, /enter your institutional email/i);
 });
 
 test('students see only their own approved grades and cannot elevate via query parameters',async()=>{

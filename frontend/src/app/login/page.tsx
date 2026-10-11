@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
-import { GraduationCap, Lock, Mail, ArrowRight, ShieldCheck, Landmark } from 'lucide-react';
+import { GraduationCap, Lock, Mail, ArrowRight, ShieldCheck, Landmark, AlertCircle } from 'lucide-react';
 import { UserRole } from '@/types';
 import { ROLE_LABELS } from '@/lib/auth/rbac';
 import { isUserRole } from '@/lib/auth/roles';
@@ -101,8 +101,12 @@ function LoginForm() {
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-lg">
-              {error}
+            <div className="mb-4 p-3.5 bg-rose-50 border border-rose-300 text-rose-900 text-xs rounded-xl flex items-start space-x-2.5 shadow-sm">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div className="flex-1 leading-relaxed">
+                <span className="font-bold block text-[11px] uppercase tracking-wider text-rose-800 mb-0.5">Authentication Issue</span>
+                <span>{error}</span>
+              </div>
             </div>
           )}
 
