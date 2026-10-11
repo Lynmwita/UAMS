@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { UserRole } from '@/types';
 import { ROLE_LABELS } from '@/lib/auth/rbac';
+import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
 
 interface ChatMessage {
   id: string;
@@ -285,9 +286,13 @@ export default function AIAssistantPage() {
                     </div>
                   </div>
 
-                  <div className="prose prose-sm max-w-none whitespace-pre-wrap font-sans">
-                    {message.content}
-                  </div>
+                  {isUser ? (
+                    <div className="whitespace-pre-wrap font-sans text-sm">
+                      {message.content}
+                    </div>
+                  ) : (
+                    <MarkdownRenderer content={message.content} />
+                  )}
                 </div>
               </div>
             );
