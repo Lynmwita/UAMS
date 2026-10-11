@@ -15,17 +15,22 @@ export type AuthSession = {
 };
 
 // Cryptographically salted scrypt hashes (OWASP Password Storage compliant)
-// Cleartext credentials are never retained in memory or disk.
-const INITIAL_DEMO_HASH = hashPassword(DEMO_PASSWORD);
+let _demoHash: string | null = null;
+function getDemoHash(): string {
+  if (!_demoHash) {
+    _demoHash = hashPassword(DEMO_PASSWORD);
+  }
+  return _demoHash;
+}
 
 export const DEMO_USERS: Record<UserRole, { email: string; passwordHash: string }> = {
-  super_admin: { email: 'super_admin@university.ac.ke', passwordHash: INITIAL_DEMO_HASH },
-  admin: { email: 'admin@university.ac.ke', passwordHash: INITIAL_DEMO_HASH },
-  registrar: { email: 'registrar@university.ac.ke', passwordHash: INITIAL_DEMO_HASH },
-  hod: { email: 'hod@university.ac.ke', passwordHash: INITIAL_DEMO_HASH },
-  lecturer: { email: 'lecturer@university.ac.ke', passwordHash: INITIAL_DEMO_HASH },
-  finance_officer: { email: 'finance_officer@university.ac.ke', passwordHash: INITIAL_DEMO_HASH },
-  student: { email: 'student@university.ac.ke', passwordHash: INITIAL_DEMO_HASH },
+  super_admin: { email: 'super_admin@university.ac.ke', get passwordHash() { return getDemoHash(); } },
+  admin: { email: 'admin@university.ac.ke', get passwordHash() { return getDemoHash(); } },
+  registrar: { email: 'registrar@university.ac.ke', get passwordHash() { return getDemoHash(); } },
+  hod: { email: 'hod@university.ac.ke', get passwordHash() { return getDemoHash(); } },
+  lecturer: { email: 'lecturer@university.ac.ke', get passwordHash() { return getDemoHash(); } },
+  finance_officer: { email: 'finance_officer@university.ac.ke', get passwordHash() { return getDemoHash(); } },
+  student: { email: 'student@university.ac.ke', get passwordHash() { return getDemoHash(); } },
 };
 
 export function normalizeRole(role?: string): UserRole {

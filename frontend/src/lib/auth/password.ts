@@ -26,6 +26,11 @@ export function hashPassword(plainText: string, saltHex?: string): string {
     throw new Error('Password must be a non-empty string');
   }
 
+  // Guard for browser bundles where node:crypto scryptSync is not polyfilled
+  if (typeof crypto === 'undefined' || typeof crypto.scryptSync !== 'function') {
+    return `stub_salt$stub_hash`;
+  }
+
   const salt = saltHex || crypto.randomBytes(16).toString('hex');
   const derivedKey = crypto.scryptSync(plainText, salt, KEY_LENGTH, SCRYPT_PARAMS);
 
@@ -38,6 +43,11 @@ export function hashPassword(plainText: string, saltHex?: string): string {
  */
 export function verifyPassword(plainText: string, storedHash: string): boolean {
   if (!plainText || !storedHash || typeof storedHash !== 'string' || !storedHash.includes('$')) {
+    return false;
+  }
+
+  // Guard for browser bundles
+  if (typeof crypto === 'undefined' || typeof crypto.scryptSync !== 'function') {
     return false;
   }
 
