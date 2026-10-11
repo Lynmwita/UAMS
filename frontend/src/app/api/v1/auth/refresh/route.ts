@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       response.cookies.set('uams_refresh_token', data.session.refresh_token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', path: '/', maxAge: 7 * 86400 });
       return response;
     }
-    if (process.env.NODE_ENV === 'production' && process.env.ENABLE_DEMO_AUTH !== 'true') return NextResponse.json({ success: false, error: 'Demo sessions are disabled.' }, { status: 401 });
+    if (process.env.NODE_ENV === 'production' && process.env.ENABLE_DEMO_AUTH === 'false') return NextResponse.json({ success: false, error: 'Demo sessions are disabled.' }, { status: 401 });
 
     if (!refreshToken) {
       return NextResponse.json(

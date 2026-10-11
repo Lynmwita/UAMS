@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   if (!validateCsrf(request).valid) return NextResponse.json({ success: false, error: 'Invalid request origin.' }, { status: 403 });
   const cookie = request.headers.get('cookie') || '';
   const accessToken = cookie.match(/(?:^|;\s*)uams_auth_token=([^;]+)/)?.[1];
-  if (accessToken && (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEMO_AUTH === 'true')) revokeAccessToken(accessToken);
+  if (accessToken && (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEMO_AUTH !== 'false')) revokeAccessToken(accessToken);
   const refresh = cookie.match(/(?:^|;\s*)uams_refresh_token=([^;]+)/)?.[1];
   if (refresh?.includes('.')) {
     const payload = verifyRefreshToken(refresh);

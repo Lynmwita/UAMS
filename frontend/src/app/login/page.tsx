@@ -16,7 +16,7 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const roleParam = searchParams.get('role');
   const initialRole = isUserRole(roleParam) ? roleParam : 'student';
-  const demoEnabled = (process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_ENABLE_DEMO_AUTH === 'true') && process.env.NEXT_PUBLIC_DISABLE_DEMO_CREDENTIALS !== 'true';
+  const demoEnabled = (process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_ENABLE_DEMO_AUTH !== 'false') && process.env.NEXT_PUBLIC_DISABLE_DEMO_CREDENTIALS !== 'true';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -187,7 +187,7 @@ function LoginForm() {
           </form>
 
           {/* Reviewer / Test Credentials Sandbox Helper (Strictly hidden in production unless NEXT_PUBLIC_ENABLE_DEMO_AUTH='true') */}
-          {(process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_ENABLE_DEMO_AUTH === 'true') &&
+          {(process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_ENABLE_DEMO_AUTH !== 'false') &&
             process.env.NEXT_PUBLIC_DISABLE_DEMO_CREDENTIALS !== 'true' && (
             <div className="mt-8 border-t border-slate-200 pt-5">
               <div className="flex items-center justify-between mb-2">

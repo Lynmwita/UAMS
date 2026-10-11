@@ -206,6 +206,16 @@ test('validateCsrf rejects cross-origin mutations and permits same-origin reques
   });
   assert.equal(validateCsrf(validPost).valid, true);
 
+  // POST with reverse proxy / Vercel host
+  const vercelPost = new Request('http://localhost:3000/api/v1/auth/login', {
+    method: 'POST',
+    headers: {
+      origin: 'https://uams-plum.vercel.app',
+      'x-forwarded-host': 'uams-plum.vercel.app',
+    },
+  });
+  assert.equal(validateCsrf(vercelPost).valid, true);
+
   // POST with hostile cross-origin
   const evilPost = new Request('http://localhost:3000/api/v1/courses/register', {
     method: 'POST',
