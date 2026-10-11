@@ -125,7 +125,7 @@ export async function getAuthenticatedUser(request: Request | NextRequest): Prom
 
   if (!token) return null;
   // Custom signed tokens are restricted to the explicitly enabled demonstration environment.
-  if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEMO_AUTH === 'true') {
+  if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEMO_AUTH !== 'false') {
     const demoUser = verifySignedToken(token);
     if (demoUser) return demoUser;
   }

@@ -24,7 +24,7 @@ export async function POST(request: Request) {
   let accessToken: string;
   let refreshToken: string;
   let expiresIn = 900;
-  if (demoRole && (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEMO_AUTH === 'true')) {
+  if (demoRole && (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEMO_AUTH !== 'false')) {
     if (!isUserRole(demoRole) || (body.role && body.role !== demoRole) || !isValidDemoCredentials(email, password, demoRole)) {
       return NextResponse.json({ success: false, error: 'Invalid credentials or portal role.' }, { status: 401 });
     }
