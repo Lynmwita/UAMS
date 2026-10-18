@@ -78,7 +78,7 @@ export default function DashboardExperience() {
         <div className="heading-tools">
           <span className="session-pill"><span className="session-dot" /> Semester 1 in session</span>
           {roleHasPermission(role,'students:read') && <Link style={{display:canAccessPage(role,'students')?undefined:'none'}} className="search-link" href="/dashboard/students" aria-label="Search student records"><Search size={17} /></Link>}
-          <Link className="primary-action" href={role === 'student' || role === 'finance_officer' ? '/dashboard/finance' : roleHasPermission(role, 'students:write') ? '/dashboard/students' : '/dashboard/courses'}>
+          <Link className="primary-action" href={role === 'student' || role === 'finance_officer' ? '/dashboard/finance' : roleHasPermission(role, 'students:write') ? '/dashboard/students?action=register' : '/dashboard/courses'}>
             <FilePlus2 size={16} />
             {role === 'student' ? 'Make a payment' : role === 'finance_officer' ? 'Review payments' : roleHasPermission(role, 'students:write') ? 'Register student' : 'View courses'}
           </Link>

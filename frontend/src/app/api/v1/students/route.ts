@@ -72,27 +72,100 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-
-    if (!body || ['first_name','last_name','admission_number','program_name'].some(k=>typeof body[k]!=='string'||!body[k].trim()||body[k].length>255) || (body.fee_balance !== undefined && (!Number.isFinite(Number(body.fee_balance)) || Number(body.fee_balance)<0))) {
+    if (!body || typeof body !== 'object') {
       return NextResponse.json(
-        { success: false, error: 'Missing required student fields: first_name, last_name, admission_number, program_name' },
+        { success: false, error: 'Request body must be a valid JSON object' },
         { status: 400 }
       );
     }
 
-    if(studentsStore.some(s=>s.admission_number.toUpperCase()===body.admission_number.trim().toUpperCase()))return NextResponse.json({success:false,error:'Admission number already exists.'},{status:409});
+    // Support both full_name or first_name + last_name
+    let fullName = (body.full_name || body.name || body.fullName || '').trim();
+    let firstName = (body.first_name || '').trim();
+    let lastName = (body.last_name || '').trim();
+
+    if (!fullName && (firstName || lastName)) {
+      fullName = `${firstName} ${lastName}`.trim();
+    } else if (fullName && (!firstName || !lastName)) {
+      const parts = fullName.split(/\s+/);
+      firstName = parts[0] || '';
+      lastName = parts.slice(1).join(' ') || firstName;
+    }
+
+    const email = (body.email || '').trim().toLowerCase();
+    const regNo = (body.registration_number || body.admission_number || body.admissionNo || body.registrationNumber || '').trim().toUpperCase();
+    const faculty = (body.faculty || 'School of Computing & Informatics').trim();
+    const department = (body.department || 'Information Technology').trim();
+    const programName = (body.program_name || body.program || `Bachelor of Science in ${department}`).trim();
+    const yearOfStudy = Number(body.year_of_study ?? body.current_year_of_study ?? body.year ?? 1);
+    const semester = Number(body.semester ?? body.current_semester_number ?? 1);
+    const campusCode = (body.campus_code || body.campus || 'SMU-MAIN').trim();
+    const initialPassword = body.initial_password || body.initialPassword || 'StudentPassword123!';
+
+    // Basic required field validations
+    if (!fullName || !email || !regNo) {
+      return NextResponse.json(
+        { success: false, error: 'Full name, email, and registration number are required.' },
+        { status: 400 }
+      );
+    }
+
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return NextResponse.json(
+        { success: false, error: 'Please enter a valid email address.' },
+        { status: 400 }
+      );
+    }
+
+    // Password validation (min 8 chars)
+    if (initialPassword.length < 8) {
+      return NextResponse.json(
+        { success: false, error: 'Initial password must be at least 8 characters long.' },
+        { status: 400 }
+      );
+    }
+
+    // Year validation (1-6)
+    if (!Number.isInteger(yearOfStudy) || yearOfStudy < 1 || yearOfStudy > 6) {
+      return NextResponse.json(
+        { success: false, error: 'Year of study must be an integer between 1 and 6.' },
+        { status: 400 }
+      );
+    }
+
+    // Duplicate check: email
+    if (studentsStore.some((s) => s.email && s.email.trim().toLowerCase() === email)) {
+      return NextResponse.json(
+        { success: false, error: 'A student with this email already exists' },
+        { status: 400 }
+      );
+    }
+
+    // Duplicate check: registration / admission number
+    if (studentsStore.some((s) => s.admission_number && s.admission_number.trim().toUpperCase() === regNo)) {
+      return NextResponse.json(
+        { success: false, error: 'A student with this registration number already exists' },
+        { status: 400 }
+      );
+    }
+
     const newStudent = {
       id: `stu-${Date.now()}`,
       user_id: `usr-${Date.now()}`,
-      admission_number: body.admission_number,
-      first_name: body.first_name,
-      last_name: body.last_name,
-      email: body.email || `${body.first_name.toLowerCase()}.${body.last_name.toLowerCase()}@student.university.ac.ke`,
+      admission_number: regNo,
+      first_name: firstName,
+      last_name: lastName,
+      email: email,
       gender: body.gender || 'other',
+      faculty: faculty,
+      department: department,
+      campus_code: campusCode,
       program_id: body.program_id || 'prog-bit',
-      program_name: body.program_name,
-      current_year_of_study: Number(body.current_year_of_study) || 1,
-      current_semester_number: Number(body.current_semester_number) || 1,
+      program_name: programName,
+      current_year_of_study: yearOfStudy,
+      current_semester_number: semester,
       status: body.status || 'active',
       admission_date: new Date().toISOString().split('T')[0],
       cgpa: 0.0,
@@ -101,24 +174,125 @@ export async function POST(request: NextRequest) {
 
     studentsStore.unshift(newStudent);
 
+    // Audit log entry: action student_registered, actor role registrar/staff
     recordAuditEvent({
       actor_email: auth.user.email,
       actor_role: auth.user.role,
-      action: 'STUDENT_REGISTERED',
+      action: 'student_registered',
       entity_type: 'students',
-      entity_id: newStudent.id,
+      entity_id: regNo,
       ip_address: request.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1',
       status: 'SUCCESS',
-      details: { admission_number: newStudent.admission_number, name: `${newStudent.first_name} ${newStudent.last_name}` },
+      details: {
+        admission_number: regNo,
+        registration_number: regNo,
+        email: email,
+        name: fullName,
+        faculty: faculty,
+        department: department,
+        year_of_study: yearOfStudy,
+        campus_code: campusCode,
+      },
     });
 
-    return NextResponse.json({
-      success: true,
-      message: 'Student registered successfully',
-      data: newStudent,
-    }, { status: 201 });
+    // Student Hub Synchronization
+    const hubSyncUrl = process.env.STUDENT_HUB_SYNC_URL || 'https://student-life-campus-hub.vercel.app/api/sync/uams';
+    const hubSyncSecret = process.env.CRON_SECRET || process.env.STUDENT_HUB_CRON_SECRET || 'K8mP4xT9qR2vN7wL5zB1';
+    let hubSyncResult: any = null;
+    let hubSyncError: string | null = null;
+
+    try {
+      const syncPayload = {
+        version: 1,
+        dry_run: false,
+        students: [
+          {
+            email: email,
+            full_name: fullName,
+            registration_number: regNo,
+            faculty: faculty,
+            department: department,
+            year_of_study: yearOfStudy,
+            campus_code: campusCode,
+            initial_password: initialPassword,
+          },
+        ],
+      };
+
+      const hubRes = await fetch(hubSyncUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${hubSyncSecret}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(syncPayload),
+      });
+
+      if (hubRes.ok) {
+        hubSyncResult = await hubRes.json();
+      } else {
+        const errText = await hubRes.text();
+        hubSyncError = `Hub sync HTTP ${hubRes.status}: ${errText}`;
+        console.warn('[UAMS -> Hub Sync]', hubSyncError);
+      }
+    } catch (syncErr: any) {
+      hubSyncError = syncErr?.message || 'Hub sync network error';
+      console.warn('[UAMS -> Hub Sync Exception]', syncErr);
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: `Student registered: ${fullName} (${regNo}). They can sign in at the Student Hub with their email and the initial password.`,
+        data: newStudent,
+        initial_password: initialPassword,
+        hub_sync: hubSyncResult,
+        hub_sync_error: hubSyncError,
+      },
+      { status: 201 }
+    );
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
 
+export async function DELETE(request: NextRequest) {
+  const auth = await requirePermission(request, 'students:write');
+  if ('errorResponse' in auth) {
+    return auth.errorResponse;
+  }
+
+  const { searchParams } = new URL(request.url);
+  const emailParam = searchParams.get('email')?.toLowerCase();
+  const regNoParam = searchParams.get('admission_number')?.toUpperCase() || searchParams.get('registration_number')?.toUpperCase();
+
+  let bodyEmail = '';
+  let bodyRegNo = '';
+  try {
+    const b = await request.json();
+    if (b.email) bodyEmail = String(b.email).toLowerCase();
+    if (b.admission_number || b.registration_number) {
+      bodyRegNo = String(b.admission_number || b.registration_number).toUpperCase();
+    }
+  } catch {}
+
+  const targetEmail = (emailParam || bodyEmail).trim();
+  const targetRegNo = (regNoParam || bodyRegNo).trim();
+
+  const initialCount = studentsStore.length;
+  for (let i = studentsStore.length - 1; i >= 0; i--) {
+    const s = studentsStore[i];
+    if (
+      (targetEmail && s.email && s.email.toLowerCase() === targetEmail) ||
+      (targetRegNo && s.admission_number && s.admission_number.toUpperCase() === targetRegNo)
+    ) {
+      studentsStore.splice(i, 1);
+    }
+  }
+
+  return NextResponse.json({
+    success: true,
+    deleted: initialCount - studentsStore.length,
+    message: 'Student record removed from UAMS store',
+  });
+}
