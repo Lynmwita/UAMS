@@ -27,15 +27,15 @@ test('student registration: unauthorized roles cannot register students', async 
   const studentReq = makeRequest('student', 'POST', {
     full_name: 'Hacker Student',
     email: 'hacker@university.ac.ke',
-    registration_number: 'SMU/BIT/2026/9999',
+    registration_number: 'BIT/2026/9999',
   });
   const res = await POST(studentReq);
   assert.equal(res.status, 403);
 });
 
 test('student registration: successfully registers a new student with full details and audit logging', async () => {
-  const regNo = `SMU/BIT/2026/TEST_${Date.now()}`;
-  const email = `test.student.${Date.now()}@summit.ac.ke`;
+  const regNo = `BIT/2026/TEST_${Date.now()}`;
+  const email = `test.student.${Date.now()}@university.ac.ke`;
 
   const req = makeRequest('registrar', 'POST', {
     full_name: 'Kelvin Test User',
@@ -44,7 +44,7 @@ test('student registration: successfully registers a new student with full detai
     faculty: 'School of Computing & Informatics',
     department: 'Information Technology',
     year_of_study: 1,
-    campus: 'SMU-MAIN',
+    campus: 'ZU-TECH',
     initial_password: 'StudentPassword123!',
   });
 
@@ -75,9 +75,9 @@ test('student registration: successfully registers a new student with full detai
 });
 
 test('student registration: duplicate email rejection', async () => {
-  const regNo1 = `SMU/BIT/2026/DUP1_${Date.now()}`;
-  const regNo2 = `SMU/BIT/2026/DUP2_${Date.now()}`;
-  const duplicateEmail = `dup.email.${Date.now()}@summit.ac.ke`;
+  const regNo1 = `BIT/2026/DUP1_${Date.now()}`;
+  const regNo2 = `BIT/2026/DUP2_${Date.now()}`;
+  const duplicateEmail = `dup.email.${Date.now()}@university.ac.ke`;
 
   // Register first
   const res1 = await POST(makeRequest('registrar', 'POST', {
@@ -105,9 +105,9 @@ test('student registration: duplicate email rejection', async () => {
 });
 
 test('student registration: duplicate registration number rejection', async () => {
-  const duplicateRegNo = `SMU/BIT/2026/DUPREG_${Date.now()}`;
-  const email1 = `student1.${Date.now()}@summit.ac.ke`;
-  const email2 = `student2.${Date.now()}@summit.ac.ke`;
+  const duplicateRegNo = `BIT/2026/DUPREG_${Date.now()}`;
+  const email1 = `student1.${Date.now()}@university.ac.ke`;
+  const email2 = `student2.${Date.now()}@university.ac.ke`;
 
   // Register first
   const res1 = await POST(makeRequest('registrar', 'POST', {
@@ -138,7 +138,7 @@ test('student registration: validation rejects invalid email or short password',
   const invalidEmailRes = await POST(makeRequest('registrar', 'POST', {
     full_name: 'Invalid Email Guy',
     email: 'not-an-email',
-    registration_number: `SMU/BIT/2026/INV_${Date.now()}`,
+    registration_number: `BIT/2026/INV_${Date.now()}`,
     initial_password: 'StudentPassword123!',
   }));
   assert.equal(invalidEmailRes.status, 400);
@@ -146,8 +146,8 @@ test('student registration: validation rejects invalid email or short password',
 
   const shortPassRes = await POST(makeRequest('registrar', 'POST', {
     full_name: 'Short Password Guy',
-    email: `valid.${Date.now()}@summit.ac.ke`,
-    registration_number: `SMU/BIT/2026/SHORT_${Date.now()}`,
+    email: `valid.${Date.now()}@university.ac.ke`,
+    registration_number: `BIT/2026/SHORT_${Date.now()}`,
     initial_password: 'short',
   }));
   assert.equal(shortPassRes.status, 400);

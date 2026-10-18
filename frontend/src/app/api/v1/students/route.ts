@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
     const programName = (body.program_name || body.program || `Bachelor of Science in ${department}`).trim();
     const yearOfStudy = Number(body.year_of_study ?? body.current_year_of_study ?? body.year ?? 1);
     const semester = Number(body.semester ?? body.current_semester_number ?? 1);
-    const campusCode = (body.campus_code || body.campus || 'SMU-MAIN').trim();
+    const campusCode = (body.campus_code || body.campus || 'ZU-TECH').trim();
     const initialPassword = body.initial_password || body.initialPassword || 'StudentPassword123!';
 
     // Basic required field validations

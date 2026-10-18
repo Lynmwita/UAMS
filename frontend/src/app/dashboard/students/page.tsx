@@ -53,10 +53,76 @@ const FACULTY_DEPARTMENTS: Record<string, string[]> = {
   ],
 };
 
+const DEPARTMENT_PROGRAMS: Record<string, string[]> = {
+  'Information Technology': [
+    'Bachelor of Science in Information Technology',
+    'Bachelor of Business Information Technology',
+    'Diploma in Information Technology',
+  ],
+  'Computer Science': [
+    'Bachelor of Science in Computer Science',
+    'Master of Science in Computer Science',
+    'Diploma in Computer Science',
+  ],
+  'Software Engineering': [
+    'Bachelor of Science in Software Engineering',
+    'Diploma in Software Engineering',
+  ],
+  'Data Science': [
+    'Bachelor of Science in Data Science',
+    'Master of Science in Data Analytics',
+  ],
+  'Business Administration': [
+    'Bachelor of Business Administration',
+    'Master of Business Administration',
+    'Diploma in Business Management',
+  ],
+  'Accounting & Finance': [
+    'Bachelor of Commerce (Accounting & Finance)',
+    'Diploma in Accounting & Finance',
+  ],
+  'Marketing & Management': [
+    'Bachelor of Science in Marketing & Management',
+    'Diploma in Marketing Management',
+  ],
+  'Electrical & Electronic Engineering': [
+    'Bachelor of Science in Electrical & Electronic Engineering',
+    'Diploma in Electrical & Electronic Engineering',
+  ],
+  'Civil Engineering': [
+    'Bachelor of Science in Civil Engineering',
+    'Diploma in Civil Engineering',
+  ],
+  'Mechanical Engineering': [
+    'Bachelor of Science in Mechanical Engineering',
+    'Diploma in Mechanical Engineering',
+  ],
+  'Nursing': [
+    'Bachelor of Science in Nursing',
+    'Diploma in Community Health Nursing',
+  ],
+  'Clinical Medicine': [
+    'Bachelor of Science in Clinical Medicine',
+    'Diploma in Clinical Medicine and Surgery',
+  ],
+  'Public Health': [
+    'Bachelor of Science in Public Health',
+    'Diploma in Public Health',
+  ],
+  'Development Studies': [
+    'Bachelor of Arts in Development Studies',
+    'Diploma in Community Development',
+  ],
+  'Communication & Media': [
+    'Bachelor of Arts in Communication & Media Studies',
+    'Diploma in Journalism & Media Studies',
+  ],
+};
+
 const CAMPUSES = [
-  { code: 'SMU-MAIN', name: 'Main Campus (SMU-MAIN)' },
-  { code: 'SMU-TOWN', name: 'Town Campus (SMU-TOWN)' },
-  { code: 'SMU-WEST', name: 'West Campus (SMU-WEST)' },
+  { code: 'ZU-TECH', name: 'Technology Park Campus (ZU-TECH)' },
+  { code: 'ZU-RUIRU', name: 'Ruiru Campus (ZU-RUIRU)' },
+  { code: 'ZU-PIONEER', name: 'Pioneer Campus (ZU-PIONEER)' },
 ];
 
 export default function StudentsPage() {
@@ -129,6 +195,13 @@ export default function StudentsPage() {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalError, setModalError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<{
+    fullName?: string;
+    email?: string;
+    regNo?: string;
+    password?: string;
+    program?: string;
+  }>({});
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -147,16 +220,24 @@ export default function StudentsPage() {
   const [regNo, setRegNo] = useState('');
   const [faculty, setFaculty] = useState('School of Computing & Informatics');
   const [department, setDepartment] = useState('Information Technology');
+  const [program, setProgram] = useState('Bachelor of Science in Information Technology');
   const [yearOfStudy, setYearOfStudy] = useState(1);
-  const [campusCode, setCampusCode] = useState('SMU-MAIN');
+  const [campusCode, setCampusCode] = useState('ZU-TECH');
   const [password, setPassword] = useState('StudentPassword123!');
 
   const handleFacultyChange = (newFaculty: string) => {
     setFaculty(newFaculty);
     const deps = FACULTY_DEPARTMENTS[newFaculty] || [];
-    if (deps.length > 0 && !deps.includes(department)) {
-      setDepartment(deps[0]);
-    }
+    const nextDept = deps[0] || '';
+    setDepartment(nextDept);
+    const progs = DEPARTMENT_PROGRAMS[nextDept] || [];
+    setProgram(progs[0] || (nextDept ? `Bachelor of Science in ${nextDept}` : ''));
+  };
+
+  const handleDepartmentChange = (newDept: string) => {
+    setDepartment(newDept);
+    const progs = DEPARTMENT_PROGRAMS[newDept] || [];
+    setProgram(progs[0] || (newDept ? `Bachelor of Science in ${newDept}` : ''));
   };
 
   const handleGeneratePassword = () => {
@@ -175,10 +256,12 @@ export default function StudentsPage() {
     setRegNo('');
     setFaculty('School of Computing & Informatics');
     setDepartment('Information Technology');
+    setProgram('Bachelor of Science in Information Technology');
     setYearOfStudy(1);
-    setCampusCode('SMU-MAIN');
+    setCampusCode('ZU-TECH');
     setPassword('StudentPassword123!');
     setModalError('');
+    setFieldErrors({});
     setShowPassword(false);
   };
 
@@ -192,34 +275,55 @@ export default function StudentsPage() {
     const trimmedRegNo = regNo.trim().toUpperCase();
     const trimmedPassword = password.trim();
 
-    // 1. Basic validation
-    if (!trimmedName || !trimmedEmail || !trimmedRegNo) {
-      setModalError('Please fill in all required fields.');
+    // 1. Field-level inline validation
+    const errors: { [key: string]: string } = {};
+
+    if (!trimmedName) {
+      errors.fullName = 'This field is required';
+    }
+
+    if (!trimmedEmail) {
+      errors.email = 'This field is required';
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(trimmedEmail)) {
+        errors.email = 'Enter a valid email address, e.g. brian.otieno@university.ac.ke';
+      }
+    }
+
+    if (!trimmedRegNo) {
+      errors.regNo = 'This field is required';
+    }
+
+    if (!trimmedPassword) {
+      errors.password = 'This field is required';
+    } else if (trimmedPassword.length < 8) {
+      errors.password = 'Password must be at least 8 characters';
+    }
+
+    if (!program) {
+      errors.program = 'This field is required';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(trimmedEmail)) {
-      setModalError('Please enter a valid email address.');
-      return;
-    }
-
-    if (trimmedPassword.length < 8) {
-      setModalError('Initial password must be at least 8 characters.');
-      return;
-    }
-
-    // 2. Client-side duplicate check before submit
+    // 2. Client-side duplicate checks before submit
     if (students.some((s) => s.email && s.email.toLowerCase() === trimmedEmail)) {
+      setFieldErrors({ email: 'A student with this email already exists' });
       setModalError('A student with this email already exists');
       return;
     }
 
     if (students.some((s) => s.admissionNo && s.admissionNo.toUpperCase() === trimmedRegNo)) {
+      setFieldErrors({ regNo: 'A student with this registration number already exists' });
       setModalError('A student with this registration number already exists');
       return;
     }
 
+    setFieldErrors({});
     setSubmitting(true);
 
     try {
@@ -232,6 +336,7 @@ export default function StudentsPage() {
           registration_number: trimmedRegNo,
           faculty,
           department,
+          program_name: program,
           year_of_study: yearOfStudy,
           campus_code: campusCode,
           initial_password: trimmedPassword,
@@ -515,9 +620,12 @@ export default function StudentsPage() {
                 <h3 className="text-lg font-bold text-academic-navy-950">Register Student</h3>
               </div>
               <button
+                type="button"
+                aria-label="Close"
                 onClick={() => {
                   setIsModalOpen(false);
                   setModalError('');
+                  setFieldErrors({});
                 }}
                 className="text-slate-400 hover:text-slate-600"
               >
@@ -535,7 +643,7 @@ export default function StudentsPage() {
               </div>
             )}
 
-            <form onSubmit={handleRegisterStudent} className="space-y-4 mt-4 text-sm">
+            <form noValidate onSubmit={handleRegisterStudent} className="space-y-4 mt-4 text-sm">
               {/* Full Name */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
@@ -543,12 +651,21 @@ export default function StudentsPage() {
                 </label>
                 <input
                   type="text"
-                  required
                   placeholder="e.g. Brian Otieno"
                   value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-academic-navy-900 outline-none"
+                  onChange={(e) => {
+                    setFullName(e.target.value);
+                    if (fieldErrors.fullName) {
+                      setFieldErrors((prev) => ({ ...prev, fullName: undefined }));
+                    }
+                  }}
+                  className={`w-full border ${
+                    fieldErrors.fullName ? 'border-rose-500 focus:ring-rose-500' : 'border-slate-300 focus:ring-academic-navy-900'
+                  } rounded-lg px-3 py-2 text-slate-900 focus:ring-2 outline-none`}
                 />
+                {fieldErrors.fullName && (
+                  <p className="mt-1 text-xs text-rose-600 font-medium">{fieldErrors.fullName}</p>
+                )}
               </div>
 
               {/* Email & Registration Number */}
@@ -559,12 +676,21 @@ export default function StudentsPage() {
                   </label>
                   <input
                     type="email"
-                    required
-                    placeholder="e.g. brian.otieno@summit.ac.ke"
+                    placeholder="e.g. brian.otieno@university.ac.ke"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value.toLowerCase())}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-academic-navy-900 outline-none lowercase"
+                    onChange={(e) => {
+                      setEmail(e.target.value.toLowerCase());
+                      if (fieldErrors.email) {
+                        setFieldErrors((prev) => ({ ...prev, email: undefined }));
+                      }
+                    }}
+                    className={`w-full border ${
+                      fieldErrors.email ? 'border-rose-500 focus:ring-rose-500' : 'border-slate-300 focus:ring-academic-navy-900'
+                    } rounded-lg px-3 py-2 text-slate-900 focus:ring-2 outline-none lowercase`}
                   />
+                  {fieldErrors.email && (
+                    <p className="mt-1 text-xs text-rose-600 font-medium">{fieldErrors.email}</p>
+                  )}
                 </div>
 
                 <div>
@@ -573,12 +699,21 @@ export default function StudentsPage() {
                   </label>
                   <input
                     type="text"
-                    required
-                    placeholder="e.g. SMU/BIT/2026/1002"
+                    placeholder="e.g. BIT/2026/1002"
                     value={regNo}
-                    onChange={(e) => setRegNo(e.target.value.toUpperCase())}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 font-mono text-slate-900 focus:ring-2 focus:ring-academic-navy-900 outline-none uppercase"
+                    onChange={(e) => {
+                      setRegNo(e.target.value.toUpperCase());
+                      if (fieldErrors.regNo) {
+                        setFieldErrors((prev) => ({ ...prev, regNo: undefined }));
+                      }
+                    }}
+                    className={`w-full border ${
+                      fieldErrors.regNo ? 'border-rose-500 focus:ring-rose-500' : 'border-slate-300 focus:ring-academic-navy-900'
+                    } rounded-lg px-3 py-2 font-mono text-slate-900 focus:ring-2 outline-none uppercase`}
                   />
+                  {fieldErrors.regNo && (
+                    <p className="mt-1 text-xs text-rose-600 font-medium">{fieldErrors.regNo}</p>
+                  )}
                 </div>
               </div>
 
@@ -607,7 +742,7 @@ export default function StudentsPage() {
                   </label>
                   <select
                     value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
+                    onChange={(e) => handleDepartmentChange(e.target.value)}
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-academic-navy-900 outline-none text-xs"
                   >
                     {(FACULTY_DEPARTMENTS[faculty] || []).map((dep) => (
@@ -617,6 +752,34 @@ export default function StudentsPage() {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Degree Programme */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Degree Programme <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={program}
+                  onChange={(e) => {
+                    setProgram(e.target.value);
+                    if (fieldErrors.program) {
+                      setFieldErrors((prev) => ({ ...prev, program: undefined }));
+                    }
+                  }}
+                  className={`w-full border ${
+                    fieldErrors.program ? 'border-rose-500 focus:ring-rose-500' : 'border-slate-300 focus:ring-academic-navy-900'
+                  } rounded-lg px-3 py-2 text-slate-900 focus:ring-2 outline-none text-xs`}
+                >
+                  {(DEPARTMENT_PROGRAMS[department] || [`Bachelor of Science in ${department}`]).map((prog) => (
+                    <option key={prog} value={prog}>
+                      {prog}
+                    </option>
+                  ))}
+                </select>
+                {fieldErrors.program && (
+                  <p className="mt-1 text-xs text-rose-600 font-medium">{fieldErrors.program}</p>
+                )}
               </div>
 
               {/* Year of study & Campus */}
@@ -665,7 +828,12 @@ export default function StudentsPage() {
                   </label>
                   <button
                     type="button"
-                    onClick={handleGeneratePassword}
+                    onClick={() => {
+                      handleGeneratePassword();
+                      if (fieldErrors.password) {
+                        setFieldErrors((prev) => ({ ...prev, password: undefined }));
+                      }
+                    }}
                     className="text-xs font-semibold text-academic-navy-700 hover:text-academic-navy-900 flex items-center space-x-1"
                   >
                     <Sparkles className="h-3 w-3 text-academic-gold-500" />
@@ -675,11 +843,16 @@ export default function StudentsPage() {
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
-                    required
-                    minLength={8}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg pl-3 pr-10 py-2 font-mono text-slate-900 focus:ring-2 focus:ring-academic-navy-900 outline-none"
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (fieldErrors.password) {
+                        setFieldErrors((prev) => ({ ...prev, password: undefined }));
+                      }
+                    }}
+                    className={`w-full border ${
+                      fieldErrors.password ? 'border-rose-500 focus:ring-rose-500' : 'border-slate-300 focus:ring-academic-navy-900'
+                    } rounded-lg pl-3 pr-10 py-2 font-mono text-slate-900 focus:ring-2 outline-none`}
                   />
                   <button
                     type="button"
@@ -690,9 +863,13 @@ export default function StudentsPage() {
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Must be at least 8 characters. The student will use this password to sign in at the Student Hub.
-                </p>
+                {fieldErrors.password ? (
+                  <p className="mt-1 text-xs text-rose-600 font-medium">{fieldErrors.password}</p>
+                ) : (
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Must be at least 8 characters. The student will use this password to sign in at the Student Hub.
+                  </p>
+                )}
               </div>
 
               {/* Footer Buttons */}
@@ -703,6 +880,7 @@ export default function StudentsPage() {
                   onClick={() => {
                     setIsModalOpen(false);
                     setModalError('');
+                    setFieldErrors({});
                   }}
                   className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 >
