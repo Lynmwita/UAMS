@@ -202,6 +202,7 @@ export default function StudentsPage() {
     password?: string;
     program?: string;
   }>({});
+  const [touched, setTouched] = useState<{ [key: string]: boolean }>({});
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -225,19 +226,79 @@ export default function StudentsPage() {
   const [campusCode, setCampusCode] = useState('ZU-TECH');
   const [password, setPassword] = useState('StudentPassword123!');
 
+  const validateField = (
+    field: 'fullName' | 'email' | 'regNo' | 'password' | 'program',
+    overrideVal?: string
+  ): string | undefined => {
+    const raw =
+      overrideVal !== undefined
+        ? overrideVal
+        : field === 'fullName'
+        ? fullName
+        : field === 'email'
+        ? email
+        : field === 'regNo'
+        ? regNo
+        : field === 'password'
+        ? password
+        : program;
+    const val = (raw || '').trim();
+
+    if (field === 'fullName') {
+      if (!val) return 'This field is required';
+    } else if (field === 'email') {
+      if (!val) return 'This field is required';
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(val.toLowerCase())) {
+        return 'Enter a valid email address, e.g. brian.otieno@university.ac.ke';
+      }
+    } else if (field === 'regNo') {
+      if (!val) return 'This field is required';
+    } else if (field === 'password') {
+      if (!val) return 'This field is required';
+      if (val.length < 8) return 'Password must be at least 8 characters';
+    } else if (field === 'program') {
+      if (!val) return 'This field is required';
+    }
+    return undefined;
+  };
+
+  const handleBlur = (field: 'fullName' | 'email' | 'regNo' | 'password' | 'program') => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    const errorMsg = validateField(field);
+    setFieldErrors((prev) => ({
+      ...prev,
+      [field]: errorMsg,
+    }));
+  };
+
   const handleFacultyChange = (newFaculty: string) => {
     setFaculty(newFaculty);
     const deps = FACULTY_DEPARTMENTS[newFaculty] || [];
     const nextDept = deps[0] || '';
     setDepartment(nextDept);
     const progs = DEPARTMENT_PROGRAMS[nextDept] || [];
-    setProgram(progs[0] || (nextDept ? `Bachelor of Science in ${nextDept}` : ''));
+    const nextProg = progs[0] || (nextDept ? `Bachelor of Science in ${nextDept}` : '');
+    setProgram(nextProg);
+    if (touched.program || fieldErrors.program) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        program: validateField('program', nextProg),
+      }));
+    }
   };
 
   const handleDepartmentChange = (newDept: string) => {
     setDepartment(newDept);
     const progs = DEPARTMENT_PROGRAMS[newDept] || [];
-    setProgram(progs[0] || (newDept ? `Bachelor of Science in ${newDept}` : ''));
+    const nextProg = progs[0] || (newDept ? `Bachelor of Science in ${newDept}` : '');
+    setProgram(nextProg);
+    if (touched.program || fieldErrors.program) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        program: validateField('program', nextProg),
+      }));
+    }
   };
 
   const handleGeneratePassword = () => {
@@ -248,6 +309,7 @@ export default function StudentsPage() {
     }
     const gen = `Student${rand}2026!`;
     setPassword(gen);
+    setFieldErrors((prev) => ({ ...prev, password: undefined }));
   };
 
   const resetForm = () => {
@@ -262,6 +324,7 @@ export default function StudentsPage() {
     setPassword('StudentPassword123!');
     setModalError('');
     setFieldErrors({});
+    setTouched({});
     setShowPassword(false);
   };
 
@@ -275,50 +338,44 @@ export default function StudentsPage() {
     const trimmedRegNo = regNo.trim().toUpperCase();
     const trimmedPassword = password.trim();
 
-    // 1. Field-level inline validation
-    const errors: { [key: string]: string } = {};
+    // 1. Mark all fields touched and validate
+    setTouched({
+      fullName: true,
+      email: true,
+      regNo: true,
+      password: true,
+      program: true,
+    });
 
-    if (!trimmedName) {
-      errors.fullName = 'This field is required';
-    }
+    const errors: {
+      fullName?: string;
+      email?: string;
+      regNo?: string;
+      password?: string;
+      program?: string;
+    } = {
+      fullName: validateField('fullName', trimmedName),
+      email: validateField('email', trimmedEmail),
+      regNo: validateField('regNo', trimmedRegNo),
+      password: validateField('password', trimmedPassword),
+      program: validateField('program', program),
+    };
 
-    if (!trimmedEmail) {
-      errors.email = 'This field is required';
-    } else {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(trimmedEmail)) {
-        errors.email = 'Enter a valid email address, e.g. brian.otieno@university.ac.ke';
-      }
-    }
-
-    if (!trimmedRegNo) {
-      errors.regNo = 'This field is required';
-    }
-
-    if (!trimmedPassword) {
-      errors.password = 'This field is required';
-    } else if (trimmedPassword.length < 8) {
-      errors.password = 'Password must be at least 8 characters';
-    }
-
-    if (!program) {
-      errors.program = 'This field is required';
-    }
-
-    if (Object.keys(errors).length > 0) {
+    const hasErrors = Object.values(errors).some(Boolean);
+    if (hasErrors) {
       setFieldErrors(errors);
       return;
     }
 
     // 2. Client-side duplicate checks before submit
     if (students.some((s) => s.email && s.email.toLowerCase() === trimmedEmail)) {
-      setFieldErrors({ email: 'A student with this email already exists' });
+      setFieldErrors((prev) => ({ ...prev, email: 'A student with this email already exists' }));
       setModalError('A student with this email already exists');
       return;
     }
 
     if (students.some((s) => s.admissionNo && s.admissionNo.toUpperCase() === trimmedRegNo)) {
-      setFieldErrors({ regNo: 'A student with this registration number already exists' });
+      setFieldErrors((prev) => ({ ...prev, regNo: 'A student with this registration number already exists' }));
       setModalError('A student with this registration number already exists');
       return;
     }
@@ -653,10 +710,12 @@ export default function StudentsPage() {
                   type="text"
                   placeholder="e.g. Brian Otieno"
                   value={fullName}
+                  onBlur={() => handleBlur('fullName')}
                   onChange={(e) => {
-                    setFullName(e.target.value);
-                    if (fieldErrors.fullName) {
-                      setFieldErrors((prev) => ({ ...prev, fullName: undefined }));
+                    const val = e.target.value;
+                    setFullName(val);
+                    if (touched.fullName || fieldErrors.fullName) {
+                      setFieldErrors((prev) => ({ ...prev, fullName: validateField('fullName', val) }));
                     }
                   }}
                   className={`w-full border ${
@@ -678,10 +737,12 @@ export default function StudentsPage() {
                     type="email"
                     placeholder="e.g. brian.otieno@university.ac.ke"
                     value={email}
+                    onBlur={() => handleBlur('email')}
                     onChange={(e) => {
-                      setEmail(e.target.value.toLowerCase());
-                      if (fieldErrors.email) {
-                        setFieldErrors((prev) => ({ ...prev, email: undefined }));
+                      const val = e.target.value.toLowerCase();
+                      setEmail(val);
+                      if (touched.email || fieldErrors.email) {
+                        setFieldErrors((prev) => ({ ...prev, email: validateField('email', val) }));
                       }
                     }}
                     className={`w-full border ${
@@ -701,10 +762,12 @@ export default function StudentsPage() {
                     type="text"
                     placeholder="e.g. BIT/2026/1002"
                     value={regNo}
+                    onBlur={() => handleBlur('regNo')}
                     onChange={(e) => {
-                      setRegNo(e.target.value.toUpperCase());
-                      if (fieldErrors.regNo) {
-                        setFieldErrors((prev) => ({ ...prev, regNo: undefined }));
+                      const val = e.target.value.toUpperCase();
+                      setRegNo(val);
+                      if (touched.regNo || fieldErrors.regNo) {
+                        setFieldErrors((prev) => ({ ...prev, regNo: validateField('regNo', val) }));
                       }
                     }}
                     className={`w-full border ${
@@ -761,10 +824,12 @@ export default function StudentsPage() {
                 </label>
                 <select
                   value={program}
+                  onBlur={() => handleBlur('program')}
                   onChange={(e) => {
-                    setProgram(e.target.value);
-                    if (fieldErrors.program) {
-                      setFieldErrors((prev) => ({ ...prev, program: undefined }));
+                    const val = e.target.value;
+                    setProgram(val);
+                    if (touched.program || fieldErrors.program) {
+                      setFieldErrors((prev) => ({ ...prev, program: validateField('program', val) }));
                     }
                   }}
                   className={`w-full border ${
@@ -844,10 +909,12 @@ export default function StudentsPage() {
                   <input
                     type={showPassword ? 'text' : 'password'}
                     value={password}
+                    onBlur={() => handleBlur('password')}
                     onChange={(e) => {
-                      setPassword(e.target.value);
-                      if (fieldErrors.password) {
-                        setFieldErrors((prev) => ({ ...prev, password: undefined }));
+                      const val = e.target.value;
+                      setPassword(val);
+                      if (touched.password || fieldErrors.password) {
+                        setFieldErrors((prev) => ({ ...prev, password: validateField('password', val) }));
                       }
                     }}
                     className={`w-full border ${
