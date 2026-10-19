@@ -198,6 +198,26 @@ export default function StudentsPage() {
     }
   }, []);
 
+  // Global Escape key listener to dismiss any active modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsEditModalOpen(false);
+        setEditingStudent(null);
+        setEditModalError('');
+        setEditFieldErrors({});
+        setIsStatusModalOpen(false);
+        setStatusTargetStudent(null);
+        setStatusModalError('');
+        setIsModalOpen(false);
+        setModalError('');
+        setFieldErrors({});
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalError, setModalError] = useState('');
@@ -639,11 +659,7 @@ export default function StudentsPage() {
 
   const handleOpenStatusModal = (student: StudentRow) => {
     setStatusTargetStudent(student);
-    setStatusReason(
-      student.status === 'active'
-        ? 'Administrative correction / enrollment suspension'
-        : 'Reinstated by Registrar Office'
-    );
+    setStatusReason('');
     setStatusModalError('');
     setIsStatusModalOpen(true);
   };
@@ -977,7 +993,16 @@ export default function StudentsPage() {
 
       {/* Registration Modal - Role gated to staff/registrar only */}
       {isModalOpen && canWrite && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsModalOpen(false);
+              setModalError('');
+              setFieldErrors({});
+            }
+          }}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+        >
           <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center space-x-2">
@@ -1279,7 +1304,17 @@ export default function StudentsPage() {
 
       {/* Edit Student Modal - Fix typos / corrections */}
       {isEditModalOpen && canWrite && editingStudent && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsEditModalOpen(false);
+              setEditingStudent(null);
+              setEditModalError('');
+              setEditFieldErrors({});
+            }
+          }}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+        >
           <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center space-x-2">
@@ -1383,41 +1418,32 @@ export default function StudentsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                    Registration No <span className="text-rose-500">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700 uppercase">
+                      Registration No
+                    </label>
+                    <span className="text-[10px] text-slate-500 font-semibold bg-slate-100 px-2 py-0.5 rounded">
+                      Record Key (Read-only)
+                    </span>
+                  </div>
                   <input
                     type="text"
-                    required
+                    readOnly
                     value={editRegNo}
-                    onChange={(e) => {
-                      const val = e.target.value.toUpperCase();
-                      setEditRegNo(val);
-                      if (editTouched.regNo) {
-                        setEditFieldErrors((prev) => ({
-                          ...prev,
-                          regNo: validateEditField('regNo', val),
-                        }));
-                      }
-                    }}
-                    onBlur={() => handleEditBlur('regNo')}
-                    aria-invalid={!!editFieldErrors.regNo}
-                    className={`w-full border ${
-                      editFieldErrors.regNo
-                        ? 'border-rose-400 bg-rose-50/20 focus:ring-rose-500'
-                        : 'border-slate-300 focus:ring-academic-navy-500'
-                    } rounded-lg px-3 py-2 font-mono text-slate-900 focus:ring-2 outline-none`}
+                    className="w-full border border-slate-200 bg-slate-100 text-slate-500 font-mono rounded-lg px-3 py-2 outline-none cursor-not-allowed select-all"
                   />
-                  {editFieldErrors.regNo && (
-                    <p className="mt-1 text-xs text-rose-600 font-medium">{editFieldErrors.regNo}</p>
-                  )}
+                  <p className="mt-1 text-[11px] text-slate-500 font-medium">
+                    Permanent record key — immutable to preserve cross-system student sync identity.
+                  </p>
                 </div>
               </div>
 
               {/* Faculty & Department */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Faculty</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Faculty <span className="text-rose-500">*</span>
+                  </label>
                   <select
                     value={editFaculty}
                     onChange={(e) => handleEditFacultyChange(e.target.value)}
@@ -1432,7 +1458,9 @@ export default function StudentsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Department</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Department <span className="text-rose-500">*</span>
+                  </label>
                   <select
                     value={editDepartment}
                     onChange={(e) => handleEditDepartmentChange(e.target.value)}
@@ -1491,7 +1519,9 @@ export default function StudentsPage() {
               {/* Year, Campus & Fee Balance */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Year of Study</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Year of Study <span className="text-rose-500">*</span>
+                  </label>
                   <select
                     value={editYearOfStudy}
                     onChange={(e) => setEditYearOfStudy(Number(e.target.value))}
@@ -1506,7 +1536,9 @@ export default function StudentsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Campus</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Campus <span className="text-rose-500">*</span>
+                  </label>
                   <select
                     value={editCampusCode}
                     onChange={(e) => setEditCampusCode(e.target.value)}
@@ -1520,7 +1552,9 @@ export default function StudentsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Fee Balance (KES)</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Fee Balance (KES) <span className="text-rose-500">*</span>
+                  </label>
                   <input
                     type="number"
                     min="0"
@@ -1566,7 +1600,16 @@ export default function StudentsPage() {
 
       {/* Deactivate / Suspend Confirmation Dialog */}
       {isStatusModalOpen && canWrite && statusTargetStudent && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsStatusModalOpen(false);
+              setStatusTargetStudent(null);
+              setStatusModalError('');
+            }
+          }}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+        >
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center space-x-2">

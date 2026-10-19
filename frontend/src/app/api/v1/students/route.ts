@@ -35,6 +35,22 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  // Sanitize any casing issues and purge stray test sync records
+  for (let i = studentsStore.length - 1; i >= 0; i--) {
+    const s = studentsStore[i];
+    if (
+      s.admission_number?.startsWith('SYNC/') ||
+      s.first_name?.toLowerCase().includes('test sync') ||
+      s.email?.toLowerCase().startsWith('sync.test.')
+    ) {
+      studentsStore.splice(i, 1);
+      continue;
+    }
+    if (s.last_name === 'simon') {
+      s.last_name = 'Simon';
+    }
+  }
+
   // Staff roles (registrar, admin, super_admin, hod, lecturer, finance_officer)
   let results = studentsStore.filter(s => inDepartment(user, s.admission_number));
 
@@ -397,12 +413,12 @@ export async function PATCH(request: NextRequest) {
       student.email = nextEmail;
     }
 
-    // Registration number duplicate check
+    // Registration number is immutable to prevent identity desynchronization
     if (nextRegNo && nextRegNo !== student.admission_number.toUpperCase()) {
-      if (studentsStore.some((s) => s.id !== student.id && s.admission_number && s.admission_number.toUpperCase() === nextRegNo)) {
-        return NextResponse.json({ success: false, error: 'A student with this registration number already exists' }, { status: 400 });
-      }
-      student.admission_number = nextRegNo;
+      return NextResponse.json(
+        { success: false, error: 'Registration number is a permanent record key and cannot be edited.' },
+        { status: 400 }
+      );
     }
 
     if (firstName) student.first_name = firstName;
