@@ -212,6 +212,8 @@ export async function POST(request: NextRequest) {
             registration_number: regNo,
             faculty: faculty,
             department: department,
+            program_name: programName,
+            program_of_study: programName,
             year_of_study: yearOfStudy,
             campus_code: campusCode,
             initial_password: initialPassword,
@@ -439,6 +441,38 @@ export async function PATCH(request: NextRequest) {
         year: student.current_year_of_study,
       },
     });
+
+    // Sync updated student to Student Hub in background
+    try {
+      const hubSyncUrl = process.env.STUDENT_HUB_SYNC_URL || 'https://student-life-campus-hub.vercel.app/api/sync/uams';
+      const hubSyncSecret = process.env.CRON_SECRET || process.env.STUDENT_HUB_CRON_SECRET || 'K8mP4xT9qR2vN7wL5zB1';
+      fetch(hubSyncUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${hubSyncSecret}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          version: 1,
+          dry_run: false,
+          students: [
+            {
+              email: student.email,
+              full_name: `${student.first_name} ${student.last_name}`.trim(),
+              registration_number: student.admission_number,
+              faculty: student.faculty,
+              department: student.department,
+              program_name: student.program_name,
+              program_of_study: student.program_name,
+              year_of_study: student.current_year_of_study,
+              campus_code: student.campus_code,
+            },
+          ],
+        }),
+      }).catch((e) => console.warn('[UAMS -> Hub Sync PATCH]', e));
+    } catch {
+      // Non-blocking
+    }
 
     return NextResponse.json({
       success: true,
