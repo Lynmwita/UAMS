@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { POST, GET, DELETE } from './route';
+import { POST, GET, DELETE, PATCH } from './route';
 import { createSignedToken } from '@/lib/auth/server-auth';
 import { getAuditLogs } from '@/lib/audit/audit-logger';
 import { studentsStore } from '@/lib/academic/student-records';
@@ -152,4 +152,89 @@ test('student registration: validation rejects invalid email or short password',
   }));
   assert.equal(shortPassRes.status, 400);
   assert.match((await shortPassRes.json()).error, /at least 8 characters/i);
+});
+
+test('student record update: registrar can edit and fix typos on student record with audit log', async () => {
+  const regNo = `BIT/2026/EDIT_${Date.now()}`;
+  const email = `typo.student.${Date.now()}@university.ac.ke`;
+
+  // Create student first
+  await POST(makeRequest('registrar', 'POST', {
+    full_name: 'Jon Doe Typo',
+    email,
+    registration_number: regNo,
+    faculty: 'School of Computing & Informatics',
+    department: 'Information Technology',
+    year_of_study: 1,
+  }));
+
+  // Fix typo in name and program
+  const editReq = makeRequest('registrar', 'PATCH', {
+    registration_number: regNo,
+    full_name: 'Johnathan Doe Corrected',
+    program: 'Bachelor of Science in Computer Science',
+    department: 'Computer Science',
+    year_of_study: 2,
+  });
+  const editRes = await PATCH(editReq);
+  assert.equal(editRes.status, 200);
+  const editData = await editRes.json();
+  assert.equal(editData.success, true);
+  assert.equal(editData.data.first_name, 'Johnathan');
+  assert.equal(editData.data.last_name, 'Doe Corrected');
+  assert.equal(editData.data.current_year_of_study, 2);
+
+  // Check audit log
+  const logs = getAuditLogs({ action: 'student_updated' });
+  const matching = logs.find((l) => l.entity_id === regNo);
+  assert.ok(matching, 'Audit log must record student_updated');
+
+  // Clean up
+  await DELETE(makeRequest('registrar', 'DELETE', undefined, `http://localhost:3000/api/v1/students?admission_number=${regNo}`));
+});
+
+test('student suspension: registrar can deactivate/suspend student preserving audit trail', async () => {
+  const regNo = `BIT/2026/SUSP_${Date.now()}`;
+  const email = `susp.student.${Date.now()}@university.ac.ke`;
+
+  // Create student
+  await POST(makeRequest('registrar', 'POST', {
+    full_name: 'Student To Suspend',
+    email,
+    registration_number: regNo,
+  }));
+
+  // Suspend with reason
+  const suspReq = makeRequest('registrar', 'PATCH', {
+    registration_number: regNo,
+    status: 'suspended',
+    reason: 'Administrative error during manual enrollment',
+  });
+  const suspRes = await PATCH(suspReq);
+  assert.equal(suspRes.status, 200);
+  const suspData = await suspRes.json();
+  assert.equal(suspData.success, true);
+  assert.equal(suspData.data.status, 'suspended');
+
+  // Verify stored status is suspended (not deleted)
+  const inStore = studentsStore.find((s) => s.admission_number === regNo);
+  assert.ok(inStore, 'Student must remain in store (not hard deleted)');
+  assert.equal(inStore.status, 'suspended');
+
+  // Verify audit log
+  const suspLogs = getAuditLogs({ action: 'student_suspended' });
+  const suspLog = suspLogs.find((l) => l.entity_id === regNo);
+  assert.ok(suspLog, 'Audit log must record student_suspended with reason');
+  assert.equal(suspLog.details?.reason, 'Administrative error during manual enrollment');
+
+  // Reactivate student
+  const reactivateRes = await PATCH(makeRequest('registrar', 'PATCH', {
+    registration_number: regNo,
+    status: 'active',
+  }));
+  assert.equal(reactivateRes.status, 200);
+  assert.equal((await reactivateRes.json()).data.status, 'active');
+
+  // Clean up
+  await DELETE(makeRequest('registrar', 'DELETE', undefined, `http://localhost:3000/api/v1/students?admission_number=${regNo}`));
 });

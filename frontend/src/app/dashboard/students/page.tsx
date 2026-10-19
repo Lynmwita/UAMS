@@ -22,6 +22,10 @@ import {
   Sparkles,
   AlertCircle,
   ExternalLink,
+  Edit,
+  UserX,
+  UserCheck,
+  AlertTriangle,
 } from 'lucide-react';
 import { generateExamCardPDF, generateStudentIDCardPDF } from '@/lib/pdf/generator';
 
@@ -141,6 +145,7 @@ export default function StudentsPage() {
     program: string;
     faculty?: string;
     department?: string;
+    campusCode?: string;
     year: number;
     semester: number;
     status: string;
@@ -159,6 +164,7 @@ export default function StudentsPage() {
     program: s.program_name || (s.department ? `BSc ${s.department}` : 'Academic Program'),
     faculty: s.faculty,
     department: s.department,
+    campusCode: s.campus_code,
     year: s.current_year_of_study || 1,
     semester: s.current_semester_number || 1,
     status: s.status || 'active',
@@ -434,6 +440,254 @@ export default function StudentsPage() {
     setTimeout(() => setCopied(false), 2500);
   };
 
+  // ==========================================
+  // EDIT STUDENT MODAL STATE & HANDLERS
+  // ==========================================
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<StudentRow | null>(null);
+  const [editFullName, setEditFullName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editRegNo, setEditRegNo] = useState('');
+  const [editFaculty, setEditFaculty] = useState('School of Computing & Informatics');
+  const [editDepartment, setEditDepartment] = useState('Information Technology');
+  const [editProgram, setEditProgram] = useState('Bachelor of Science in Information Technology');
+  const [editYearOfStudy, setEditYearOfStudy] = useState(1);
+  const [editCampusCode, setEditCampusCode] = useState('ZU-TECH');
+  const [editFeeBalance, setEditFeeBalance] = useState(0);
+  const [editModalError, setEditModalError] = useState('');
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editFieldErrors, setEditFieldErrors] = useState<{
+    fullName?: string;
+    email?: string;
+    regNo?: string;
+    program?: string;
+  }>({});
+  const [editTouched, setEditTouched] = useState<{ [key: string]: boolean }>({});
+
+  const handleOpenEditModal = (student: StudentRow) => {
+    setEditingStudent(student);
+    setEditFullName(student.name);
+    setEditEmail(student.email);
+    setEditRegNo(student.admissionNo);
+
+    // Derive faculty or fallback
+    const matchedFac = Object.keys(FACULTY_DEPARTMENTS).find((f) =>
+      FACULTY_DEPARTMENTS[f].includes(student.department || '')
+    ) || student.faculty || 'School of Computing & Informatics';
+    setEditFaculty(matchedFac);
+
+    const deps = FACULTY_DEPARTMENTS[matchedFac] || [];
+    const matchedDept = student.department && deps.includes(student.department)
+      ? student.department
+      : (deps[0] || 'Information Technology');
+    setEditDepartment(matchedDept);
+
+    const progs = DEPARTMENT_PROGRAMS[matchedDept] || [];
+    const matchedProg = student.program && progs.includes(student.program)
+      ? student.program
+      : (progs[0] || student.program || 'Bachelor of Science in Information Technology');
+    setEditProgram(matchedProg);
+
+    setEditYearOfStudy(student.year || 1);
+    setEditCampusCode(student.campusCode || 'ZU-TECH');
+    setEditFeeBalance(student.feeBalance || 0);
+
+    setEditModalError('');
+    setEditFieldErrors({});
+    setEditTouched({});
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditFacultyChange = (newFaculty: string) => {
+    setEditFaculty(newFaculty);
+    const deps = FACULTY_DEPARTMENTS[newFaculty] || [];
+    const nextDept = deps[0] || '';
+    setEditDepartment(nextDept);
+    const progs = DEPARTMENT_PROGRAMS[nextDept] || [];
+    const nextProg = progs[0] || (nextDept ? `Bachelor of Science in ${nextDept}` : '');
+    setEditProgram(nextProg);
+  };
+
+  const handleEditDepartmentChange = (newDept: string) => {
+    setEditDepartment(newDept);
+    const progs = DEPARTMENT_PROGRAMS[newDept] || [];
+    const nextProg = progs[0] || (newDept ? `Bachelor of Science in ${newDept}` : '');
+    setEditProgram(nextProg);
+  };
+
+  const validateEditField = (
+    field: 'fullName' | 'email' | 'regNo' | 'program',
+    overrideVal?: string
+  ): string | undefined => {
+    const raw =
+      overrideVal !== undefined
+        ? overrideVal
+        : field === 'fullName'
+        ? editFullName
+        : field === 'email'
+        ? editEmail
+        : field === 'regNo'
+        ? editRegNo
+        : editProgram;
+    const val = (raw || '').trim();
+
+    if (field === 'fullName') {
+      if (!val) return 'This field is required';
+    } else if (field === 'email') {
+      if (!val) return 'This field is required';
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(val.toLowerCase())) {
+        return 'Enter a valid email address, e.g. brian.otieno@university.ac.ke';
+      }
+    } else if (field === 'regNo') {
+      if (!val) return 'This field is required';
+    } else if (field === 'program') {
+      if (!val) return 'This field is required';
+    }
+    return undefined;
+  };
+
+  const handleEditBlur = (field: 'fullName' | 'email' | 'regNo' | 'program') => {
+    setEditTouched((prev) => ({ ...prev, [field]: true }));
+    const errorMsg = validateEditField(field);
+    setEditFieldErrors((prev) => ({ ...prev, [field]: errorMsg }));
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canWrite || !editingStudent) return;
+    setEditModalError('');
+
+    const trimmedName = editFullName.trim();
+    const trimmedEmail = editEmail.trim().toLowerCase();
+    const trimmedRegNo = editRegNo.trim().toUpperCase();
+
+    setEditTouched({ fullName: true, email: true, regNo: true, program: true });
+    const errors = {
+      fullName: validateEditField('fullName', trimmedName),
+      email: validateEditField('email', trimmedEmail),
+      regNo: validateEditField('regNo', trimmedRegNo),
+      program: validateEditField('program', editProgram),
+    };
+
+    if (Object.values(errors).some(Boolean)) {
+      setEditFieldErrors(errors);
+      return;
+    }
+
+    // Duplicate check against other students
+    if (students.some((s) => s.id !== editingStudent.id && s.email && s.email.toLowerCase() === trimmedEmail)) {
+      setEditFieldErrors((prev) => ({ ...prev, email: 'A student with this email already exists' }));
+      setEditModalError('A student with this email already exists');
+      return;
+    }
+
+    if (students.some((s) => s.id !== editingStudent.id && s.admissionNo && s.admissionNo.toUpperCase() === trimmedRegNo)) {
+      setEditFieldErrors((prev) => ({ ...prev, regNo: 'A student with this registration number already exists' }));
+      setEditModalError('A student with this registration number already exists');
+      return;
+    }
+
+    setEditSubmitting(true);
+    try {
+      const res = await fetch('/api/v1/students', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingStudent.id,
+          admission_number: trimmedRegNo,
+          full_name: trimmedName,
+          email: trimmedEmail,
+          faculty: editFaculty,
+          department: editDepartment,
+          program_name: editProgram,
+          year_of_study: editYearOfStudy,
+          campus_code: editCampusCode,
+          fee_balance: editFeeBalance,
+        }),
+      });
+
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Failed to update student record.');
+
+      const updatedRow = mapStudent(d.data);
+      setStudents((prev) => prev.map((s) => (s.id === updatedRow.id ? updatedRow : s)));
+
+      setSuccessBanner({
+        fullName: trimmedName,
+        regNo: trimmedRegNo,
+        email: trimmedEmail,
+      });
+
+      setIsEditModalOpen(false);
+      setEditingStudent(null);
+    } catch (err: any) {
+      setEditModalError(err.message || 'Failed to update student record.');
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  // ==========================================
+  // DEACTIVATE / SUSPEND CONFIRMATION MODAL
+  // ==========================================
+  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+  const [statusTargetStudent, setStatusTargetStudent] = useState<StudentRow | null>(null);
+  const [statusReason, setStatusReason] = useState('');
+  const [statusSubmitting, setStatusSubmitting] = useState(false);
+  const [statusModalError, setStatusModalError] = useState('');
+
+  const handleOpenStatusModal = (student: StudentRow) => {
+    setStatusTargetStudent(student);
+    setStatusReason(
+      student.status === 'active'
+        ? 'Administrative correction / enrollment suspension'
+        : 'Reinstated by Registrar Office'
+    );
+    setStatusModalError('');
+    setIsStatusModalOpen(true);
+  };
+
+  const handleConfirmStatusChange = async () => {
+    if (!canWrite || !statusTargetStudent) return;
+    setStatusModalError('');
+    setStatusSubmitting(true);
+
+    const nextStatus = statusTargetStudent.status === 'active' ? 'suspended' : 'active';
+
+    try {
+      const res = await fetch('/api/v1/students', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: statusTargetStudent.id,
+          admission_number: statusTargetStudent.admissionNo,
+          status: nextStatus,
+          reason: statusReason.trim() || undefined,
+        }),
+      });
+
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Failed to change student status.');
+
+      const updatedRow = mapStudent(d.data);
+      setStudents((prev) => prev.map((s) => (s.id === updatedRow.id ? updatedRow : s)));
+
+      setSuccessBanner({
+        fullName: statusTargetStudent.name,
+        regNo: statusTargetStudent.admissionNo,
+        email: statusTargetStudent.email,
+      });
+
+      setIsStatusModalOpen(false);
+      setStatusTargetStudent(null);
+    } catch (err: any) {
+      setStatusModalError(err.message || 'Failed to change student status.');
+    } finally {
+      setStatusSubmitting(false);
+    }
+  };
+
   const handleDownloadExamCard = (student: typeof students[0]) => {
     const doc = generateExamCardPDF({
       student: {
@@ -603,7 +857,8 @@ export default function StudentsPage() {
                 {role !== 'finance_officer' && <th className="px-5 py-3.5">Level</th>}
                 {role !== 'finance_officer' && <th className="px-5 py-3.5">CGPA</th>}
                 <th className="px-5 py-3.5">Fee Balance</th>
-                {role !== 'finance_officer' && <th className="px-5 py-3.5 text-center">Student Credentials</th>}
+                <th className="px-5 py-3.5">Status</th>
+                <th className="px-5 py-3.5 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -634,28 +889,81 @@ export default function StudentsPage() {
                       </span>
                     )}
                   </td>
+                  <td className="px-5 py-3.5">
+                    {s.status === 'suspended' ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500 mr-1.5" />
+                        Suspended
+                      </span>
+                    ) : s.status === 'inactive' ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400 mr-1.5" />
+                        Inactive
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse" />
+                        Active
+                      </span>
+                    )}
+                  </td>
                   <td className="px-5 py-3.5 text-center">
-                    <div className="flex items-center justify-center space-x-2">
-                      <button
-                        hidden={role === 'finance_officer'}
-                        style={{ display: role === 'finance_officer' ? 'none' : undefined }}
-                        onClick={() => handleDownloadIDCard(s)}
-                        className="inline-flex items-center space-x-1 text-xs font-semibold px-2.5 py-1 rounded bg-academic-navy-50 hover:bg-academic-navy-100 text-academic-navy-800 border border-academic-navy-200 transition"
-                        title="Download PVC Student ID Card PDF"
-                      >
-                        <CreditCard className="h-3.5 w-3.5 text-academic-gold-600" />
-                        <span>ID Card</span>
-                      </button>
+                    <div className="flex items-center justify-center space-x-1.5">
+                      {role !== 'finance_officer' && (
+                        <button
+                          onClick={() => handleDownloadIDCard(s)}
+                          className="inline-flex items-center space-x-1 text-xs font-semibold px-2 py-1 rounded bg-academic-navy-50 hover:bg-academic-navy-100 text-academic-navy-800 border border-academic-navy-200 transition"
+                          title="Download PVC Student ID Card PDF"
+                        >
+                          <CreditCard className="h-3.5 w-3.5 text-academic-gold-600" />
+                          <span className="hidden xl:inline">ID Card</span>
+                        </button>
+                      )}
 
                       {canWrite && (
                         <button
-                          disabled={!s.feeCleared}
+                          disabled={!s.feeCleared || s.status === 'suspended'}
                           onClick={() => handleDownloadExamCard(s)}
-                          className="inline-flex items-center space-x-1 text-xs font-semibold px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
-                          title="Download Exam Clearance Card PDF"
+                          className="inline-flex items-center space-x-1 text-xs font-semibold px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 transition"
+                          title={s.status === 'suspended' ? 'Suspended students cannot download exam card' : 'Download Exam Clearance Card PDF'}
                         >
                           <Download className="h-3.5 w-3.5 text-academic-navy-700" />
-                          <span>Exam Pass</span>
+                          <span className="hidden xl:inline">Exam Pass</span>
+                        </button>
+                      )}
+
+                      {canWrite && (
+                        <button
+                          onClick={() => handleOpenEditModal(s)}
+                          className="inline-flex items-center space-x-1 text-xs font-semibold px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition"
+                          title="Edit Student Record"
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                          <span>Edit</span>
+                        </button>
+                      )}
+
+                      {canWrite && (
+                        <button
+                          onClick={() => handleOpenStatusModal(s)}
+                          className={`inline-flex items-center space-x-1 text-xs font-semibold px-2 py-1 rounded transition border ${
+                            s.status === 'suspended'
+                              ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                              : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200'
+                          }`}
+                          title={s.status === 'suspended' ? 'Reactivate Student Record' : 'Deactivate / Suspend Student Record'}
+                        >
+                          {s.status === 'suspended' ? (
+                            <>
+                              <UserCheck className="h-3.5 w-3.5" />
+                              <span>Reactivate</span>
+                            </>
+                          ) : (
+                            <>
+                              <UserX className="h-3.5 w-3.5" />
+                              <span>Suspend</span>
+                            </>
+                          )}
                         </button>
                       )}
                     </div>
@@ -965,6 +1273,456 @@ export default function StudentsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Student Modal - Fix typos / corrections */}
+      {isEditModalOpen && canWrite && editingStudent && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center space-x-2">
+                <Edit className="h-5 w-5 text-academic-navy-700" />
+                <div>
+                  <h3 className="text-lg font-bold text-academic-navy-950">Edit Student Record</h3>
+                  <p className="text-xs text-slate-500">
+                    Fix typos or correct student details for {editingStudent.admissionNo}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setEditingStudent(null);
+                  setEditModalError('');
+                  setEditFieldErrors({});
+                }}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {editModalError && (
+              <div
+                role="alert"
+                className="mt-4 p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-start space-x-2 text-rose-800 text-xs font-medium"
+              >
+                <AlertCircle className="h-4 w-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                <span>{editModalError}</span>
+              </div>
+            )}
+
+            <form noValidate onSubmit={handleSaveEdit} className="space-y-4 mt-4 text-sm">
+              {/* Full Name */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Full Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editFullName}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setEditFullName(val);
+                    if (editTouched.fullName) {
+                      setEditFieldErrors((prev) => ({
+                        ...prev,
+                        fullName: validateEditField('fullName', val),
+                      }));
+                    }
+                  }}
+                  onBlur={() => handleEditBlur('fullName')}
+                  aria-invalid={!!editFieldErrors.fullName}
+                  className={`w-full border ${
+                    editFieldErrors.fullName
+                      ? 'border-rose-400 bg-rose-50/20 focus:ring-rose-500'
+                      : 'border-slate-300 focus:ring-academic-navy-500'
+                  } rounded-lg px-3 py-2 text-slate-900 focus:ring-2 outline-none`}
+                />
+                {editFieldErrors.fullName && (
+                  <p className="mt-1 text-xs text-rose-600 font-medium">{editFieldErrors.fullName}</p>
+                )}
+              </div>
+
+              {/* Email & Registration Number */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Institutional Email <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={editEmail}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEditEmail(val);
+                      if (editTouched.email) {
+                        setEditFieldErrors((prev) => ({
+                          ...prev,
+                          email: validateEditField('email', val),
+                        }));
+                      }
+                    }}
+                    onBlur={() => handleEditBlur('email')}
+                    aria-invalid={!!editFieldErrors.email}
+                    className={`w-full border ${
+                      editFieldErrors.email
+                        ? 'border-rose-400 bg-rose-50/20 focus:ring-rose-500'
+                        : 'border-slate-300 focus:ring-academic-navy-500'
+                    } rounded-lg px-3 py-2 font-mono text-slate-900 focus:ring-2 outline-none`}
+                  />
+                  {editFieldErrors.email && (
+                    <p className="mt-1 text-xs text-rose-600 font-medium">{editFieldErrors.email}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Registration No <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editRegNo}
+                    onChange={(e) => {
+                      const val = e.target.value.toUpperCase();
+                      setEditRegNo(val);
+                      if (editTouched.regNo) {
+                        setEditFieldErrors((prev) => ({
+                          ...prev,
+                          regNo: validateEditField('regNo', val),
+                        }));
+                      }
+                    }}
+                    onBlur={() => handleEditBlur('regNo')}
+                    aria-invalid={!!editFieldErrors.regNo}
+                    className={`w-full border ${
+                      editFieldErrors.regNo
+                        ? 'border-rose-400 bg-rose-50/20 focus:ring-rose-500'
+                        : 'border-slate-300 focus:ring-academic-navy-500'
+                    } rounded-lg px-3 py-2 font-mono text-slate-900 focus:ring-2 outline-none`}
+                  />
+                  {editFieldErrors.regNo && (
+                    <p className="mt-1 text-xs text-rose-600 font-medium">{editFieldErrors.regNo}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Faculty & Department */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Faculty</label>
+                  <select
+                    value={editFaculty}
+                    onChange={(e) => handleEditFacultyChange(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-academic-navy-500 outline-none bg-white"
+                  >
+                    {Object.keys(FACULTY_DEPARTMENTS).map((fac) => (
+                      <option key={fac} value={fac}>
+                        {fac}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Department</label>
+                  <select
+                    value={editDepartment}
+                    onChange={(e) => handleEditDepartmentChange(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-academic-navy-500 outline-none bg-white"
+                  >
+                    {(FACULTY_DEPARTMENTS[editFaculty] || []).map((dept) => (
+                      <option key={dept} value={dept}>
+                        {dept}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Degree Programme Cascading Dropdown */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Degree Programme <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={editProgram}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setEditProgram(val);
+                    if (editTouched.program) {
+                      setEditFieldErrors((prev) => ({
+                        ...prev,
+                        program: validateEditField('program', val),
+                      }));
+                    }
+                  }}
+                  onBlur={() => handleEditBlur('program')}
+                  aria-invalid={!!editFieldErrors.program}
+                  className={`w-full border ${
+                    editFieldErrors.program
+                      ? 'border-rose-400 bg-rose-50/20 focus:ring-rose-500'
+                      : 'border-slate-300 focus:ring-academic-navy-500'
+                  } rounded-lg px-3 py-2 text-slate-900 focus:ring-2 outline-none bg-white`}
+                >
+                  {(DEPARTMENT_PROGRAMS[editDepartment] || []).map((prog) => (
+                    <option key={prog} value={prog}>
+                      {prog}
+                    </option>
+                  ))}
+                  {/* Fallback if student has a custom/legacy program */}
+                  {editProgram &&
+                    !(DEPARTMENT_PROGRAMS[editDepartment] || []).includes(editProgram) && (
+                      <option value={editProgram}>{editProgram}</option>
+                    )}
+                </select>
+                {editFieldErrors.program && (
+                  <p className="mt-1 text-xs text-rose-600 font-medium">{editFieldErrors.program}</p>
+                )}
+              </div>
+
+              {/* Year, Campus & Fee Balance */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Year of Study</label>
+                  <select
+                    value={editYearOfStudy}
+                    onChange={(e) => setEditYearOfStudy(Number(e.target.value))}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-academic-navy-500 outline-none bg-white"
+                  >
+                    {[1, 2, 3, 4, 5, 6].map((yr) => (
+                      <option key={yr} value={yr}>
+                        Year {yr}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Campus</label>
+                  <select
+                    value={editCampusCode}
+                    onChange={(e) => setEditCampusCode(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-academic-navy-500 outline-none bg-white font-mono"
+                  >
+                    <option value="ZU-TECH">ZU-TECH (Technology Park / Main)</option>
+                    <option value="ZU-RUIRU">ZU-RUIRU (Ruiru Campus)</option>
+                    <option value="ZU-PIONEER">ZU-PIONEER (Pioneer Campus)</option>
+                    <option value="ZU-CBD">ZU-CBD (Nairobi CBD Campus)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Fee Balance (KES)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    value={editFeeBalance}
+                    onChange={(e) => setEditFeeBalance(Math.max(0, Number(e.target.value) || 0))}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-academic-navy-500 outline-none font-mono"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-0.5">0 = Cleared for Exam Pass</p>
+                </div>
+              </div>
+
+              {/* Footer Buttons */}
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  disabled={editSubmitting}
+                  onClick={() => {
+                    setIsEditModalOpen(false);
+                    setEditingStudent(null);
+                    setEditModalError('');
+                    setEditFieldErrors({});
+                  }}
+                  className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editSubmitting}
+                  className="px-5 py-2 bg-academic-navy-900 hover:bg-academic-navy-800 disabled:opacity-50 text-white rounded-lg text-sm font-bold shadow flex items-center space-x-2"
+                >
+                  {editSubmitting && (
+                    <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  )}
+                  <span>{editSubmitting ? 'Saving Changes...' : 'Save Changes'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Deactivate / Suspend Confirmation Dialog */}
+      {isStatusModalOpen && canWrite && statusTargetStudent && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center space-x-2">
+                {statusTargetStudent.status === 'active' ? (
+                  <AlertTriangle className="h-5 w-5 text-amber-500" />
+                ) : (
+                  <UserCheck className="h-5 w-5 text-emerald-600" />
+                )}
+                <h3 className="text-lg font-bold text-academic-navy-950">
+                  {statusTargetStudent.status === 'active'
+                    ? 'Deactivate / Suspend Student'
+                    : 'Reactivate Student Record'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => {
+                  setIsStatusModalOpen(false);
+                  setStatusTargetStudent(null);
+                  setStatusModalError('');
+                }}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {statusModalError && (
+              <div
+                role="alert"
+                className="mt-4 p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-start space-x-2 text-rose-800 text-xs font-medium"
+              >
+                <AlertCircle className="h-4 w-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                <span>{statusModalError}</span>
+              </div>
+            )}
+
+            <div className="mt-4 space-y-4">
+              {statusTargetStudent.status === 'active' ? (
+                <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-1.5">
+                  <div className="flex items-center space-x-1.5 font-bold text-amber-950">
+                    <ShieldAlert className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                    <span>Audit-Trail Protection Guarantee</span>
+                  </div>
+                  <p className="leading-relaxed">
+                    Student records are <strong>never permanently deleted</strong>. Suspending this student will deactivate their portal access and exam clearance privileges while preserving complete historical grades, financial ledgers, and registrar audit trails.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 space-y-1.5">
+                  <div className="flex items-center space-x-1.5 font-bold text-emerald-950">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                    <span>Restore Student Status</span>
+                  </div>
+                  <p className="leading-relaxed">
+                    Reactivating this student will restore their active status in the university database, re-enabling portal login and exam clearance pass eligibility.
+                  </p>
+                </div>
+              )}
+
+              {/* Student Summary Card */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Student Name:</span>
+                  <span className="font-bold text-slate-900">{statusTargetStudent.name}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Admission Number:</span>
+                  <span className="font-mono font-bold text-academic-navy-800">
+                    {statusTargetStudent.admissionNo}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Current Status:</span>
+                  <span
+                    className={`font-bold capitalize ${
+                      statusTargetStudent.status === 'active' ? 'text-emerald-700' : 'text-amber-700'
+                    }`}
+                  >
+                    {statusTargetStudent.status}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Target Status:</span>
+                  <span
+                    className={`font-bold capitalize ${
+                      statusTargetStudent.status === 'active' ? 'text-amber-700' : 'text-emerald-700'
+                    }`}
+                  >
+                    {statusTargetStudent.status === 'active' ? 'Suspended' : 'Active'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Reason Input */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  {statusTargetStudent.status === 'active'
+                    ? 'Reason for Suspension (Recorded in Audit Log)'
+                    : 'Reactivation Note (Recorded in Audit Log)'}
+                </label>
+                <textarea
+                  rows={2}
+                  value={statusReason}
+                  onChange={(e) => setStatusReason(e.target.value)}
+                  placeholder={
+                    statusTargetStudent.status === 'active'
+                      ? 'e.g. Administrative correction, disciplinary deferral, fee non-compliance...'
+                      : 'e.g. Reinstated by Registrar Office...'
+                  }
+                  className="w-full border border-slate-300 rounded-lg p-2.5 text-xs text-slate-900 focus:ring-2 focus:ring-academic-navy-500 outline-none"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  disabled={statusSubmitting}
+                  onClick={() => {
+                    setIsStatusModalOpen(false);
+                    setStatusTargetStudent(null);
+                    setStatusModalError('');
+                  }}
+                  className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={statusSubmitting}
+                  onClick={handleConfirmStatusChange}
+                  className={`px-5 py-2 rounded-lg text-sm font-bold shadow flex items-center space-x-2 text-white ${
+                    statusTargetStudent.status === 'active'
+                      ? 'bg-amber-600 hover:bg-amber-700'
+                      : 'bg-emerald-600 hover:bg-emerald-700'
+                  }`}
+                >
+                  {statusSubmitting ? (
+                    <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : statusTargetStudent.status === 'active' ? (
+                    <UserX className="h-4 w-4" />
+                  ) : (
+                    <UserCheck className="h-4 w-4" />
+                  )}
+                  <span>
+                    {statusSubmitting
+                      ? 'Updating...'
+                      : statusTargetStudent.status === 'active'
+                      ? 'Confirm Suspension'
+                      : 'Confirm Reactivation'}
+                  </span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

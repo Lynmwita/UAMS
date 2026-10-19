@@ -296,3 +296,158 @@ export async function DELETE(request: NextRequest) {
     message: 'Student record removed from UAMS store',
   });
 }
+
+export async function PATCH(request: NextRequest) {
+  const auth = await requirePermission(request, 'students:write');
+  if ('errorResponse' in auth) {
+    return auth.errorResponse;
+  }
+
+  try {
+    const body = await request.json();
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json(
+        { success: false, error: 'Request body must be a valid JSON object' },
+        { status: 400 }
+      );
+    }
+
+    const id = body.id;
+    const admissionNo = (body.admission_number || body.registration_number || body.regNo || '').trim().toUpperCase();
+    const currentEmail = (body.current_email || body.lookup_email || '').trim().toLowerCase();
+
+    // Locate student in store
+    const student = studentsStore.find(
+      (s) =>
+        (id && s.id === id) ||
+        (admissionNo && s.admission_number && s.admission_number.toUpperCase() === admissionNo) ||
+        (currentEmail && s.email && s.email.toLowerCase() === currentEmail)
+    );
+
+    if (!student) {
+      return NextResponse.json({ success: false, error: 'Student record not found.' }, { status: 404 });
+    }
+
+    // 1. Deactivation / Suspension / Status Toggle
+    if (body.status !== undefined) {
+      const allowed = ['active', 'suspended', 'inactive'];
+      const nextStatus = String(body.status).toLowerCase();
+      if (!allowed.includes(nextStatus)) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid status. Must be active, suspended, or inactive.' },
+          { status: 400 }
+        );
+      }
+      const prevStatus = student.status;
+      student.status = nextStatus;
+
+      const action = nextStatus === 'suspended' ? 'student_suspended' : nextStatus === 'active' ? 'student_reactivated' : 'student_status_updated';
+      recordAuditEvent({
+        actor_email: auth.user.email,
+        actor_role: auth.user.role,
+        action,
+        entity_type: 'students',
+        entity_id: student.admission_number,
+        ip_address: request.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1',
+        status: 'SUCCESS',
+        details: {
+          admission_number: student.admission_number,
+          student_id: student.id,
+          name: `${student.first_name} ${student.last_name}`.trim(),
+          previous_status: prevStatus,
+          new_status: nextStatus,
+          reason: body.reason || 'Registrar operational status change',
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Student status successfully changed to ${nextStatus}`,
+        data: student,
+      });
+    }
+
+    // 2. Edit student details (fixing typos and mistakes)
+    let fullName = (body.full_name || body.name || body.fullName || '').trim();
+    let firstName = (body.first_name || '').trim();
+    let lastName = (body.last_name || '').trim();
+
+    if (fullName) {
+      const parts = fullName.split(/\s+/);
+      firstName = parts[0] || '';
+      lastName = parts.slice(1).join(' ') || firstName;
+    }
+
+    const nextEmail = body.email ? body.email.trim().toLowerCase() : undefined;
+    const nextRegNo = (body.registration_number || body.admission_number)
+      ? String(body.registration_number || body.admission_number).trim().toUpperCase()
+      : undefined;
+
+    // Email validation and duplicate check
+    if (nextEmail && nextEmail !== student.email.toLowerCase()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(nextEmail)) {
+        return NextResponse.json({ success: false, error: 'Please enter a valid email address.' }, { status: 400 });
+      }
+      if (studentsStore.some((s) => s.id !== student.id && s.email && s.email.toLowerCase() === nextEmail)) {
+        return NextResponse.json({ success: false, error: 'A student with this email already exists' }, { status: 400 });
+      }
+      student.email = nextEmail;
+    }
+
+    // Registration number duplicate check
+    if (nextRegNo && nextRegNo !== student.admission_number.toUpperCase()) {
+      if (studentsStore.some((s) => s.id !== student.id && s.admission_number && s.admission_number.toUpperCase() === nextRegNo)) {
+        return NextResponse.json({ success: false, error: 'A student with this registration number already exists' }, { status: 400 });
+      }
+      student.admission_number = nextRegNo;
+    }
+
+    if (firstName) student.first_name = firstName;
+    if (lastName) student.last_name = lastName;
+    if (body.faculty) student.faculty = String(body.faculty).trim();
+    if (body.department) student.department = String(body.department).trim();
+    if (body.program_name || body.program) {
+      student.program_name = String(body.program_name || body.program).trim();
+    }
+    if (body.campus_code || body.campus) {
+      student.campus_code = String(body.campus_code || body.campus).trim();
+    }
+    if (body.year_of_study !== undefined || body.year !== undefined) {
+      student.current_year_of_study = Number(body.year_of_study ?? body.year);
+    }
+    if (body.fee_balance !== undefined) {
+      student.fee_balance = Number(body.fee_balance);
+    }
+
+    recordAuditEvent({
+      actor_email: auth.user.email,
+      actor_role: auth.user.role,
+      action: 'student_updated',
+      entity_type: 'students',
+      entity_id: student.admission_number,
+      ip_address: request.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1',
+      status: 'SUCCESS',
+      details: {
+        admission_number: student.admission_number,
+        student_id: student.id,
+        name: `${student.first_name} ${student.last_name}`.trim(),
+        email: student.email,
+        faculty: student.faculty,
+        department: student.department,
+        program: student.program_name,
+        year: student.current_year_of_study,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: `Student record updated: ${student.first_name} ${student.last_name} (${student.admission_number})`,
+      data: student,
+    });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
+export const PUT = PATCH;

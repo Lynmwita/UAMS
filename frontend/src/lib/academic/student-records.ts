@@ -1,4 +1,25 @@
-const seed = [
+export interface StudentRecord {
+  id: string;
+  user_id: string;
+  admission_number: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  gender: string;
+  faculty?: string;
+  department?: string;
+  campus_code?: string;
+  program_id: string;
+  program_name: string;
+  current_year_of_study: number;
+  current_semester_number: number;
+  status: string;
+  admission_date: string;
+  cgpa: number;
+  fee_balance: number;
+}
+
+const seed: StudentRecord[] = [
   {
     id: 'stu-1',
     user_id: 'usr-student-01',
@@ -7,6 +28,9 @@ const seed = [
     last_name: 'Wanjiku',
     email: 'faith.wanjiku@student.university.ac.ke',
     gender: 'female',
+    faculty: 'School of Computing & Informatics',
+    department: 'Information Technology',
+    campus_code: 'ZU-TECH',
     program_id: 'prog-bit',
     program_name: 'Bachelor of Science in Information Technology',
     current_year_of_study: 3,
@@ -24,6 +48,9 @@ const seed = [
     last_name: 'Otieno',
     email: 'kevin.otieno@student.university.ac.ke',
     gender: 'male',
+    faculty: 'School of Computing & Informatics',
+    department: 'Computer Science',
+    campus_code: 'ZU-RUIRU',
     program_id: 'prog-bcs',
     program_name: 'Bachelor of Science in Computer Science',
     current_year_of_study: 2,
@@ -41,6 +68,9 @@ const seed = [
     last_name: 'Kiprono',
     email: 'brian.kiprono@student.university.ac.ke',
     gender: 'male',
+    faculty: 'School of Business',
+    department: 'Business Administration',
+    campus_code: 'ZU-TECH',
     program_id: 'prog-bba',
     program_name: 'Bachelor of Business Administration',
     current_year_of_study: 4,
@@ -51,5 +81,5 @@ const seed = [
     fee_balance: 0,
   },
 ];
-const runtime=globalThis as typeof globalThis & {__uams_studentsStore?: typeof seed};
-export const studentsStore=runtime.__uams_studentsStore || (runtime.__uams_studentsStore=seed);
+const runtime = globalThis as typeof globalThis & { __uams_studentsStore?: StudentRecord[] };
+export const studentsStore: StudentRecord[] = runtime.__uams_studentsStore || (runtime.__uams_studentsStore = seed);
