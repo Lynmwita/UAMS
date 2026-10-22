@@ -19,7 +19,7 @@ Reviewed 22 October 2026. The requested implementation is present locally. Produ
 
 ## Verification evidence
 
-- UAMS: 84 tests passed, including 10 real PostgreSQL workflow tests. Final demo registration change additionally passed its five focused tests and makes no outbound request.
+- UAMS: 89 tests passed, including 10 real PostgreSQL workflow tests. Final demo registration change additionally passed its five focused tests and makes no outbound request.
 - Student Hub: all 212 tests passed across 31 files, including real PostgreSQL RLS, sync, feedback, ticket/audit boundaries, offline and push transport behavior.
 - Express gateway/backend: all 14 tests passed.
 - TypeScript passed in both applications. Hub lint completed with zero errors; existing nonblocking warnings remain.
@@ -34,4 +34,4 @@ Missing local deployment settings include the full registrar feed, reverse suppo
 
 See [LIVE_ROLLOUT.md](LIVE_ROLLOUT.md), [REGISTRAR_INTEGRATION.md](REGISTRAR_INTEGRATION.md) and [PROJECT_COMPLETION.md](PROJECT_COMPLETION.md). No live migrations, deployments, invitations, notifications or payments were performed. Queued SMS/email records still require a delivery dispatcher. Previously embedded acceptance-script credentials must be rotated before live use.
 
-Both original working branches and preexisting unrelated changes were preserved. This session made no commits or pushes.
+The original working branches were preserved. Rollout changes are published for maintainer review in UAMS PR #7 and Student Hub PR #9; no direct Vercel deployment was performed.

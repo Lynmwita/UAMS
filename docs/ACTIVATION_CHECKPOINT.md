@@ -23,3 +23,12 @@ Read-only HEAD probes on 22 October returned 404 for the UAMS /api/v1/integratio
 Deployment policy: publish the changes through GitHub pull requests. The maintainers review and merge; their existing Git integration triggers Vercel deployment. Do not deploy directly through Vercel CLI/API or merge on their behalf. Add the prepared private integration settings to the existing Vercel projects before merging, then test authenticated forward and reverse sync using designated test records. Do not claim real-account login, push delivery, financial flows or pilot acceptance without their walkthroughs.
 
 A database password was pasted into chat by the user; rotate it before production use.
+
+## Pull requests and release checks
+
+- UAMS: https://github.com/Lynmwita/UAMS/pull/7
+- Student Hub: https://github.com/Lynmwita/student-life-campus-hub/pull/9
+
+Both rollout branches incorporate the latest main commits. The full post-rebase suites passed (UAMS 88 and Hub 213, plus backend 14). One cross-repository migration test was then moved from Hub into UAMS so each repository can be checked out independently; its UAMS focused run passed. The resulting suite counts are UAMS 89, Hub 212, backend 14 (315 total). Hub CI/runtime now uses Node 22, consistent with the installed Vitest engine requirement.
+
+UAMS type checking and Hub lint passed (existing warnings remain). Hub local production build passed with demo auth disabled. Automatic Vercel preview checks on both PRs passed; these were Git-triggered checks, not direct deployments by the agent. Follow-up CI after the repository-local test fix must be green before merge.
