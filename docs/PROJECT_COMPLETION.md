@@ -23,6 +23,6 @@ Workspace `output/playwright`: UAMS grades/support screenshots and selected-stud
 
 ## Remaining activation work
 
-Apply reviewed migrations to the correct campus projects, set exact tenant/campus, feed/support/scheduler credentials, disable production demos, configure VAPID/Auth/provider settings and deploy. Run the staging acceptance walkthrough, actual browser push/payment/invite delivery tests and human pilot before production sign-off. No migration, deployment, outbound live message, invitation or payment was performed in this session. SMS/email queues require a dispatcher.
+Reconcile the manually applied SQL with migration history, apply the private Vercel integration configuration, disable production demos, configure VAPID/Auth/provider settings and merge reviewed PRs to trigger deployment. Run the staging acceptance walkthrough, actual browser push/payment/invite delivery tests and human pilot before production sign-off. The project owner applied the SQL manually. No direct Vercel deployment, outbound live message, invitation or payment was performed by the agent. SMS/email queues require a dispatcher.
 
 Rollout branches are published in UAMS PR #7 and Student Hub PR #9. Maintainers review and merge to trigger the existing Git-based deployment. Local test success is not evidence of live activation.
