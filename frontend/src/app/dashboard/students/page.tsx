@@ -124,6 +124,8 @@ const DEPARTMENT_PROGRAMS: Record<string, string[]> = {
 };
 
 const CAMPUSES = [
+  { code: 'SMU-MAIN', name: 'Main Campus (SMU-MAIN)' },
+  { code: 'SMU-CITY', name: 'City Campus (SMU-CITY)' },
   { code: 'ZU-TECH', name: 'Technology Park Campus (ZU-TECH)' },
   { code: 'ZU-RUIRU', name: 'Ruiru Campus (ZU-RUIRU)' },
   { code: 'ZU-PIONEER', name: 'Pioneer Campus (ZU-PIONEER)' },
@@ -255,7 +257,7 @@ export default function StudentsPage() {
   const [department, setDepartment] = useState('Information Technology');
   const [program, setProgram] = useState('Bachelor of Science in Information Technology');
   const [yearOfStudy, setYearOfStudy] = useState(1);
-  const [campusCode, setCampusCode] = useState('ZU-TECH');
+  const [campusCode, setCampusCode] = useState('SMU-MAIN');
   const [password, setPassword] = useState('StudentPassword123!');
 
   const validateField = (
@@ -352,7 +354,7 @@ export default function StudentsPage() {
     setDepartment('Information Technology');
     setProgram('Bachelor of Science in Information Technology');
     setYearOfStudy(1);
-    setCampusCode('ZU-TECH');
+    setCampusCode('SMU-MAIN');
     setPassword('StudentPassword123!');
     setModalError('');
     setFieldErrors({});
