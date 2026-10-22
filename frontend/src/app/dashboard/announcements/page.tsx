@@ -10,9 +10,14 @@ export default function AnnouncementsPage() {
   const [filterAudience, setFilterAudience] = useState('All');
 
   const [error,setError]=useState('');
-  const [notices,setNotices]=useState<{id:string;title:string;audience:string;category:string;priority:string;date:string;author:string;body:string}[]>([]);
-  useEffect(()=>{fetch('/api/v1/announcements').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);setNotices(d.data);}).catch(e=>setError(e.message));},[]);
+  const [success,setSuccess]=useState('');
+  const [notices,setNotices]=useState<{id:string;title:string;audience:string;category:string;priority:string;date:string;author:string;body:string;is_published?:boolean}[]>([]);
+  const loadNotices = () => {
+    fetch('/api/v1/announcements').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);setNotices(d.data);}).catch(e=>setError(e.message));
+  };
+  useEffect(()=>{ loadNotices(); },[]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
   const [newNotice, setNewNotice] = useState({
     title: '',
     audience: 'All Campus',
@@ -22,16 +27,48 @@ export default function AnnouncementsPage() {
     body: '',
   });
 
+  const handleTogglePublish = async (noticeItem: { id: string; title: string; audience: string; category: string; priority: string; body: string; is_published?: boolean }) => {
+    if (!canPost) return;
+    setWithdrawingId(noticeItem.id);
+    setError('');
+    setSuccess('');
+    const targetState = noticeItem.is_published === false;
+    try {
+      const r = await fetch('/api/v1/announcements', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: noticeItem.id,
+          title: noticeItem.title,
+          audience: noticeItem.audience,
+          category: noticeItem.category,
+          priority: noticeItem.priority,
+          body: noticeItem.body,
+          is_published: targetState,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Failed to update notice status.');
+      setNotices(prev => prev.map(n => n.id === noticeItem.id ? { ...n, is_published: targetState } : n));
+      setSuccess(`Notice ${targetState ? 'published' : 'withdrawn'} successfully.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Action failed.');
+    } finally {
+      setWithdrawingId(null);
+    }
+  };
+
   const handlePublish=async(e:React.FormEvent)=>{
     e.preventDefault();if(!canPost)return;
-    try{const r=await fetch('/api/v1/announcements',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(newNotice)});const d=await r.json();if(!r.ok)throw new Error(d.error);setNotices(prev=>[d.data,...prev]);setIsModalOpen(false);setError('');}catch(e){setError(e instanceof Error?e.message:'Publishing failed.');}
+    try{const r=await fetch('/api/v1/announcements',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(newNotice)});const d=await r.json();if(!r.ok)throw new Error(d.error);setNotices(prev=>[d.data,...prev]);setIsModalOpen(false);setError('');setSuccess('Notice published successfully.');}catch(e){setError(e instanceof Error?e.message:'Publishing failed.');}
   };
 
   const filteredNotices = filterAudience === 'All' ? notices : notices.filter((n) => n.audience === filterAudience || n.audience === 'All Campus');
 
   return (
     <div className="space-y-6">
-      {error&&<p role="alert" className="text-rose-700">{error}</p>}
+      {error&&<p role="alert" className="text-rose-700 bg-rose-50 border border-rose-200 p-3 rounded-lg text-sm">{error}</p>}
+      {success&&<p role="status" className="text-emerald-700 bg-emerald-50 border border-emerald-200 p-3 rounded-lg text-sm">{success}</p>}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-200 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-academic-navy-950 tracking-tight">
@@ -75,6 +112,10 @@ export default function AnnouncementsPage() {
           <div key={n.id} className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm hover:border-slate-300 transition">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <div className="flex items-center space-x-2">
+                <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                  #{n.id.slice(0, 8)}
+                </span>
+
                 <span className="text-xs font-bold uppercase bg-academic-navy-50 text-academic-navy-900 border border-academic-navy-200 px-2.5 py-0.5 rounded">
                   {n.audience}
                 </span>
@@ -94,6 +135,12 @@ export default function AnnouncementsPage() {
                 <span className="text-xs font-medium text-slate-500 bg-slate-50 px-2 py-0.5 rounded">
                   {n.category}
                 </span>
+
+                {n.is_published === false && (
+                  <span className="text-xs font-bold uppercase bg-rose-100 text-rose-800 border border-rose-300 px-2.5 py-0.5 rounded">
+                    Withdrawn
+                  </span>
+                )}
               </div>
 
               <span className="text-xs text-slate-400 font-medium">{n.date}</span>
@@ -102,9 +149,25 @@ export default function AnnouncementsPage() {
             <h2 className="text-lg font-bold text-academic-navy-950 mb-2">{n.title}</h2>
             <p className="text-sm text-slate-600 leading-relaxed">{n.body}</p>
 
-            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between text-xs text-slate-500 gap-2">
               <span className="font-semibold text-slate-700">Issued by: {n.author}</span>
-              <span className="text-academic-gold-700 font-medium">Verified Institutional Dispatch</span>
+              <div className="flex items-center gap-3">
+                <span className="text-academic-gold-700 font-medium">Verified Institutional Dispatch</span>
+                {canPost && (
+                  <button
+                    type="button"
+                    disabled={withdrawingId === n.id}
+                    onClick={() => handleTogglePublish(n)}
+                    className={`font-semibold px-2.5 py-1 rounded text-xs transition border ${
+                      n.is_published === false
+                        ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                        : 'border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100'
+                    }`}
+                  >
+                    {withdrawingId === n.id ? 'Updating...' : n.is_published === false ? 'Republish Notice' : 'Withdraw Notice'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ))}
