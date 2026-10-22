@@ -4,7 +4,7 @@ import { updateInstitutionalStudent } from './student-update';
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
-const actor = { id: '00000000-0000-4000-8000-000000000001', email: 'registrar@example.test', role: 'registrar' as const };
+const actor = { id: '00000000-0000-4000-8000-000000000001', email: 'registrar@example.test', role: 'registrar' as const, iat: 0, exp: 9999999999 };
 const student = { id: 'student-id', admission_number: 'SMU/2026/1', first_name: 'Student', last_name: 'One', email: 'student@example.test', faculty: 'Computing', department: 'Science', program_name: 'Specific Degree', fee_balance: 0 };
 afterEach(() => {
   globalThis.fetch = originalFetch;
