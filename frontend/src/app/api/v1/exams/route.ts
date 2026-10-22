@@ -1,3 +1,4 @@
+import { institutionalApi } from '@/lib/academic/institutional-api';
 import { NextRequest, NextResponse } from 'next/server';
 import { ExamSchedule, ExamClearanceCard } from '@/types';
 import { requireServerAuth, requirePermission } from '@/lib/auth/server-auth';
@@ -46,6 +47,7 @@ export async function GET(req: NextRequest) {
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
+ if(!auth.user.id.startsWith('usr-'))return institutionalApi(req,auth.user,'exams');
 
   const { user } = auth;
   let filteredCards = clearanceCards.filter(c => inDepartment(user,c.admission_number));
@@ -74,6 +76,7 @@ export async function POST(req: NextRequest) {
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
+ if(!auth.user.id.startsWith('usr-'))return institutionalApi(req,auth.user,'exams');
 
   const { user } = auth;
 

@@ -1,3 +1,4 @@
+import { institutionalApi } from '@/lib/academic/institutional-api';
 import { NextRequest, NextResponse } from 'next/server';
 import { HostelBlock, HostelRoom, HostelAllocation } from '@/types';
 import { requireServerAuth, requirePermission } from '@/lib/auth/server-auth';
@@ -26,6 +27,7 @@ export async function GET(req: NextRequest) {
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
+ if(!auth.user.id.startsWith('usr-'))return institutionalApi(req,auth.user,'hostels');
 
   const { user } = auth;
   let filteredAllocations = [...hostelAllocations];
@@ -53,6 +55,7 @@ export async function POST(req: NextRequest) {
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
+ if(!auth.user.id.startsWith('usr-'))return institutionalApi(req,auth.user,'hostels');
 
   const { user } = auth;
 

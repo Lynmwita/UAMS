@@ -1,3 +1,4 @@
+import { institutionalApi } from '@/lib/academic/institutional-api';
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePermission } from '@/lib/auth/server-auth';
 import { getAuditLogs } from '@/lib/audit/audit-logger';
@@ -8,6 +9,7 @@ export async function GET(request: NextRequest) {
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
+ if(!auth.user.id.startsWith('usr-'))return institutionalApi(request,auth.user,'audit');
 
   const { searchParams } = new URL(request.url);
   const action = searchParams.get('action') || undefined;

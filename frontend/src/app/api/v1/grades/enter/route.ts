@@ -1,67 +1,19 @@
+import { institutionalApi } from '@/lib/academic/institutional-api';
 import { studentsStore } from '@/lib/academic/student-records';
 import { coursesStore } from '@/lib/academic/course-catalog';
+import { gradesStore } from '@/lib/academic/grades';
 import { canTeachCourse, canReviewCourse } from '@/lib/auth/scope';
 import { NextRequest, NextResponse } from 'next/server';
 import { calculateGradePoint, getAcademicStanding } from '@/lib/academic/gpa';
 import { requireServerAuth } from '@/lib/auth/server-auth';
 import { recordAuditEvent } from '@/lib/audit/audit-logger';
 
-let gradesStore = [
-  {
-    id: 'grd-1',
-    student_id: 'stu-1',
-    student_name: 'Faith Wanjiku',
-    admission_number: 'BIT/2023/8849',
-    course_code: 'BCS 311',
-    course_title: 'Advanced Database Systems',
-    credit_hours: 3,
-    cat_score: 28,
-    exam_score: 62,
-    total_score: 90,
-    letter_grade: 'A',
-    grade_point: 4.0,
-    is_submitted: true,
-    is_approved: true,
-  },
-  {
-    id: 'grd-2',
-    student_id: 'stu-1',
-    student_name: 'Faith Wanjiku',
-    admission_number: 'BIT/2023/8849',
-    course_code: 'BIT 312',
-    course_title: 'Distributed Systems & Cloud Computing',
-    credit_hours: 3,
-    cat_score: 26,
-    exam_score: 58,
-    total_score: 84,
-    letter_grade: 'A',
-    grade_point: 4.0,
-    is_submitted: true,
-    is_approved: true,
-  },
-  {
-    id: 'grd-3',
-    student_id: 'stu-1',
-    student_name: 'Faith Wanjiku',
-    admission_number: 'BIT/2023/8849',
-    course_code: 'BCS 314',
-    course_title: 'Software Engineering Architecture',
-    credit_hours: 4,
-    cat_score: 24,
-    exam_score: 52,
-    total_score: 76,
-    letter_grade: 'A',
-    grade_point: 4.0,
-    is_submitted: true,
-    is_approved: true,
-  },
-];
-
 export async function GET(request: NextRequest) {
   const auth = await requireServerAuth(request, ['student','admin','super_admin','registrar','hod','lecturer']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
+  if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'grades/enter');
 
   const { user } = auth;
   const { searchParams } = new URL(request.url);
@@ -95,6 +47,7 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const auth = await requireServerAuth(request, ['hod','registrar','admin','super_admin']);
   if ('errorResponse' in auth) return auth.errorResponse;
+  if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'grades/enter');
   try {
     const body = await request.json();
     const grade = gradesStore.find(g => g.id === body.grade_id);
@@ -112,6 +65,7 @@ export async function POST(request: NextRequest) {
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
+  if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'grades/enter');
 
   try {
     const body = await request.json();

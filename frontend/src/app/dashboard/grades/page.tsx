@@ -4,16 +4,16 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/context';
 import { roleHasPermission } from '@/lib/auth/rbac';
 import { Award, CheckCircle2, FileSpreadsheet, Download, Plus, X, Printer } from 'lucide-react';
-import { generateTranscriptPDF } from '@/lib/pdf/generator';
-import { calculateGradePoint, getAcademicStanding } from '@/lib/academic/gpa';
+
+import { calculateGradePoint } from '@/lib/academic/gpa';
 
 export default function GradesPage() {
   const { role } = useAuth();
   const canWrite = roleHasPermission(role, 'grades:write');
   const [error, setError] = useState('');
-  type GradeRow={id:string;student:string;adm:string;course:string;courseTitle:string;credits:number;cat:number;exam:number;total:number;grade:string;gpa:number;status:string};
+  type GradeRow={id:string;studentId:string;student:string;adm:string;course:string;courseTitle:string;credits:number;cat:number;exam:number;total:number;grade:string;gpa:number;status:string};
   const [grades,setGrades]=useState<GradeRow[]>([]);
-  const mapGrade=(g:any):GradeRow=>({id:g.id,student:g.student_name,adm:g.admission_number,course:g.course_code,courseTitle:g.course_title,credits:g.credit_hours,cat:g.cat_score,exam:g.exam_score,total:g.total_score,grade:g.letter_grade,gpa:g.grade_point,status:g.is_approved?'Approved':'Submitted'});
+  const mapGrade=(g:any):GradeRow=>({id:g.id,studentId:g.student_id,student:g.student_name,adm:g.admission_number,course:g.course_code,courseTitle:g.course_title,credits:g.credit_hours,cat:g.cat_score,exam:g.exam_score,total:g.total_score,grade:g.letter_grade,gpa:g.grade_point,status:g.is_approved?'Approved':'Submitted'});
   useEffect(()=>{fetch('/api/v1/grades/enter').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);setGrades(d.data.map(mapGrade));}).catch(e=>setError(e.message));},[]);
   const approveGrade=async(id:string)=>{try{const r=await fetch('/api/v1/grades/enter',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({grade_id:id})});const d=await r.json();if(!r.ok)throw new Error(d.error);setGrades(prev=>prev.map(g=>g.id===id?mapGrade(d.data):g));}catch(e){setError(e instanceof Error?e.message:'Approval failed.');}};
 
@@ -38,49 +38,33 @@ export default function GradesPage() {
     try{const r=await fetch('/api/v1/grades/enter',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({student_name:newGrade.student,admission_number:newGrade.adm,course_code:newGrade.course,course_title:newGrade.courseTitle,credit_hours:newGrade.credits,cat_score:catVal,exam_score:examVal})});const d=await r.json();if(!r.ok)throw new Error(d.error);setGrades(prev=>[mapGrade(d.data),...prev]);setIsModalOpen(false);setError('');}catch(e){setError(e instanceof Error?e.message:'Grade entry failed.');}
   };
 
-  const handleDownloadTranscript = () => {
-    const studentGrades = grades.filter((g) => g.adm === 'BIT/2023/8849');
-    const totalCredits = studentGrades.reduce((sum, g) => sum + g.credits, 0);
-    const totalPoints = studentGrades.reduce((sum, g) => sum + g.gpa * g.credits, 0);
-    const cumulativeGpa = totalCredits > 0 ? totalPoints / totalCredits : 0;
-    const standing = getAcademicStanding(cumulativeGpa);
-
-    const doc = generateTranscriptPDF({
-      student: {
-        name: 'Faith Wanjiku',
-        admissionNumber: 'BIT/2023/8849',
-        program: 'Bachelor of Science in Information Technology',
-        school: 'School of Information Communication & Technology',
-        department: 'Information Technology',
-        yearOfStudy: 3,
-        semesterNumber: 1,
-      },
-      semesterResults: [
-        {
-          semesterLabel: 'Year 3 Semester 1',
-          academicYear: '2025/2026 Academic Year',
-          courses: studentGrades.map((g) => ({
-            courseCode: g.course,
-            courseTitle: g.courseTitle,
-            creditHours: g.credits,
-            catScore: g.cat,
-            examScore: g.exam,
-            totalScore: g.total,
-            letterGrade: g.grade,
-            gradePoint: g.gpa,
-          })),
-          gpa: cumulativeGpa,
-          creditsEarned: totalCredits,
-        },
-      ],
-      cumulativeGpa,
-      totalCredits,
-      academicStanding: standing,
-    });
-
-    doc.save('Academic_Results_Preview_BIT_2023_8849.pdf');
+  const [transcriptStudent, setTranscriptStudent] = useState('');
+  const [downloading, setDownloading] = useState(false);
+  const transcriptOptions = [...new Map(grades.map(grade => [grade.adm, {id: grade.studentId || grade.adm, name: grade.student, admission:grade.adm}])).values()];
+  const handleDownloadTranscript = async () => {
+    const target = role === 'student' ? 'me' : transcriptStudent;
+    if (!target || downloading) return;
+    setDownloading(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/v1/results/transcript/${encodeURIComponent(target)}`, {cache:'no-store'});
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Transcript download failed.');
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] || 'Academic_Transcript.pdf';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Transcript download failed.');
+    } finally { setDownloading(false); }
   };
-
   return (
     <div className="space-y-6">
       {error && <p role="alert" className="text-rose-700">{error}</p>}
@@ -90,17 +74,27 @@ export default function GradesPage() {
             Examinations & Academic Grades
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Continuous Assessment (CAT 30%), Final Exam (70%), 4.0 GPA conversion, and Senate transcript sealing.
+            Continuous Assessment (CAT 30%), Final Exam (70%), approved results, and academic transcripts.
           </p>
         </div>
 
         <div className="flex items-center space-x-3">
+          {['super_admin','admin','registrar'].includes(role) && (
+            <label className="text-xs text-slate-600">
+              Transcript student
+              <select className="block max-w-64 rounded border border-slate-300 px-2 py-2 text-sm" value={transcriptStudent} onChange={event=>setTranscriptStudent(event.target.value)}>
+                <option value="">Select student</option>
+                {transcriptOptions.map(student=><option key={student.id} value={student.id}>{student.name} ({student.admission})</option>)}
+              </select>
+            </label>
+          )}
           {['super_admin','admin','registrar','student'].includes(role) && <button
             onClick={handleDownloadTranscript}
+            disabled={downloading || (role !== 'student' && !transcriptStudent)}
             className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold px-4 py-2.5 rounded-lg text-sm transition flex items-center space-x-2 shadow-sm"
           >
             <Download className="h-4 w-4 text-academic-navy-700" />
-            <span>Download Results Preview PDF</span>
+            <span>{downloading ? 'Preparing transcript…' : 'Download Transcript'}</span>
           </button>}
 
           <button

@@ -25,6 +25,7 @@ import {
 import { UserRole } from '@/types';
 import { canAccessPage } from '@/lib/auth/roles';
 import { ROLE_LABELS, roleHasPermission } from '@/lib/auth/rbac';
+import InstitutionalDashboard from './InstitutionalDashboard';
 
 const courses = [
   { code: 'CSC101', title: 'Introduction to Computer Science', department: 'Computing', enrolled: '124', status: 'Active' },
@@ -33,7 +34,8 @@ const courses = [
 ];
 
 export default function DashboardExperience() {
-  const { role } = useAuth();
+  const { role,id } = useAuth();
+  if(!id.startsWith('usr-'))return <InstitutionalDashboard/>;
   const metrics = role === 'student'
     ? [
         { label: 'Semester GPA', value: '3.82', detail: 'Cumulative 3.75', icon: GraduationCap, tone: 'green' },

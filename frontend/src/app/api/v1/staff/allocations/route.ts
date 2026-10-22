@@ -1,0 +1,4 @@
+import {NextResponse} from 'next/server';
+import {requireServerAuth} from '@/lib/auth/server-auth';
+import {callInstitutional} from '@/lib/academic/institutional';
+export async function POST(request:Request){const auth=await requireServerAuth(request,['admin','super_admin','registrar','hod']);if('errorResponse'in auth)return auth.errorResponse;if(auth.user.id.startsWith('usr-'))return NextResponse.json({success:false,error:'Teaching allocations require the institutional database.'},{status:503});try{const data=await callInstitutional('staff.allocate',await request.json(),auth.user);return NextResponse.json({success:true,data});}catch(error:any){return NextResponse.json({success:false,error:'Allocation rejected. Choose an active lecturer and course within your department.'},{status:error?.code==='42501'?403:400});}}

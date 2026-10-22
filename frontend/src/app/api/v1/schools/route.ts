@@ -1,3 +1,4 @@
+import { institutionalApi } from '@/lib/academic/institutional-api';
 import { requireServerAuth, requirePermission } from '@/lib/auth/server-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -47,6 +48,7 @@ const schoolsStore = [
 export async function GET(request: NextRequest) {
   const auth = await requireServerAuth(request, ['super_admin','admin','registrar']);
   if ('errorResponse' in auth) return auth.errorResponse;
+  if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'schools');
   return NextResponse.json({
     success: true,
     total: schoolsStore.length,
@@ -57,6 +59,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireServerAuth(request, ['super_admin','admin','registrar']);
   if ('errorResponse' in auth) return auth.errorResponse;
+  if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'schools');
   try {
     const body = await request.json();
     if (typeof body?.code !== 'string' || !body.code.trim() || body.code.length > 20 || typeof body.name !== 'string' || !body.name.trim() || body.name.length > 255) {

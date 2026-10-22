@@ -1,37 +1,17 @@
+import { institutionalApi } from '@/lib/academic/institutional-api';
 import { coursesStore } from '@/lib/academic/course-catalog';
+import { registrationsStore } from '@/lib/academic/registrations';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireServerAuth } from '@/lib/auth/server-auth';
 import { canTeachCourse, canReviewCourse } from '@/lib/auth/scope';
-
-let registrationsStore = [
-  {
-    id: 'reg-1',
-    student_id: 'stu-1',
-    admission_number: 'BIT/2023/8849',
-    student_name: 'Faith Wanjiku',
-    course_code: 'BCS 311',
-    course_title: 'Advanced Database Systems',
-    status: 'approved',
-    registered_at: '2026-09-10T10:00:00Z',
-    approved_by: 'Registrar',
-  },
-  {
-    id: 'reg-2',
-    student_id: 'stu-2',
-    admission_number: 'BCS/2023/1204',
-    student_name: 'Kevin Otieno',
-    course_code: 'BIT 312',
-    course_title: 'Distributed Systems & Cloud Computing',
-    status: 'pending',
-    registered_at: '2026-09-12T14:30:00Z',
-  },
-];
+import { approveCourseRegistrations } from '@/lib/academic/registration-approval';
 
 export async function GET(request: NextRequest) {
   const auth = await requireServerAuth(request, ['student','admin','super_admin','registrar','hod','lecturer']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
+  if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'courses/register');
 
   const { user } = auth;
   let results = registrationsStore.filter(r => canTeachCourse(user,r.course_code) && canReviewCourse(user,r.course_code));
@@ -50,16 +30,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const auth = await requireServerAuth(request,['registrar','admin','super_admin']);
-  if ('errorResponse' in auth) return auth.errorResponse;
-  try {
-    const body = await request.json();
-    const registration = registrationsStore.find(r=>r.id===body.registration_id);
-    if (!registration) return NextResponse.json({success:false,error:'Registration not found.'},{status:404});
-    registration.status='approved';
-    registration.approved_by=auth.user.email;
-    return NextResponse.json({success:true,data:registration});
-  } catch { return NextResponse.json({success:false,error:'Invalid registration approval.'},{status:400}); }
+  return approveCourseRegistrations(request, 'single');
 }
 
 export async function POST(request: NextRequest) {
@@ -67,6 +38,7 @@ export async function POST(request: NextRequest) {
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
+  if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'courses/register');
 
   const { user } = auth;
 
@@ -101,7 +73,7 @@ export async function POST(request: NextRequest) {
       student_name: effectiveName,
       course_code,
       course_title: course_title || course_code,
-      status: 'pending',
+      status: 'pending' as const,
       registered_at: new Date().toISOString(),
     };
 

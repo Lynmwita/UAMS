@@ -1,3 +1,4 @@
+import { institutionalApi } from '@/lib/academic/institutional-api';
 import { NextRequest, NextResponse } from 'next/server';
 import { NotificationLog } from '@/types';
 import { requireServerAuth } from '@/lib/auth/server-auth';
@@ -44,6 +45,7 @@ export async function GET(req: NextRequest) {
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
+ if(!auth.user.id.startsWith('usr-'))return institutionalApi(req,auth.user,'notifications');
 
   const { user } = auth;
   if (user.role === 'student') {
@@ -66,6 +68,7 @@ export async function POST(req: NextRequest) {
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
+ if(!auth.user.id.startsWith('usr-'))return institutionalApi(req,auth.user,'notifications');
   try {
     const body = await req.json();
     const { recipient_type, recipient_identifier, recipient_name, channel, message_content, subject } = body;

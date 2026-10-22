@@ -1,0 +1,4 @@
+import {NextResponse} from 'next/server';
+import {requireServerAuth} from '@/lib/auth/server-auth';
+import {callInstitutional} from '@/lib/academic/institutional';
+export async function POST(request:Request){const auth=await requireServerAuth(request,['lecturer','admin','super_admin']);if('errorResponse'in auth)return auth.errorResponse;if(auth.user.id.startsWith('usr-'))return NextResponse.json({success:false,error:'Separate sessions require the institutional database; use the combined demonstration attendance form.'},{status:503});try{const body=await request.json();const data=await callInstitutional('attendance.mark',body,auth.user);return NextResponse.json({success:true,data});}catch(error:any){return NextResponse.json({success:false,error:'Attendance batch rejected. Verify session scope and registered students.'},{status:error?.code==='42501'?403:400});}}

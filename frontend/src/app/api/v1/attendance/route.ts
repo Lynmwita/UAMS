@@ -1,3 +1,4 @@
+import { institutionalApi } from '@/lib/academic/institutional-api';
 import { NextResponse } from 'next/server';
 import { requireServerAuth } from '@/lib/auth/server-auth';
 import { canTeachCourse, inDepartment } from '@/lib/auth/scope';
@@ -11,12 +12,14 @@ const sessions = [{id:'ses-1',date:'2026-10-03',course:'BCS 311',courseTitle:'Ad
 export async function GET(request:Request) {
   const auth = await requireServerAuth(request,['student','lecturer','hod','admin','super_admin']);
   if ('errorResponse' in auth) return auth.errorResponse;
+ if(!auth.user.id.startsWith('usr-'))return institutionalApi(request,auth.user,'attendance');
   const rows = roster.filter(r=>auth.user.role==='student' ? auth.user.id==='usr-student-01' && r.id==='stu-1' : inDepartment(auth.user,r.adm));
   return NextResponse.json({success:true,data:{sessions:sessions.filter(s=>canTeachCourse(auth.user,s.course)),roster:rows}});
 }
 export async function POST(request:Request) {
   const auth = await requireServerAuth(request,['lecturer','super_admin']);
   if ('errorResponse' in auth) return auth.errorResponse;
+ if(!auth.user.id.startsWith('usr-'))return institutionalApi(request,auth.user,'attendance');
   try {
     const body=await request.json();
     if(typeof body.course!=='string'||!canTeachCourse(auth.user,body.course)) return NextResponse.json({success:false,error:'Course is not assigned to you.'},{status:403});
