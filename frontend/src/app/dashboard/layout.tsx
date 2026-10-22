@@ -34,10 +34,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [pathname, router]);
   if (!session) return <div className="min-h-screen flex items-center justify-center">Verifying institutional credentials...</div>;
   const module = pathname.split('/')[2];
+  const fullName = [session.firstName, session.lastName].filter(Boolean).join(' ');
   return (
     <AuthContext.Provider value={session}>
       <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
-        <Navbar userEmail={session.email} userRole={ROLE_LABELS[session.role]} />
+        <Navbar userEmail={session.email} userName={fullName} userRole={ROLE_LABELS[session.role]} />
         <div className="flex-1 flex flex-col md:flex-row">
           <Sidebar role={session.role} />
           <main className="min-w-0 w-full max-w-7xl mx-auto flex-1 p-4 sm:p-8 overflow-y-auto">

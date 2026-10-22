@@ -36,26 +36,42 @@ function LoginForm() {
   },[router,searchParams]);
 
   const authenticate = async (nextRole: UserRole, nextEmail: string, nextPassword: string) => {
-    const response = await fetch('/api/v1/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: nextEmail,
-        password: nextPassword,
-        role: nextRole,
-      }),
-    });
+    try {
+      const response = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: nextEmail,
+          password: nextPassword,
+          role: nextRole,
+        }),
+        signal: AbortSignal.timeout(12000),
+      });
 
-    const data = await response.json();
+      let data: any;
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error('Server returned an unreadable response. Please retry.');
+      }
 
-    if (!response.ok || !data?.success) {
-      throw new Error(data?.error || 'Authentication failed. Please try again.');
+      if (!response.ok || !data?.success) {
+        throw new Error(data?.error || 'Authentication failed. Please try again.');
+      }
+
+      // Session is held exclusively in secure httpOnly cookie set by /api/v1/auth/login
+      const target = searchParams.get('redirect');
+      router.push(target && /^\/dashboard(?:\/|\?|$)/.test(target) ? target : '/dashboard');
+      router.refresh();
+    } catch (err: any) {
+      if (err.name === 'TimeoutError' || (err.message && err.message.includes('timeout'))) {
+        throw new Error('Sign-in request timed out. Please check your connection and try again.');
+      }
+      if (err.message === 'Failed to fetch') {
+        throw new Error('Unable to connect to authentication server. Please check your connection and try again.');
+      }
+      throw err;
     }
-
-    // Session is held exclusively in secure httpOnly cookie set by /api/v1/auth/login
-    const target = searchParams.get('redirect');
-    router.push(target && /^\/dashboard(?:\/|\?|$)/.test(target) ? target : '/dashboard');
-    router.refresh();
   };
 
   const handleLogin = async (e: React.FormEvent) => {

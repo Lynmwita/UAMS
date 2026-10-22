@@ -27,19 +27,26 @@ import { canAccessPage } from '@/lib/auth/roles';
 import { ROLE_LABELS, roleHasPermission } from '@/lib/auth/rbac';
 import InstitutionalDashboard from './InstitutionalDashboard';
 
-const courses = [
+const defaultCourses = [
   { code: 'CSC101', title: 'Introduction to Computer Science', department: 'Computing', enrolled: '124', status: 'Active' },
   { code: 'CSC301', title: 'Database Systems and Architecture', department: 'Computing', enrolled: '86', status: 'Active' },
   { code: 'BUS214', title: 'Business Information Systems', department: 'Business', enrolled: '72', status: 'Review' },
 ];
 
+const studentRegisteredCourses = [
+  { code: 'BCS 311', title: 'Advanced Database Systems', department: 'Computing', enrolled: '86', status: 'Approved' },
+  { code: 'BIT 312', title: 'Distributed Systems & Cloud Computing', department: 'Computing', enrolled: '72', status: 'Approved' },
+];
+
 export default function DashboardExperience() {
-  const { role,id } = useAuth();
+  const session = useAuth();
+  const { role, id, firstName } = session;
   if(!id.startsWith('usr-'))return <InstitutionalDashboard/>;
+  const courses = role === 'student' ? studentRegisteredCourses : defaultCourses;
   const metrics = role === 'student'
     ? [
         { label: 'Semester GPA', value: '3.82', detail: 'Cumulative 3.75', icon: GraduationCap, tone: 'green' },
-        { label: 'Registered units', value: '06', detail: '18 credit hours', icon: BookOpen, tone: 'blue' },
+        { label: 'Registered units', value: '02', detail: '6 credit hours (approved)', icon: BookOpen, tone: 'blue' },
         { label: 'Attendance', value: '94.5%', detail: 'Above 75% threshold', icon: ClipboardCheck, tone: 'orange' },
         { label: 'Fee balance', value: 'KSh 15k', detail: 'Of KSh 75,000 billed', icon: CircleDollarSign, tone: 'rose' },
       ]
@@ -74,7 +81,7 @@ export default function DashboardExperience() {
       <section className="dashboard-heading">
         <div>
           <p className="eyebrow">MONDAY, OCTOBER 5, 2026 <span /> ACADEMIC YEAR 2026/27</p>
-          <h1>{role === 'super_admin' ? 'Good morning, Administrator' : `Welcome back, ${ROLE_LABELS[role]}`}</h1>
+          <h1>{role === 'super_admin' ? 'Good morning, Administrator' : firstName ? `Welcome back, ${firstName}` : `Welcome back, ${ROLE_LABELS[role]}`}</h1>
           <p className="heading-caption">Here is what is happening across your university today.</p>
         </div>
         <div className="heading-tools">
