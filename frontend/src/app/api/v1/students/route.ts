@@ -1,3 +1,5 @@
+import { institutionalApi } from '@/lib/academic/institutional-api';
+import { updateInstitutionalStudent } from '@/lib/academic/student-update';
 import { inDepartment } from '@/lib/auth/scope';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireServerAuth, requirePermission } from '@/lib/auth/server-auth';
@@ -12,6 +14,7 @@ export async function GET(request: NextRequest) {
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
+  if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'students');
 
   const { user } = auth;
   const { searchParams } = new URL(request.url);
@@ -85,6 +88,7 @@ export async function POST(request: NextRequest) {
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
+  if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'students');
 
   try {
     const body = await request.json();
@@ -211,61 +215,15 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Student Hub Synchronization
-    const hubSyncUrl = process.env.STUDENT_HUB_SYNC_URL || 'https://student-life-campus-hub.vercel.app/api/sync/uams';
-    const hubSyncSecret = process.env.CRON_SECRET || process.env.STUDENT_HUB_CRON_SECRET || 'K8mP4xT9qR2vN7wL5zB1';
-    let hubSyncResult: any = null;
-    let hubSyncError: string | null = null;
-
-    try {
-      const syncPayload = {
-        version: 1,
-        dry_run: false,
-        students: [
-          {
-            email: email,
-            full_name: fullName,
-            registration_number: regNo,
-            faculty: faculty,
-            department: department,
-            program_name: programName,
-            program_of_study: programName,
-            year_of_study: yearOfStudy,
-            campus_code: campusCode,
-            initial_password: initialPassword,
-          },
-        ],
-      };
-
-      const hubRes = await fetch(hubSyncUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${hubSyncSecret}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(syncPayload),
-      });
-
-      if (hubRes.ok) {
-        hubSyncResult = await hubRes.json();
-      } else {
-        const errText = await hubRes.text();
-        hubSyncError = `Hub sync HTTP ${hubRes.status}: ${errText}`;
-        console.warn('[UAMS -> Hub Sync]', hubSyncError);
-      }
-    } catch (syncErr: any) {
-      hubSyncError = syncErr?.message || 'Hub sync network error';
-      console.warn('[UAMS -> Hub Sync Exception]', syncErr);
-    }
-
+    // Demonstration records are isolated and never provision external accounts.
     return NextResponse.json(
       {
         success: true,
-        message: `Student registered: ${fullName} (${regNo}). They can sign in at the Student Hub with their email and the initial password.`,
+        message: `Demonstration student registered: ${fullName} (${regNo}). This record exists only in the current demo process.`,
         data: newStudent,
         initial_password: initialPassword,
-        hub_sync: hubSyncResult,
-        hub_sync_error: hubSyncError,
+        hub_sync: null,
+        hub_sync_error: 'External synchronization is disabled for demonstration records.',
       },
       { status: 201 }
     );
@@ -279,6 +237,7 @@ export async function DELETE(request: NextRequest) {
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
+  if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'students');
 
   const { searchParams } = new URL(request.url);
   const emailParam = searchParams.get('email')?.toLowerCase();
@@ -320,6 +279,7 @@ export async function PATCH(request: NextRequest) {
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
+  if (!auth.user.id.startsWith('usr-')) return updateInstitutionalStudent(request, auth.user);
 
   try {
     const body = await request.json();
@@ -458,37 +418,7 @@ export async function PATCH(request: NextRequest) {
       },
     });
 
-    // Sync updated student to Student Hub in background
-    try {
-      const hubSyncUrl = process.env.STUDENT_HUB_SYNC_URL || 'https://student-life-campus-hub.vercel.app/api/sync/uams';
-      const hubSyncSecret = process.env.CRON_SECRET || process.env.STUDENT_HUB_CRON_SECRET || 'K8mP4xT9qR2vN7wL5zB1';
-      fetch(hubSyncUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${hubSyncSecret}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          version: 1,
-          dry_run: false,
-          students: [
-            {
-              email: student.email,
-              full_name: `${student.first_name} ${student.last_name}`.trim(),
-              registration_number: student.admission_number,
-              faculty: student.faculty,
-              department: student.department,
-              program_name: student.program_name,
-              program_of_study: student.program_name,
-              year_of_study: student.current_year_of_study,
-              campus_code: student.campus_code,
-            },
-          ],
-        }),
-      }).catch((e) => console.warn('[UAMS -> Hub Sync PATCH]', e));
-    } catch {
-      // Non-blocking
-    }
+    // Demonstration edits never provision or change external accounts.
 
     return NextResponse.json({
       success: true,

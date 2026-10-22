@@ -4,26 +4,38 @@ import { useState, useEffect } from 'react';
 import { Building2, Plus, School, BookOpen, Layers, X, Check } from 'lucide-react';
 
 export default function StructurePage() {
+  const [createKind,setCreateKind]=useState<'departments'|'programs'>('departments');
+  const [entry,setEntry]=useState({code:'',name:'',school_id:'',department_id:'',duration_years:'4',credit_limit:'48'});
+  const createEntry=async(e:React.FormEvent)=>{e.preventDefault();try{const r=await fetch('/api/v1/'+createKind,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...entry,duration_years:Number(entry.duration_years),credit_limit:Number(entry.credit_limit)})});const d=await r.json();if(!r.ok)throw new Error(d.error);window.location.reload();}catch(e:any){setError(e.message);}};
   const [activeTab, setActiveTab] = useState<'schools' | 'departments' | 'programs'>('schools');
 
   const [error,setError]=useState('');
   const [schools,setSchools]=useState<{id:string;code:string;name:string;dean:string;deanEmail:string;depts:number;programs:number}[]>([]);
   const mapSchool=(s:any)=>({id:s.id,code:s.code,name:s.name,dean:s.dean,deanEmail:s.dean_email,depts:s.departments_count,programs:s.programs_count});
   useEffect(()=>{fetch('/api/v1/schools').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);setSchools(d.data.map(mapSchool));}).catch(e=>setError(e.message));},[]);
-  const [departments, setDepartments] = useState([
-    { id: 'd1', code: 'DCS', name: 'Department of Computer Science', school: 'SOICT', hod: 'Dr. Jane Mwangi', lecturers: 14, programs: 3 },
-    { id: 'd2', code: 'DIT', name: 'Department of Information Technology', school: 'SOICT', hod: 'Prof. David Kamau', lecturers: 12, programs: 2 },
-    { id: 'd3', code: 'DBA', name: 'Department of Business Administration', school: 'SOBE', hod: 'Dr. Lucy Wambui', lecturers: 18, programs: 3 },
-    { id: 'd4', code: 'DEE', name: 'Department of Electrical & Electronic Engineering', school: 'SOET', hod: 'Eng. Eric Ochieng', lecturers: 10, programs: 2 },
-  ]);
+  const [departments,setDepartments]=useState<{id:string;code:string;name:string;school:string;hod:string;lecturers:number;programs:number}[]>([]);
+  const [programs,setPrograms]=useState<{id:string;code:string;name:string;level:string;duration:string;department:string;credits:number}[]>([]);
 
-  const [programs, setPrograms] = useState([
-    { id: 'p1', code: 'BCS', name: 'Bachelor of Science in Computer Science', level: 'Undergraduate', duration: '4 Years', department: 'Computer Science', credits: 128 },
-    { id: 'p2', code: 'BIT', name: 'Bachelor of Science in Information Technology', level: 'Undergraduate', duration: '4 Years', department: 'Information Technology', credits: 124 },
-    { id: 'p3', code: 'BBA', name: 'Bachelor of Business Administration', level: 'Undergraduate', duration: '4 Years', department: 'Business Administration', credits: 120 },
-    { id: 'p4', code: 'BSE', name: 'Bachelor of Science in Software Engineering', level: 'Undergraduate', duration: '4 Years', department: 'Computer Science', credits: 132 },
-    { id: 'p5', code: 'MIT', name: 'Master of Science in Information Technology', level: 'Postgraduate', duration: '2 Years', department: 'Information Technology', credits: 64 },
-  ]);
+  useEffect(() => {
+    fetch('/api/v1/departments')
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        setDepartments(
+          d.data.map((dep: any) => ({ id: dep.id, code: dep.code, name: dep.name, school: dep.school_id, hod: dep.hod, lecturers: 0, programs: dep.programs_count }))
+        );
+      })
+      .catch(e=>setError(e.message));
+    fetch('/api/v1/programs')
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        setPrograms(
+          d.data.map((p: any) => ({ id: p.id, code: p.code, name: p.name, level: p.level, duration: `${p.duration_years} Years`, department: p.department_id, credits: p.credit_limit }))
+        );
+      })
+      .catch(e=>setError(e.message));
+  }, []);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newSchool, setNewSchool] = useState({
@@ -61,6 +73,7 @@ export default function StructurePage() {
       </div>
 
       {/* Tabs */}
+      <form onSubmit={createEntry} className="border rounded p-4 flex flex-wrap gap-3"><label>Create<select aria-label="Record type" value={createKind} onChange={e=>setCreateKind(e.target.value as 'departments'|'programs')} className="block border p-2"><option value="departments">Department</option><option value="programs">Program</option></select></label><label>Code<input required className="block border p-2" value={entry.code} onChange={e=>setEntry({...entry,code:e.target.value})}/></label><label>Name<input required className="block border p-2" value={entry.name} onChange={e=>setEntry({...entry,name:e.target.value})}/></label>{createKind==='departments'?<label>School<select required className="block border p-2" value={entry.school_id} onChange={e=>setEntry({...entry,school_id:e.target.value})}><option value="">Choose school</option>{schools.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>:<><label>Department<select required className="block border p-2" value={entry.department_id} onChange={e=>setEntry({...entry,department_id:e.target.value})}><option value="">Choose department</option>{departments.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label><label>Duration (years)<input required type="number" min="1" max="8" className="block border p-2" value={entry.duration_years} onChange={e=>setEntry({...entry,duration_years:e.target.value})}/></label><label>Semester credit limit<input required type="number" min="1" className="block border p-2" value={entry.credit_limit} onChange={e=>setEntry({...entry,credit_limit:e.target.value})}/></label></>}<button className="border rounded px-3">Save {createKind==='departments'?'department':'program'}</button></form>
       <div className="flex items-center space-x-2 border-b border-slate-200 pb-2">
         <button
           onClick={() => setActiveTab('schools')}

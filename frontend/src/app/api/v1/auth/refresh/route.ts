@@ -3,7 +3,7 @@ import { rotateRefreshToken } from '@/lib/auth/refresh-token';
 import { createSignedToken } from '@/lib/auth/server-auth';
 import { recordAuditEvent } from '@/lib/audit/audit-logger';
 import { validateCsrf } from '@/lib/auth/csrf';
-import { authClient, trustedUser } from '@/lib/supabase/server';
+import { authClient, activeInstitutionalUser } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
   if (!validateCsrf(request).valid) return NextResponse.json({ success: false, error: 'Invalid request origin.' }, { status: 403 });
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     if (!refreshToken) return NextResponse.json({ success: false, error: 'No refresh token provided.' }, { status: 401 });
     if (!refreshToken.includes('.')) {
       const { data, error } = await authClient().auth.refreshSession({ refresh_token: refreshToken });
-      const user = data.user ? trustedUser(data.user) : null;
+      const user = data.user ? await activeInstitutionalUser(data.user) : null;
       if (error || !data.session || !user) return NextResponse.json({ success: false, error: 'Session expired. Please sign in.' }, { status: 401 });
       const response = NextResponse.json({ success: true, user });
       response.cookies.set('uams_auth_token', data.session.access_token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: data.session.expires_in });

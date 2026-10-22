@@ -1,3 +1,4 @@
+import { institutionalApi } from '@/lib/academic/institutional-api';
 import { requireServerAuth, requirePermission } from '@/lib/auth/server-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -6,6 +7,7 @@ import { coursesStore } from '@/lib/academic/course-catalog';
 export async function GET(request: NextRequest) {
   const auth = await requirePermission(request, 'courses:read');
   if ('errorResponse' in auth) return auth.errorResponse;
+  if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'courses');
   const { searchParams } = new URL(request.url);
   const search = searchParams.get('search')?.toLowerCase();
   const level = searchParams.get('level');
@@ -32,6 +34,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requirePermission(request, 'courses:write');
   if ('errorResponse' in auth) return auth.errorResponse;
+  if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'courses');
   try {
     const body = await request.json();
     if (typeof body?.code !== 'string' || !body.code.trim() || body.code.length > 20 || typeof body.title !== 'string' || !body.title.trim() || body.title.length > 255 || !Number.isInteger(Number(body.credit_hours)) || Number(body.credit_hours)<1 || Number(body.credit_hours)>24) {

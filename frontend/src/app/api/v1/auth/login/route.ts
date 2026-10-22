@@ -7,7 +7,7 @@ import { createSignedToken } from '@/lib/auth/server-auth';
 import { issueRefreshToken } from '@/lib/auth/refresh-token';
 import { checkRateLimit } from '@/lib/auth/rate-limiter';
 import { validateCsrf } from '@/lib/auth/csrf';
-import { authClient, trustedUser } from '@/lib/supabase/server';
+import { authClient, activeInstitutionalUser } from '@/lib/supabase/server';
 
 export async function POST(request: Request) {
   if (!validateCsrf(request).valid) {
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
 
   const demoRoleEntry = Object.entries(DEMO_USERS).find(([, account]) => account.email.toLowerCase() === email);
   const demoRole = demoRoleEntry ? (demoRoleEntry[0] as UserRole) : null;
-  const isDemoAuthEnabled = process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEMO_AUTH !== 'false';
+  const isDemoAuthEnabled = process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEMO_AUTH === 'true';
 
   let user;
   let accessToken: string;
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
         }, { status: 401 });
       }
 
-      user = trustedUser(data.user);
+      user = await activeInstitutionalUser(data.user);
       if (!user) {
         return NextResponse.json({
           success: false,

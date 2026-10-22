@@ -21,6 +21,11 @@ export const PAGE_ROLES: Record<string, UserRole[]> = {
   audit: ['super_admin', 'admin'],
   ai: USER_ROLES,
   announcements: USER_ROLES,
+  admissions: ['super_admin', 'admin', 'registrar', 'hod'],
+  staff: ['super_admin', 'admin', 'registrar'],
+  events: USER_ROLES,
+  reports: ['super_admin', 'admin', 'registrar', 'finance_officer', 'hod'],
+  support: ['super_admin','admin','registrar'],
 };
 
 export function canAccessPage(role: UserRole, module: string): boolean {

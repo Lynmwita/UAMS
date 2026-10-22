@@ -3,12 +3,16 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/context';
 import { roleHasPermission } from '@/lib/auth/rbac';
-import { BookOpen, Plus, Search, Filter, X, Check, Layers } from 'lucide-react';
+import { BookOpen, Plus, Search, X } from 'lucide-react';
 
 export default function CoursesPage() {
   const { role } = useAuth();
   const canWrite = roleHasPermission(role, 'courses:write');
+  const canApprove = ['super_admin', 'admin', 'registrar', 'hod'].includes(role);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [approving, setApproving] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [search, setSearch] = useState('');
   const [levelFilter, setLevelFilter] = useState('all');
 
@@ -33,11 +37,53 @@ export default function CoursesPage() {
     try{const r=await fetch('/api/v1/courses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:newCourse.code,title:newCourse.title,credit_hours:newCourse.credits,level:newCourse.level,department:newCourse.dept,prerequisites:newCourse.prereq==='None'?[]:newCourse.prereq.split(',').map(p=>p.trim()),lecturer:newCourse.lecturer})});const d=await r.json();if(!r.ok)throw new Error(d.error);setCourses(prev=>[mapCourse(d.data),...prev]);setIsModalOpen(false);setError('');}catch(e){setError(e instanceof Error?e.message:'Course creation failed.');}
   };
 
-  const registerCourse=async(c:CourseRow)=>{try{const r=await fetch('/api/v1/courses/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({course_code:c.code,course_title:c.title})});const d=await r.json();if(!r.ok)throw new Error(d.error);setError('Registration request submitted for '+c.code);void loadRegistrations();}catch(e){setError(e instanceof Error?e.message:'Registration failed.');}};
+  const registerCourse = async (course: CourseRow) => {
+    setError('');
+    setNotice('');
+    try {
+      const response = await fetch('/api/v1/courses/register', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({course_code: course.code, course_title: course.title}),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Registration failed.');
+      setNotice(`Registration request submitted for ${course.code}.`);
+      await loadRegistrations();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Registration failed.');
+    }
+  };
   const [registrations,setRegistrations]=useState<{id:string;course_code:string;admission_number:string;status:string}[]>([]);
-  const loadRegistrations=()=>fetch('/api/v1/courses/register').then(async r=>{const d=await r.json();if(r.ok)setRegistrations(d.data);});
-  useEffect(()=>{void loadRegistrations();},[]);
-  const approveRegistration=async(id:string)=>{try{const r=await fetch('/api/v1/courses/register',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({registration_id:id})});const d=await r.json();if(!r.ok)throw new Error(d.error);await loadRegistrations();}catch(e){setError(e instanceof Error?e.message:'Approval failed.');}};
+  const loadRegistrations = async () => {
+    const response = await fetch('/api/v1/courses/register');
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Could not load registrations.');
+    setRegistrations(data.data);
+    setSelectedIds(previous => previous.filter(id => data.data.some((r: {id:string;status:string}) => r.id === id && r.status === 'pending')));
+  };
+  useEffect(() => { void loadRegistrations().catch(e => setError(e.message)); }, []);
+  const approveRegistrations = async (ids: string[]) => {
+    if (!canApprove || approving || ids.length === 0) return;
+    setApproving(true);
+    setError('');
+    setNotice('');
+    try {
+      const response = await fetch('/api/v1/courses/approve', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({registration_ids: ids}),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Approval failed.');
+      setSelectedIds([]);
+      setNotice(data.message);
+      await loadRegistrations();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Approval failed.');
+    } finally {
+      setApproving(false);
+    }
+  };
+  const pendingIds = registrations.filter(r => r.status === 'pending').map(r => r.id);
   const filtered = courses.filter((c) => {
     const matchesSearch =
       c.code.toLowerCase().includes(search.toLowerCase()) ||
@@ -50,6 +96,7 @@ export default function CoursesPage() {
   return (
     <div className="space-y-6">
       {error && <p role="alert" className="text-rose-700">{error}</p>}
+      {notice && <p role="status" className="text-emerald-700">{notice}</p>}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-200 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-academic-navy-950 tracking-tight">
@@ -138,7 +185,39 @@ export default function CoursesPage() {
         </div>
       </div>
 
-      <section className="bg-white rounded border p-4"><h2 className="font-bold mb-3">Course registrations</h2>{registrations.map(r=><div key={r.id} className="flex gap-3 py-2"><span>{r.admission_number}: {r.course_code} — {r.status}</span>{r.status==='pending'&&['super_admin','admin','registrar'].includes(role)&&<button onClick={()=>approveRegistration(r.id)} className="underline">Approve registration</button>}</div>)}</section>
+      <section className="bg-white rounded border p-4" aria-busy={approving}>
+        <h2 className="font-bold mb-3">Course registrations</h2>
+        {canApprove && pendingIds.length > 0 && (
+          <div className="flex flex-wrap items-center gap-4 border-b pb-3 mb-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" disabled={approving} checked={pendingIds.slice(0, 200).every(id => selectedIds.includes(id))}
+                onChange={e => setSelectedIds(e.target.checked ? pendingIds.slice(0, 200) : [])} />
+              Select pending registrations (up to 200)
+            </label>
+            <button disabled={approving || selectedIds.length === 0}
+              onClick={() => void approveRegistrations(selectedIds)}
+              className="rounded bg-academic-navy-900 px-3 py-2 text-sm text-white disabled:opacity-50">
+              {approving ? 'Approving…' : `Approve selected (${selectedIds.length})`}
+            </button>
+          </div>
+        )}
+        {registrations.length === 0 && <p className="text-sm text-slate-500">No course registrations to show.</p>}
+        {registrations.map(r => (
+          <div key={r.id} className="flex flex-wrap items-center gap-3 py-2">
+            {canApprove && r.status === 'pending' && (
+              <input type="checkbox" aria-label={`Select ${r.admission_number} for ${r.course_code}`}
+                disabled={approving || (!selectedIds.includes(r.id) && selectedIds.length >= 200)}
+                checked={selectedIds.includes(r.id)}
+                onChange={e => setSelectedIds(previous => e.target.checked ? [...previous, r.id] : previous.filter(id => id !== r.id))} />
+            )}
+            <span>{r.admission_number}: {r.course_code} — {r.status}</span>
+            {canApprove && r.status === 'pending' && (
+              <button disabled={approving} onClick={() => void approveRegistrations([r.id])}
+                className="underline disabled:opacity-50">Approve registration</button>
+            )}
+          </div>
+        ))}
+      </section>
       {/* Add Course Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">

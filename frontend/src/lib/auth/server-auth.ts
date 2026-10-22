@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { UserRole } from '@/types';
 import { isUserRole } from './roles';
-import { authClient, trustedUser } from '@/lib/supabase/server';
+import { authClient, activeInstitutionalUser } from '@/lib/supabase/server';
 import { roleHasPermission } from './rbac';
 import { validateCsrf } from './csrf';
 
@@ -125,13 +125,13 @@ export async function getAuthenticatedUser(request: Request | NextRequest): Prom
 
   if (!token) return null;
   // Custom signed tokens are restricted to the explicitly enabled demonstration environment.
-  if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEMO_AUTH !== 'false') {
+  if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEMO_AUTH === 'true') {
     const demoUser = verifySignedToken(token);
-    if (demoUser) return demoUser;
+    if (demoUser && (process.env.NODE_ENV === 'test' || demoUser.id.startsWith('usr-'))) return demoUser;
   }
   try {
     const { data, error } = await authClient().auth.getUser(token);
-    return error || !data.user ? null : trustedUser(data.user);
+    return error || !data.user ? null : await activeInstitutionalUser(data.user);
   } catch {
     return null;
   }
@@ -155,10 +155,11 @@ export async function requireServerAuth(
     };
   }
 
-  // These modules still use demonstration stores. Institutional accounts must never
-  // read fixture records or receive false persistence claims.
+  // Institutional access is limited to modules with a durable database adapter.
+  // New demonstration modules must be explicitly integrated before becoming available.
   const modulePath = new URL(request.url).pathname;
-  if (!user.id.startsWith('usr-') && /^\/api\/v1\/(students|schools|courses|grades|attendance|hostels|library|exams|notifications|announcements|timetable|audit|finance\/bank)(\/|$)/.test(modulePath)) {
+  const institutionalModule = /^\/api\/v1\/(auth|students|schools|departments|programs|staff|admissions|courses|grades|reports|events|attendance|exams|timetable|library|hostels|notifications|audit|finance\/(?:bank|invoices|mpesa)|results\/transcript|announcements|support|ai\/chat)(\/|$)/;
+  if (!user.id.startsWith('usr-') && modulePath.startsWith('/api/v1/') && !institutionalModule.test(modulePath)) {
     return { errorResponse: NextResponse.json({ success:false, error:'This module requires an institutional database adapter. Demonstration records are unavailable to institutional accounts.' }, {status:503}) };
   }
 

@@ -41,7 +41,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="flex-1 flex flex-col md:flex-row">
           <Sidebar role={session.role} />
           <main className="min-w-0 w-full max-w-7xl mx-auto flex-1 p-4 sm:p-8 overflow-y-auto">
-            <p className="mb-4 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Academic records are demonstration data until institutional database adapters are configured. Payment prompts remain pending until Safaricom confirmation.</p>
+            {session.id.startsWith('usr-')?<p className="mb-4 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Demonstration workspace. Academic records are sample data. Payment prompts remain pending until Safaricom confirmation.</p>:<p className="mb-4 rounded border border-slate-200 bg-white p-3 text-sm text-slate-700">Institutional workspace. Records load from your university database within your authorized role. Payment prompts remain pending until provider confirmation.</p>}
             {!module || canAccessPage(session.role, module) ? children : <p role="alert">Your role does not have access to this page.</p>}
           </main>
         </div>

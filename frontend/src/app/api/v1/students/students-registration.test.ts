@@ -33,9 +33,10 @@ test('student registration: unauthorized roles cannot register students', async 
   assert.equal(res.status, 403);
 });
 
-test('student registration: successfully registers a new student with full details and audit logging', async () => {
-  const regNo = `BIT/2026/TEST_${Date.now()}`;
-  const email = `test.student.${Date.now()}@university.ac.ke`;
+test('student registration: successfully registers an isolated demo student with full details and audit logging', async (context) => {
+  const outbound = context.mock.method(globalThis, 'fetch', async () => { throw new Error('Demo registration must not make outbound requests'); });
+  const regNo = `SMU/BIT/2026/TEST_${Date.now()}`;
+  const email = `test.student.${Date.now()}@summit.ac.ke`;
 
   const req = makeRequest('registrar', 'POST', {
     full_name: 'Kelvin Test User',
@@ -49,10 +50,11 @@ test('student registration: successfully registers a new student with full detai
   });
 
   const res = await POST(req);
+  assert.equal(outbound.mock.callCount(), 0);
   assert.equal(res.status, 201);
   const data = await res.json();
   assert.equal(data.success, true);
-  assert.match(data.message, /Student registered: Kelvin Test User/);
+  assert.match(data.message, /Demonstration student registered: Kelvin Test User/);
   assert.equal(data.data.admission_number, regNo);
   assert.equal(data.data.email, email.toLowerCase());
   assert.equal(data.data.current_year_of_study, 1);

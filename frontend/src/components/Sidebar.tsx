@@ -22,6 +22,10 @@ import {
   Menu,
   ChevronDown,
   ChevronUp,
+  UserPlus,
+  IdCard,
+  CalendarPlus,
+  BarChart3,
 } from 'lucide-react';
 import { UserRole } from '@/types';
 import { canAccessPage } from '@/lib/auth/roles';
@@ -49,6 +53,11 @@ export default function Sidebar({ role = 'student' }: SidebarProps) {
     { name: 'Timetable', href: '/dashboard/timetable', icon: Calendar, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student'] },
     { name: 'Announcements', href: '/dashboard/announcements', icon: Bell, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student'] },
     { name: 'SMS & Dispatch', href: '/dashboard/notifications', icon: Send, roles: ['super_admin', 'admin', 'finance_officer', 'registrar'] },
+    { name: 'Admissions', href: '/dashboard/admissions', icon: UserPlus, roles: ['super_admin', 'admin', 'registrar', 'hod'] },
+    { name: 'Faculty & Staff', href: '/dashboard/staff', icon: IdCard, roles: ['super_admin', 'admin', 'registrar'] },
+    { name: 'Campus Events', href: '/dashboard/events', icon: CalendarPlus, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student'] },
+    { name: 'Reports & Analytics', href: '/dashboard/reports', icon: BarChart3, roles: ['super_admin', 'admin', 'registrar', 'finance_officer', 'hod'] },
+    { name: 'Student Hub Inbox', href: '/dashboard/support', icon: Send, roles: ['super_admin','admin','registrar'] },
     { name: 'Audit Logs', href: '/dashboard/audit', icon: Activity, roles: ['super_admin'] },
   ];
 

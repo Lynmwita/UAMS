@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth/context';
 import { roleHasPermission } from '@/lib/auth/rbac';
 import { CreditCard, Smartphone, Building, CheckCircle2, ArrowRight, Copy, Check, Info, Download, FileText, UploadCloud, RefreshCw } from 'lucide-react';
 import { generateFeeStatementPDF } from '@/lib/pdf/generator';
+import InstitutionalFinance from './institutional-finance';
 
 interface BankTransactionItem {
   id: string;
@@ -21,7 +22,7 @@ interface BankTransactionItem {
 }
 
 export default function FinancePage() {
-  const { role } = useAuth();
+  const { role,id } = useAuth();
   const paybill=process.env.NEXT_PUBLIC_MPESA_SHORTCODE || '';
   const paybillLabel=paybill && !paybill.includes('your_') ? paybill : 'Not configured';
   const canReconcile = roleHasPermission(role, 'finance:reconcile');
@@ -209,6 +210,7 @@ export default function FinancePage() {
     doc.save(`Fee_Statement_${admissionNo.replace(/\//g, '_')}.pdf`);
   };
 
+  if(!id.startsWith('usr-'))return <InstitutionalFinance/>;
   return (
     <div className="space-y-6">
       <p className="text-sm text-amber-800">Historical invoices and balances on this screen are demonstration data. New M-Pesa receipts require provider confirmation; invoice allocation must be completed by Finance.</p>

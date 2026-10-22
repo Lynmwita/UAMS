@@ -49,7 +49,9 @@ test('requireRole rejects a user whose role is not allowed', () => {
 });
 
 test('student list route requires authentication', async () => {
-  const server = app.listen(0);
+  const {createGateway}=require('../src/gateway');
+  const gateway=createGateway({upstreamOrigin:'https://canonical.example.edu',fetchImpl:async()=>Response.json({success:false,error:'Authentication required'},{status:401})});
+  const server = gateway.listen(0);
   const { port } = server.address();
 
   try {
@@ -64,10 +66,15 @@ test('student list route requires authentication', async () => {
   }
 });
 
-test('valid student token can access the student list', async () => {
-  const server = app.listen(0);
+test('opaque student credentials are validated by the canonical student-list service', async () => {
+  const {createGateway}=require('../src/gateway');
+  const gateway=createGateway({upstreamOrigin:'https://canonical.example.edu',fetchImpl:async(url,options)=>{
+    assert.equal(options.headers.authorization,'Bearer real-student-access-token');
+    return Response.json({success:true,data:[]});
+  }});
+  const server = gateway.listen(0);
   const { port } = server.address();
-  const token = buildDemoToken('student');
+  const token = 'real-student-access-token';
 
   try {
     const response = await fetch(`http://127.0.0.1:${port}/api/v1/students`, {

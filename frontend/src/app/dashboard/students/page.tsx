@@ -130,7 +130,13 @@ const CAMPUSES = [
 ];
 
 export default function StudentsPage() {
-  const { role } = useAuth();
+  const { role,id:actorId } = useAuth();
+  const institutional=!actorId.startsWith('usr-');
+  const [programs,setPrograms]=useState<{id:string;name:string}[]>([]);
+  const [programId,setProgramId]=useState('');
+  const [birthDate,setBirthDate]=useState('');
+  const [gender,setGender]=useState('other');
+  useEffect(()=>{if(institutional)fetch('/api/v1/programs').then(r=>r.json()).then(d=>{if(d.success)setPrograms(d.data);});},[institutional]);
   const canWrite = roleHasPermission(role, 'students:write');
 
   const [error, setError] = useState('');
@@ -423,6 +429,7 @@ export default function StudentsPage() {
           year_of_study: yearOfStudy,
           campus_code: campusCode,
           initial_password: trimmedPassword,
+          ...(institutional?{program_id:programId,date_of_birth:birthDate,gender}:{}),
         }),
       });
 
@@ -440,7 +447,7 @@ export default function StudentsPage() {
         fullName: trimmedName,
         regNo: trimmedRegNo,
         email: trimmedEmail,
-        password: trimmedPassword,
+        password: institutional?undefined:trimmedPassword,
       });
 
       setIsModalOpen(false);
@@ -791,20 +798,22 @@ export default function StudentsPage() {
               <p className="text-sm font-bold text-emerald-950">
                 Student registered: {successBanner.fullName} ({successBanner.regNo}).
               </p>
-              <p className="text-xs text-emerald-800 mt-1">
+              {institutional?<p className="text-xs text-emerald-800 mt-1">Academic record saved. Invite the student to link their institutional login. Student Hub enrollment synchronization runs separately.</p>:<p className="text-xs text-emerald-800 mt-1">
                 They can sign in at the Student Hub with their email (
                 <span className="font-mono font-semibold">{successBanner.email}</span>) and the initial password.
-              </p>
+              </p>}
             </div>
           </div>
           <div className="flex items-center space-x-2 self-end sm:self-center">
             <button
+              hidden={institutional}
               onClick={handleCopyCredentials}
               className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition"
             >
               {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               <span>{copied ? 'Copied!' : 'Copy credentials'}</span>
             </button>
+            {institutional&&<button className="border rounded px-3 py-2" onClick={async()=>{try{const r=await fetch('/api/v1/staff/invite',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:successBanner.email})});const d=await r.json();if(!r.ok)throw new Error(d.error);setModalError('');alert(d.message);}catch(e:any){setModalError(e.message);}}}>Invite institutional account</button>}
             <a
               href="https://student-life-campus-hub.vercel.app/login"
               target="_blank"
@@ -1114,6 +1123,7 @@ export default function StudentsPage() {
               </div>
 
               {/* Faculty & Department */}
+              {institutional&&<div className="grid grid-cols-2 gap-4"><label>Program<select required aria-label="Program" value={programId} onChange={e=>setProgramId(e.target.value)} className="w-full border rounded p-2"><option value="">Choose program</option>{programs.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label>Date of birth<input required type="date" value={birthDate} onChange={e=>setBirthDate(e.target.value)} className="w-full border rounded p-2"/></label><label>Gender<select value={gender} onChange={e=>setGender(e.target.value)} className="w-full border rounded p-2"><option value="other">Other</option><option value="female">Female</option><option value="male">Male</option></select></label></div>}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase mb-1">

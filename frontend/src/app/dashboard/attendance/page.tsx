@@ -5,7 +5,9 @@ import { useAuth } from '@/lib/auth/context';
 import { CalendarCheck, Plus, QrCode, CheckCircle2, XCircle, Clock, AlertTriangle, X, Check, Users, Sparkles } from 'lucide-react';
 
 export default function AttendancePage() {
-  const { role } = useAuth();
+  const { role,id:actorId } = useAuth();
+  const institutional=!actorId.startsWith('usr-');
+  const [courses,setCourses]=useState<{code:string;title:string}[]>([]);
   const canWrite = role === 'lecturer' || role === 'super_admin';
   const [error,setError]=useState('');
   const [sessions,setSessions]=useState<{id:string;date:string;course:string;courseTitle:string;topic:string;lecturer:string;present:number;total:number;percentage:string}[]>([]);
@@ -24,6 +26,8 @@ export default function AttendancePage() {
 
   const [studentRoll,setStudentRoll]=useState<{id:string;adm:string;name:string;status:'present'|'absent'|'late'|'excused'}[]>([]);
   useEffect(()=>{fetch('/api/v1/attendance').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);setSessions(d.data.sessions);setStudentRoll(d.data.roster);}).catch(e=>setError(e.message));},[]);
+  useEffect(()=>{if(institutional)fetch('/api/v1/courses').then(r=>r.json()).then(d=>{if(d.success){setCourses(d.data);if(d.data[0])setSessionForm(p=>({...p,course:d.data[0].code,courseTitle:d.data[0].title}));}});},[institutional]);
+  useEffect(()=>{if(institutional&&sessionForm.course)fetch('/api/v1/attendance?course_code='+encodeURIComponent(sessionForm.course)).then(r=>r.json()).then(d=>{if(d.success)setStudentRoll(d.data.roster);else setError(d.error);});},[institutional,sessionForm.course]);
   // Simulate QR Code countdown
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -67,6 +71,7 @@ export default function AttendancePage() {
   return (
     <div className="space-y-6">
       {error && <p role="alert" className="text-rose-700">{error}</p>}
+      {institutional&&canWrite&&<label>Course attendance roster<select aria-label="Course attendance roster" className="border rounded p-2" value={sessionForm.course} onChange={e=>setSessionForm({...sessionForm,course:e.target.value,courseTitle:courses.find(c=>c.code===e.target.value)?.title||e.target.value})}>{courses.map(c=><option key={c.code} value={c.code}>{c.code} — {c.title}</option>)}</select></label>}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-200 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-academic-navy-950 tracking-tight">

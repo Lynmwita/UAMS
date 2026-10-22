@@ -1,3 +1,4 @@
+import { institutionalApi } from '@/lib/academic/institutional-api';
 import { NextResponse } from 'next/server';
 import { requirePermission } from '@/lib/auth/server-auth';
 import { recordAuditEvent } from '@/lib/audit/audit-logger';
@@ -65,6 +66,7 @@ export async function GET(req: Request) {
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
+  if (!auth.user.id.startsWith('usr-')) return institutionalApi(req, auth.user, 'finance/bank/reconcile');
 
   return NextResponse.json({
     success: true,
@@ -83,6 +85,7 @@ export async function POST(req: Request) {
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
+  if (!auth.user.id.startsWith('usr-')) return institutionalApi(req, auth.user, 'finance/bank/reconcile');
 
   const { user } = auth;
   try {

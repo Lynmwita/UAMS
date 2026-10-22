@@ -1,5 +1,7 @@
 # UAMS
 
+Implementation and activation status: [current checkpoint](docs/IMPLEMENTATION_STATUS.md). The institutional workflow code is implemented locally; production migrations, configuration and acceptance are tracked in [live rollout](docs/LIVE_ROLLOUT.md).
+
 University Administration Management System (UAMS) is a web-based platform designed to centralize and simplify the management of university academic and administrative activities.
 
 ## Project Structure
