@@ -59,3 +59,24 @@ test('dispatch: invalid phone fails honestly; retry increments attempts; sent lo
   assert.equal(retrySent.status, 409);
   assert.equal(listData.meta.providers.mode, 'mock');
 });
+
+test('retry brake: attempts stop at 3 and the 4th try is rejected with 400', async () => {
+  const created = await POST(makeRequest('POST', {
+    recipient_identifier: '0700000000',
+    channel: 'sms',
+    message_content: 'UAMS TEST: brake check.',
+  }));
+  const createdData = await created.json();
+  const id = createdData.data.id;
+  assert.equal(createdData.data.attempts, 1);
+
+  const r1 = await PATCH(makeRequest('PATCH', { id, action: 'retry' }));
+  assert.equal((await r1.json()).data.attempts, 2);
+  const r2 = await PATCH(makeRequest('PATCH', { id, action: 'retry' }));
+  assert.equal((await r2.json()).data.attempts, 3);
+
+  const r3 = await PATCH(makeRequest('PATCH', { id, action: 'retry' }));
+  assert.equal(r3.status, 400);
+  const r3Data = await r3.json();
+  assert.match(r3Data.error, /Maximum retry limit of 3 reached/);
+});

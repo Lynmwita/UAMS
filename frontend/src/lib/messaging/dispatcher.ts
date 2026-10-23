@@ -1,6 +1,32 @@
 import { getAfricasTalkingConfig, sendSmsViaAfricasTalking } from './africas-talking';
 import { getResendConfig, getSmtpConfig, sendEmailViaResend, sendEmailViaSmtp, SmtpSender } from './email';
 import { isValidEmailAddress, normalizeKenyanPhone } from './phone';
+import { contentGuardError, estimatedSmsCost, scanSmsContent, smsSegments } from './content-guard';
+
+/** Hard brake: a notification may be attempted at most 3 times in total. */
+export const MAX_DISPATCH_ATTEMPTS = 3;
+
+/** Live SMS is opt-in: real airtime is spent only when ENABLE_LIVE_SMS=true. */
+export function liveSmsEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.ENABLE_LIVE_SMS === 'true';
+}
+
+/** Sandbox simulation used when Africa's Talking is configured but live SMS is off. */
+function simulateSandboxSms(input: DispatchInput, to: string): DispatchResult {
+  const cost = estimatedSmsCost(input.messageContent);
+  const shouldFail = to.endsWith('0000');
+  if (shouldFail) {
+    return { status: 'failed', provider: 'africas_talking', mode: 'mock', error: "Sandbox simulation: provider rejected the message (recipient ends in 0000)." };
+  }
+  return {
+    status: 'sent',
+    provider: 'africas_talking',
+    mode: 'mock',
+    providerMessageId: `ATXid_sbx_${Math.random().toString(36).slice(2, 10)}`,
+    cost: `KES ${cost.toFixed(2)} (sandbox, ${smsSegments(input.messageContent)} segment${smsSegments(input.messageContent) > 1 ? 's' : ''})`,
+    costAmount: cost,
+  };
+}
 import { DispatchResult, FetchFn } from './types';
 
 /**
@@ -39,13 +65,15 @@ function mockDispatch(input: DispatchInput, normalizedTo: string): DispatchResul
       error: 'Mock provider simulated a delivery failure for this recipient.',
     };
   }
+  const isSms = String(input.channel || 'sms').toLowerCase() === 'sms';
+  const cost = isSms ? estimatedSmsCost(input.messageContent) : 0;
   return {
     status: 'sent',
     provider: 'mock',
     mode: 'mock',
     providerMessageId: `mock-${Date.now()}`,
-    cost: 'KES 0.00 (mock)',
-    costAmount: 0,
+    cost: isSms ? `KES ${cost.toFixed(2)} (mock estimate, ${smsSegments(input.messageContent)} segment${smsSegments(input.messageContent) > 1 ? 's' : ''})` : 'KES 0.00 (mock)',
+    costAmount: cost,
   };
 }
 
@@ -54,6 +82,14 @@ export async function dispatchNotification(input: DispatchInput, deps: Dispatche
   const channel = String(input.channel || 'sms').toLowerCase();
 
   if (channel === 'sms') {
+    // Content & privacy guard (KDPA): never let secrets ride over SMS.
+    const findings = scanSmsContent(input.messageContent || '');
+    if (findings.length > 0) {
+      return {
+        normalizedRecipient: String(input.recipientIdentifier || ''),
+        result: { status: 'failed', provider: 'content_guard', mode: getAfricasTalkingConfig(env) ? 'live' : 'mock', error: contentGuardError(findings) },
+      };
+    }
     const to = normalizeKenyanPhone(input.recipientIdentifier);
     if (!to) {
       return {
@@ -63,6 +99,9 @@ export async function dispatchNotification(input: DispatchInput, deps: Dispatche
     }
     const config = getAfricasTalkingConfig(env);
     if (!config) return { normalizedRecipient: to, result: mockDispatch(input, to) };
+    // Financial brake: without ENABLE_LIVE_SMS=true we simulate in sandbox
+    // and never spend real airtime, even when real keys are present.
+    if (!liveSmsEnabled(env)) return { normalizedRecipient: to, result: simulateSandboxSms(input, to) };
     const result = await sendSmsViaAfricasTalking({ to, message: input.messageContent }, { config, fetchFn: deps.fetchFn });
     return { normalizedRecipient: to, result };
   }
@@ -95,7 +134,7 @@ export function messagingProviderStatus(env: NodeJS.ProcessEnv = process.env) {
   const resend = getResendConfig(env);
   const smtp = getSmtpConfig(env);
   return {
-    sms: sms ? { configured: true, provider: 'africas_talking', sandbox: sms.sandbox, senderId: sms.senderId || null } : { configured: false, provider: null as string | null, sandbox: false, senderId: null },
+    sms: sms ? { configured: true, provider: 'africas_talking', sandbox: sms.sandbox, senderId: sms.senderId || null, liveEnabled: liveSmsEnabled(env) } : { configured: false, provider: null as string | null, sandbox: false, senderId: null, liveEnabled: false },
     email: resend
       ? { configured: true, provider: 'resend' }
       : smtp
@@ -105,6 +144,6 @@ export function messagingProviderStatus(env: NodeJS.ProcessEnv = process.env) {
   };
 }
 
-export function isRetryableStatus(status: string): boolean {
-  return status === 'failed' || status === 'queued';
+export function isRetryableStatus(status: string, attempts = 0): boolean {
+  return (status === 'failed' || status === 'queued') && attempts < MAX_DISPATCH_ATTEMPTS;
 }

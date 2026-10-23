@@ -96,7 +96,7 @@ test('dispatcher: mock mode is honest, normalizes phones, and can simulate failu
 });
 
 test('dispatcher: live env routes SMS through the injected transport', async () => {
-  const env = { AT_API_KEY: 'k', AT_USERNAME: 'sandbox' } as unknown as NodeJS.ProcessEnv;
+  const env = { AT_API_KEY: 'k', AT_USERNAME: 'sandbox', ENABLE_LIVE_SMS: 'true' } as unknown as NodeJS.ProcessEnv;
   assert.equal(messagingProviderStatus(env).sms.configured, true);
   const res = await dispatchNotification(
     { channel: 'sms', recipientIdentifier: '0712345678', messageContent: 'Exam card ready' },
@@ -105,4 +105,37 @@ test('dispatcher: live env routes SMS through the injected transport', async () 
   assert.equal(res.result.provider, 'africas_talking');
   assert.equal(res.result.providerMessageId, 'AT-77');
   assert.equal(res.result.mode, 'live');
+});
+
+test('content guard: secrets in an SMS are blocked before any provider is called', async () => {
+  const { scanSmsContent, smsSegments, estimatedSmsCost } = await import('./content-guard');
+  assert.ok(scanSmsContent('Your password is: Sunrise2026!').length > 0);
+  assert.ok(scanSmsContent('Your PIN: 1234').length > 0);
+  assert.equal(scanSmsContent('UAMS NOTICE: Your exam card is ready. Log into the portal.').length, 0);
+  assert.equal(smsSegments('x'.repeat(160)), 1);
+  assert.equal(smsSegments('x'.repeat(161)), 2);
+  assert.equal(estimatedSmsCost('x'.repeat(161)), 1.6);
+
+  const env = {} as unknown as NodeJS.ProcessEnv;
+  const blocked = await dispatchNotification(
+    { channel: 'sms', recipientIdentifier: '0712345678', messageContent: 'Your new password is: Sunrise2026!' },
+    { env }
+  );
+  assert.equal(blocked.result.status, 'failed');
+  assert.equal(blocked.result.provider, 'content_guard');
+  assert.match(blocked.result.error || '', /content guard/i);
+});
+
+test('financial brake: AT keys without ENABLE_LIVE_SMS=true simulate in sandbox, no live call', async () => {
+  const env = { AT_API_KEY: 'k', AT_USERNAME: 'liveuser' } as unknown as NodeJS.ProcessEnv;
+  let liveCalls = 0;
+  const res = await dispatchNotification(
+    { channel: 'sms', recipientIdentifier: '0712345678', messageContent: 'Fee reminder: log into the portal.' },
+    { env, fetchFn: (async () => { liveCalls++; throw new Error('must not be called'); }) as any }
+  );
+  assert.equal(liveCalls, 0);
+  assert.equal(res.result.mode, 'mock');
+  assert.equal(res.result.provider, 'africas_talking');
+  assert.match(res.result.providerMessageId || '', /^ATXid_sbx_/);
+  assert.equal(res.result.costAmount, 0.8);
 });

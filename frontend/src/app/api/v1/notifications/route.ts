@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { NotificationLog } from '@/types';
 import { requireServerAuth } from '@/lib/auth/server-auth';
 import { notificationLogs } from '@/lib/messaging/notification-store';
-import { dispatchNotification, isRetryableStatus, messagingProviderStatus } from '@/lib/messaging/dispatcher';
+import { dispatchNotification, isRetryableStatus, MAX_DISPATCH_ATTEMPTS, messagingProviderStatus } from '@/lib/messaging/dispatcher';
 
 const STAFF_ROLES = ['super_admin', 'admin', 'registrar', 'finance_officer'] as const;
 
@@ -116,7 +116,11 @@ export async function PATCH(req: NextRequest) {
     }
     const log = notificationLogs.find((n) => n.id === body.id);
     if (!log) return NextResponse.json({ success: false, error: 'Notification not found.' }, { status: 404 });
-    if (!isRetryableStatus(log.status)) {
+    if ((log.attempts || 0) >= MAX_DISPATCH_ATTEMPTS) {
+      log.delivery_error = 'Maximum retry limit of 3 reached. Marked as permanently failed to prevent airtime exhaustion.';
+      return NextResponse.json({ success: false, error: 'Maximum retry limit of 3 reached. Marked as permanently failed to prevent airtime exhaustion.', data: log }, { status: 400 });
+    }
+    if (!isRetryableStatus(log.status, log.attempts || 0)) {
       return NextResponse.json({ success: false, error: `Only failed or queued notifications can be retried (this one is ${log.status}).` }, { status: 409 });
     }
     const { result, normalizedRecipient } = await dispatchNotification({

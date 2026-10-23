@@ -172,11 +172,12 @@ export default function NotificationsPage() {
                       <button
                         type="button"
                         onClick={() => handleRetry(l.id)}
-                        disabled={retryingId === l.id}
+                        disabled={retryingId === l.id || (l.attempts || 0) >= 3}
+                        title={(l.attempts || 0) >= 3 ? 'Maximum retry limit of 3 reached - permanently failed to prevent airtime exhaustion' : 'Retry this notification'}
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-academic-navy-900 text-white hover:bg-academic-navy-800 disabled:opacity-50 transition"
                       >
                         <RefreshCcw className="h-3 w-3" />
-                        {retryingId === l.id ? 'Retrying...' : 'Retry'}
+                        {(l.attempts || 0) >= 3 ? 'Max retries' : retryingId === l.id ? 'Retrying...' : 'Retry'}
                       </button>
                     )}
                   </div>
@@ -257,6 +258,27 @@ export default function NotificationsPage() {
                   className="w-full text-xs p-2.5 rounded-lg border border-slate-300 font-mono"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Quick Templates (privacy-safe: details stay in the portal)</label>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { name: 'Fee Update', text: 'UAMS FEE UPDATE: A change was made to your fee statement. Please log into the Student Portal to view your balance and details. Do not share your password or PIN with anyone.' },
+                  { name: 'Exam Card Ready', text: 'UAMS NOTICE: Your examination clearance card is ready. Please log into the Student Portal to download it. Do not share your password or PIN with anyone.' },
+                  { name: 'Admissions', text: 'UAMS ADMISSIONS: There is an update on your application. Please log into the portal to view it and complete any next steps. Do not share your password or PIN with anyone.' },
+                ].map((tpl) => (
+                  <button
+                    key={tpl.name}
+                    type="button"
+                    onClick={() => setForm({ ...form, message_content: tpl.text })}
+                    className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-100 hover:bg-academic-navy-100 text-slate-700 border border-slate-200 transition"
+                  >
+                    {tpl.name}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">SMS is plain text: never include passwords, PINs or account numbers - the content guard will block them.</p>
             </div>
 
             <div>
