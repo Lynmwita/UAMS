@@ -12,17 +12,21 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const status = searchParams.get('status');
   const program = searchParams.get('program_code');
+  const entryType = searchParams.get('entry_type');
   const search = searchParams.get('search')?.toLowerCase();
 
   let results = [...admissionsStore];
   if (status) results = results.filter((a) => a.status === status);
   if (program) results = results.filter((a) => a.program_code === program.toUpperCase());
+  if (entryType) results = results.filter((a) => a.entry_type === entryType.toUpperCase());
   if (search) {
     results = results.filter(
       (a) =>
         a.applicant_name.toLowerCase().includes(search) ||
         a.reference_number.toLowerCase().includes(search) ||
-        a.applicant_email.toLowerCase().includes(search)
+        a.applicant_email.toLowerCase().includes(search) ||
+        (a.kcse_index && a.kcse_index.toLowerCase().includes(search)) ||
+        (a.admission_number && a.admission_number.toLowerCase().includes(search))
     );
   }
 

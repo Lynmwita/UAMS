@@ -141,6 +141,7 @@ CREATE TABLE IF NOT EXISTS notification_logs (
     status VARCHAR(20) DEFAULT 'queued' CHECK (status IN ('queued', 'sent', 'delivered', 'failed')),
     error_message TEXT,
     cost NUMERIC(8, 4) DEFAULT 0.00,
+    retry_count INT DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

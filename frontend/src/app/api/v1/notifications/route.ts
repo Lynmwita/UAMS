@@ -1,103 +1,97 @@
-import { institutionalApi } from '@/lib/academic/institutional-api';
 import { NextRequest, NextResponse } from 'next/server';
-import { NotificationLog } from '@/types';
 import { requireServerAuth } from '@/lib/auth/server-auth';
-
-let notificationLogs: NotificationLog[] = [
-  {
-    id: 'ntf-01',
-    recipient_type: 'student',
-    recipient_identifier: '+254712345678',
-    recipient_name: 'Faith Wanjiku',
-    channel: 'sms',
-    message_content: 'UAMS ALERT: Your M-Pesa fee payment of KES 35,000 (Ref: QHJ8829101) has been verified. Current balance: KES 0.',
-    provider: 'africas_talking',
-    status: 'delivered',
-    created_at: '2026-10-03 14:32:00',
-  },
-  {
-    id: 'ntf-02',
-    recipient_type: 'student',
-    recipient_identifier: '+254723456789',
-    recipient_name: 'Kevin Otieno',
-    channel: 'sms',
-    message_content: 'UAMS NOTICE: Exam clearance card generated for Semester 1, 2026/2027. Download your clearance card from the student portal.',
-    provider: 'africas_talking',
-    status: 'delivered',
-    created_at: '2026-10-04 09:15:00',
-  },
-  {
-    id: 'ntf-03',
-    recipient_type: 'broadcast',
-    recipient_identifier: 'All Students & Staff',
-    recipient_name: 'All University Community',
-    channel: 'sms',
-    subject: 'Mid-Semester Examinations Commencement',
-    message_content: 'UAMS BROADCAST: Mid-Semester Examinations begin on 15th October 2026. Please check your personalized examination schedule online.',
-    provider: 'africas_talking',
-    status: 'sent',
-    created_at: '2026-10-05 08:00:00',
-  },
-];
+import { executeDispatch, getNotificationLogs } from '@/lib/communications/dispatcher-service';
 
 export async function GET(req: NextRequest) {
-  const auth = await requireServerAuth(req, ['super_admin','admin','registrar','finance_officer']);
+  const auth = await requireServerAuth(req, ['super_admin', 'admin', 'registrar', 'finance_officer', 'student']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
- if(!auth.user.id.startsWith('usr-'))return institutionalApi(req,auth.user,'notifications');
 
   const { user } = auth;
+  const isDemo = user.id.startsWith('usr-');
+  const allLogs = await getNotificationLogs(isDemo);
+
+  // Catch 1: Ensure no internal server keys or credentials are ever present in log output
+  const sanitizedLogs = allLogs.map(log => {
+    const { ...safeLog } = log;
+    return safeLog;
+  });
+
+  // Students can only see broadcasts or notifications specifically addressed to them
   if (user.role === 'student') {
-    // Only return broadcast or personal alerts
-    const filtered = notificationLogs.filter(
-      (n) => n.recipient_type === 'broadcast' || n.recipient_name.toLowerCase().includes('faith')
+    const userEmail = (user.email || '').toLowerCase();
+    const filtered = sanitizedLogs.filter(
+      (n) => n.recipient_type === 'broadcast' ||
+             (n.recipient_identifier && n.recipient_identifier.toLowerCase().includes(userEmail))
     );
     return NextResponse.json({ success: true, data: filtered });
   }
 
   return NextResponse.json({
     success: true,
-    data: notificationLogs,
+    data: sanitizedLogs,
+    meta: {
+      mode: process.env.ENABLE_LIVE_SMS === 'true' ? 'production' : 'sandbox',
+      airtime_brakes_active: process.env.ENABLE_LIVE_SMS !== 'true',
+      max_retries: 3,
+    },
   });
 }
 
 export async function POST(req: NextRequest) {
-  // Staff authorization required for sending notifications
+  // Catch 2: Only authorized staff roles can trigger SMS / Email dispatch
   const auth = await requireServerAuth(req, ['super_admin', 'admin', 'registrar', 'finance_officer']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
- if(!auth.user.id.startsWith('usr-'))return institutionalApi(req,auth.user,'notifications');
+
   try {
     const body = await req.json();
     const { recipient_type, recipient_identifier, recipient_name, channel, message_content, subject } = body;
 
     if (!recipient_identifier || !message_content) {
-      return NextResponse.json({ success: false, error: 'Recipient identifier and message content are required.' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: 'Recipient identifier and message content are required.' },
+        { status: 400 }
+      );
     }
 
-    const newLog: NotificationLog = {
-      id: `ntf-${Date.now()}`,
-      recipient_type: recipient_type || 'student',
-      recipient_identifier,
-      recipient_name: recipient_name || recipient_identifier,
-      channel: channel || 'sms',
-      subject,
-      message_content,
-      provider: 'africas_talking',
-      status: 'queued',
-      created_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
-    };
+    const isDemo = auth.user.id.startsWith('usr-');
 
-    notificationLogs.unshift(newLog);
+    const result = await executeDispatch(
+      {
+        recipient_type: recipient_type || 'student',
+        recipient_identifier,
+        recipient_name: recipient_name || recipient_identifier,
+        channel: channel || 'sms',
+        subject,
+        message_content,
+      },
+      isDemo
+    );
+
+    if (!result.success && result.log.status === 'failed') {
+      return NextResponse.json({
+        success: false,
+        error: result.error || 'Failed to dispatch notification.',
+        data: result.log,
+        warning: result.warning,
+      }, { status: 400 });
+    }
 
     return NextResponse.json({
       success: true,
-      message: `Notification queued for ${newLog.recipient_identifier}. Delivery provider is not configured.`,
-      data: newLog,
+      message: result.log.status === 'delivered'
+        ? `Notification delivered to ${result.log.recipient_identifier}.`
+        : `Notification dispatched (${result.log.status}) to ${result.log.recipient_identifier}.`,
+      data: result.log,
+      warning: result.warning,
     });
-  } catch (error) {
-    return NextResponse.json({ success: false, error: 'Failed to dispatch notification.' }, { status: 500 });
+  } catch (error: any) {
+    return NextResponse.json(
+      { success: false, error: error?.message || 'Internal notification dispatch error.' },
+      { status: 500 }
+    );
   }
 }

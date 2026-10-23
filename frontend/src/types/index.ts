@@ -225,6 +225,60 @@ export interface NotificationLog {
   message_content: string;
   provider: 'africas_talking' | 'smtp_relay' | 'system';
   status: 'delivered' | 'sent' | 'queued' | 'failed';
+  provider_message_id?: string;
+  error_message?: string;
+  cost?: number;
+  retry_count?: number;
   created_at: string;
 }
 
+export interface ApplicationDocuments {
+  kcse_slip?: string;
+  national_id_doc?: string;
+  passport_photo?: string;
+  leaving_cert?: string;
+}
+
+export interface UamsAdmissionApplication {
+  id: string;
+  reference_number: string;
+  applicant_name: string;
+  applicant_email: string;
+  applicant_phone: string;
+  gender: 'male' | 'female' | 'other';
+  date_of_birth: string;
+  program_code: string;
+  program_name: string;
+  intake: string;
+  intake_year: number;
+  kcse_grade: string;
+  kcse_points: number;
+  kcse_index?: string;
+  national_id?: string;
+  cluster_weight?: number;
+  entry_type: 'KUCCPS' | 'DIRECT';
+  previous_institution?: string;
+  documents?: ApplicationDocuments;
+  status: 'submitted' | 'under_review' | 'shortlisted' | 'admitted' | 'rejected';
+  reviewed_by?: string;
+  reviewed_at?: string;
+  admission_number?: string;
+  offer_letter_generated_at?: string;
+  submitted_at: string;
+}
+
+export interface KuccpsPlacementRecord {
+  kcse_index: string;
+  applicant_name: string;
+  gender: 'male' | 'female' | 'other';
+  applicant_phone: string;
+  applicant_email: string;
+  program_code: string;
+  program_name?: string;
+  cluster_weight?: number;
+  kcse_grade: string;
+  kcse_points: number;
+  national_id?: string;
+  intake_year?: number;
+  intake?: string;
+}
