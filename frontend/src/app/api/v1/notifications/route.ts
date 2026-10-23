@@ -2,50 +2,39 @@ import { institutionalApi } from '@/lib/academic/institutional-api';
 import { NextRequest, NextResponse } from 'next/server';
 import { NotificationLog } from '@/types';
 import { requireServerAuth } from '@/lib/auth/server-auth';
+import { notificationLogs } from '@/lib/messaging/notification-store';
+import { dispatchNotification, isRetryableStatus, messagingProviderStatus } from '@/lib/messaging/dispatcher';
 
-let notificationLogs: NotificationLog[] = [
-  {
-    id: 'ntf-01',
-    recipient_type: 'student',
-    recipient_identifier: '+254712345678',
-    recipient_name: 'Faith Wanjiku',
-    channel: 'sms',
-    message_content: 'UAMS ALERT: Your M-Pesa fee payment of KES 35,000 (Ref: QHJ8829101) has been verified. Current balance: KES 0.',
-    provider: 'africas_talking',
-    status: 'delivered',
-    created_at: '2026-10-03 14:32:00',
-  },
-  {
-    id: 'ntf-02',
-    recipient_type: 'student',
-    recipient_identifier: '+254723456789',
-    recipient_name: 'Kevin Otieno',
-    channel: 'sms',
-    message_content: 'UAMS NOTICE: Exam clearance card generated for Semester 1, 2026/2027. Download your clearance card from the student portal.',
-    provider: 'africas_talking',
-    status: 'delivered',
-    created_at: '2026-10-04 09:15:00',
-  },
-  {
-    id: 'ntf-03',
-    recipient_type: 'broadcast',
-    recipient_identifier: 'All Students & Staff',
-    recipient_name: 'All University Community',
-    channel: 'sms',
-    subject: 'Mid-Semester Examinations Commencement',
-    message_content: 'UAMS BROADCAST: Mid-Semester Examinations begin on 15th October 2026. Please check your personalized examination schedule online.',
-    provider: 'africas_talking',
-    status: 'sent',
-    created_at: '2026-10-05 08:00:00',
-  },
-];
+const STAFF_ROLES = ['super_admin', 'admin', 'registrar', 'finance_officer'] as const;
+
+function nowStamp() {
+  return new Date().toISOString().replace('T', ' ').substring(0, 19);
+}
+
+function applyDispatch(log: NotificationLog, result: Awaited<ReturnType<typeof dispatchNotification>>['result']) {
+  log.status = result.status;
+  log.provider = result.provider;
+  log.provider_message_id = result.providerMessageId;
+  log.delivery_error = result.error;
+  log.cost = result.cost;
+  log.dispatch_mode = result.mode;
+  log.attempts = (log.attempts || 0) + 1;
+  log.updated_at = nowStamp();
+}
+
+function outcomeMessage(log: NotificationLog): string {
+  const target = log.recipient_identifier;
+  if (log.status === 'failed') return `Notification to ${target} FAILED: ${log.delivery_error || 'provider error'}`;
+  if (log.dispatch_mode === 'mock') return `Notification mock-sent to ${target} (no live provider configured - nothing left UAMS). Configure Africa's Talking / email env keys for real delivery.`;
+  return `Notification ${log.status} via ${log.provider} to ${target}.`;
+}
 
 export async function GET(req: NextRequest) {
-  const auth = await requireServerAuth(req, ['super_admin','admin','registrar','finance_officer']);
+  const auth = await requireServerAuth(req, ['super_admin', 'admin', 'registrar', 'finance_officer']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
- if(!auth.user.id.startsWith('usr-'))return institutionalApi(req,auth.user,'notifications');
+  if (!auth.user.id.startsWith('usr-')) return institutionalApi(req, auth.user, 'notifications');
 
   const { user } = auth;
   if (user.role === 'student') {
@@ -59,16 +48,17 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     success: true,
     data: notificationLogs,
+    meta: { providers: messagingProviderStatus() },
   });
 }
 
 export async function POST(req: NextRequest) {
   // Staff authorization required for sending notifications
-  const auth = await requireServerAuth(req, ['super_admin', 'admin', 'registrar', 'finance_officer']);
+  const auth = await requireServerAuth(req, [...STAFF_ROLES]);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
- if(!auth.user.id.startsWith('usr-'))return institutionalApi(req,auth.user,'notifications');
+  if (!auth.user.id.startsWith('usr-')) return institutionalApi(req, auth.user, 'notifications');
   try {
     const body = await req.json();
     const { recipient_type, recipient_identifier, recipient_name, channel, message_content, subject } = body;
@@ -85,19 +75,60 @@ export async function POST(req: NextRequest) {
       channel: channel || 'sms',
       subject,
       message_content,
-      provider: 'africas_talking',
+      provider: 'system',
       status: 'queued',
-      created_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      attempts: 0,
+      created_at: nowStamp(),
     };
-
     notificationLogs.unshift(newLog);
+
+    // A3: actually dispatch (live provider when configured, mock otherwise).
+    const { result, normalizedRecipient } = await dispatchNotification({
+      channel: newLog.channel,
+      recipientIdentifier: recipient_identifier,
+      subject,
+      messageContent: message_content,
+    });
+    newLog.recipient_identifier = normalizedRecipient || recipient_identifier;
+    applyDispatch(newLog, result);
 
     return NextResponse.json({
       success: true,
-      message: `Notification queued for ${newLog.recipient_identifier}. Delivery provider is not configured.`,
+      message: outcomeMessage(newLog),
       data: newLog,
     });
   } catch (error) {
     return NextResponse.json({ success: false, error: 'Failed to dispatch notification.' }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  // Retry a failed (or stuck queued) notification.
+  const auth = await requireServerAuth(req, [...STAFF_ROLES]);
+  if ('errorResponse' in auth) {
+    return auth.errorResponse;
+  }
+  if (!auth.user.id.startsWith('usr-')) return institutionalApi(req, auth.user, 'notifications');
+  try {
+    const body = await req.json();
+    if (body?.action !== 'retry' || !body?.id) {
+      return NextResponse.json({ success: false, error: 'Provide { id, action: "retry" }.' }, { status: 400 });
+    }
+    const log = notificationLogs.find((n) => n.id === body.id);
+    if (!log) return NextResponse.json({ success: false, error: 'Notification not found.' }, { status: 404 });
+    if (!isRetryableStatus(log.status)) {
+      return NextResponse.json({ success: false, error: `Only failed or queued notifications can be retried (this one is ${log.status}).` }, { status: 409 });
+    }
+    const { result, normalizedRecipient } = await dispatchNotification({
+      channel: log.channel,
+      recipientIdentifier: log.recipient_identifier,
+      subject: log.subject,
+      messageContent: log.message_content,
+    });
+    if (normalizedRecipient) log.recipient_identifier = normalizedRecipient;
+    applyDispatch(log, result);
+    return NextResponse.json({ success: true, message: outcomeMessage(log), data: log });
+  } catch (error) {
+    return NextResponse.json({ success: false, error: 'Failed to retry notification.' }, { status: 500 });
   }
 }

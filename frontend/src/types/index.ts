@@ -223,8 +223,15 @@ export interface NotificationLog {
   channel: 'sms' | 'email' | 'in_app';
   subject?: string;
   message_content: string;
-  provider: 'africas_talking' | 'smtp_relay' | 'system';
+  provider: 'africas_talking' | 'smtp_relay' | 'system' | string;
   status: 'delivered' | 'sent' | 'queued' | 'failed';
   created_at: string;
+  // A3 dispatch telemetry (optional; older records may not carry these)
+  provider_message_id?: string;
+  delivery_error?: string;
+  cost?: string;
+  attempts?: number;
+  updated_at?: string;
+  dispatch_mode?: 'live' | 'mock';
 }
 

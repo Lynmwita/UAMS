@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { TokenPayload } from '@/lib/auth/server-auth';
 import { institutionalRows,institutionalDatabase,readStudents,readGrades,courseScope,callInstitutional } from './institutional';
 import { extractStudentPhoto, isValidStudentPhoto } from '@/lib/students/photo';
+import { dispatchNotification } from '@/lib/messaging/dispatcher';
 
 const fail=(error:string,status=400)=>NextResponse.json({success:false,error},{status});
 const resources:Record<string,string>={staff:'uams_staff_records',admissions:'uams_admission_records',schools:'schools',departments:'departments',programs:'programs',courses:'uams_course_records',events:'campus_events','courses/register':'uams_registration_records','finance/bank/record':'uams_bank_records','finance/bank/reconcile':'uams_bank_records'};
@@ -55,6 +56,21 @@ export async function institutionalApi(request:Request,user:TokenPayload,module:
   let body:Record<string,any>;
   try {const raw=await request.json();if(!raw||typeof raw!=='object'||Array.isArray(raw))return fail('Provide a JSON object.');body=raw;}catch{return fail('Provide valid JSON.');}
   const validation=validate(module,body,request.method);if(validation)return fail(validation);
+  if(module==='notifications'&&request.method==='PATCH') {
+   // A3 retry: re-dispatch a failed/queued institutional notification and
+   // write the new outcome back onto its notification_logs row.
+   if(body.action!=='retry'||typeof body.id!=='string'||!body.id)return fail('Provide { id, action: "retry" }.');
+   const rows=await institutionalRows('notification_logs');
+   const row=rows.find(r=>String(r.id)===body.id);
+   if(!row)return fail('Notification not found.',404);
+   if(!['failed','queued'].includes(String(row.status)))return fail(`Only failed or queued notifications can be retried (this one is ${row.status}).`,409);
+   const {result}=await dispatchNotification({channel:row.channel||'sms',recipientIdentifier:row.recipient_identifier,subject:row.subject,messageContent:row.message_content});
+   const patchRow:Record<string,unknown>={status:result.status,provider:result.provider,provider_message_id:result.providerMessageId||null,error_message:result.error||null};
+   if(typeof result.costAmount==='number')patchRow.cost=result.costAmount;
+   const {error:updateError}=await institutionalDatabase().from('notification_logs').update(patchRow).eq('id',row.id);
+   if(updateError)return fail('Retry outcome could not be saved.',503);
+   return NextResponse.json({success:true,data:{...row,...patchRow,dispatch_mode:result.mode},message:'Notification retry dispatched.'});
+  }
   let operation=operations[module];
   if(module==='exams')operation=body.action==='schedule_exam'?'exam.schedule':'';
   if(module==='timetable')operation='timetable.create';
@@ -86,6 +102,19 @@ export async function institutionalApi(request:Request,user:TokenPayload,module:
     const {error:photoError}=await institutionalDatabase().from('users').update({avatar_url:photo}).eq('id',data.user_id);
     if(!photoError)data.photo_url=photo;
    }
+  }
+  if(module==='notifications'&&request.method==='POST'&&data?.id) {
+   // A3: the workflow queued the record; now actually dispatch it and write
+   // the delivery outcome back onto the same notification_logs row.
+   try {
+    const {result}=await dispatchNotification({channel:body.channel||'sms',recipientIdentifier:body.recipient_identifier,subject:body.subject,messageContent:body.message_content});
+    const patchRow:Record<string,unknown>={status:result.status,provider:result.provider,provider_message_id:result.providerMessageId||null,error_message:result.error||null};
+    if(typeof result.costAmount==='number')patchRow.cost=result.costAmount;
+    const {error:updateError}=await institutionalDatabase().from('notification_logs').update(patchRow).eq('id',data.id);
+    if(!updateError){data.status=result.status;data.provider=result.provider;data.provider_message_id=result.providerMessageId||null;data.error_message=result.error||null;data.dispatch_mode=result.mode;}
+    else data.dispatch_warning='Delivery outcome could not be written back to the log.';
+    data.dispatch_mode=result.mode;
+   } catch { data.dispatch_warning='Dispatch failed unexpectedly; the record stays queued for retry.'; }
   }
   return NextResponse.json({success:true,data,message:'Saved to the institutional database.'},{status:request.method==='POST'?201:200});
  }catch(error:any){const code=error?.code;return fail(code==='42501'?'Operation outside your authorized scope.':code==='23505'?'Record already exists.':code==='P0002'?'Record not found.':code?'Institutional operation rejected. Check required fields and workflow prerequisites.':'Institutional database did not acknowledge the operation. Retry using the same reference where applicable.',code==='42501'?403:code==='23505'?409:code==='P0002'?404:code?400:503);}
