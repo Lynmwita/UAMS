@@ -7,7 +7,7 @@ export function institutionalDatabase() {
   if (!url || !key || url.includes('your-') || key.includes('your-')) throw new Error('Institutional database is not configured.');
   return createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false},global:{fetch:(input,init)=>fetch(input,{...init,cache:'no-store',signal:AbortSignal.timeout(15000)})}});
 }
-export type InstitutionalStudent = { id:string;user_id:string;admission_number:string;first_name:string;last_name:string;email:string;gender:string;program_id:string;program_name:string;department_id:string;department:string;faculty:string;campus_code:string;current_year_of_study:number;current_semester_number:number;status:string;admission_date:string;cgpa:number;fee_balance:number;updated_at:string };
+export type InstitutionalStudent = { id:string;user_id:string;admission_number:string;first_name:string;last_name:string;email:string;gender:string;program_id:string;program_name:string;department_id:string;department:string;faculty:string;campus_code:string;current_year_of_study:number;current_semester_number:number;status:string;admission_date:string;cgpa:number;fee_balance:number;updated_at:string;photo_url?:string;avatar_url?:string };
 export async function institutionalRows<T = Record<string, any>>(resource:string):Promise<T[]> {
   const db=institutionalDatabase(); const rows:T[]=[];
   for(let start=0;;start+=500) {

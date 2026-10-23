@@ -7,6 +7,7 @@ import { recordAuditEvent } from '@/lib/audit/audit-logger';
 
 // In-memory student store synchronized with database schema
 import { studentsStore } from '@/lib/academic/student-records';
+import { extractStudentPhoto, isValidStudentPhoto } from '@/lib/students/photo';
 
 export async function GET(request: NextRequest) {
   // Enforce server-side authentication
@@ -121,6 +122,14 @@ export async function POST(request: NextRequest) {
     const semester = Number(body.semester ?? body.current_semester_number ?? 1);
     const campusCode = (body.campus_code || body.campus || 'ZU-TECH').trim();
     const initialPassword = body.initial_password || body.initialPassword || 'StudentPassword123!';
+    // One profile photo for the student: shown as their avatar and printed on the ID card.
+    const photo = extractStudentPhoto(body);
+    if (photo !== undefined && photo !== null && !isValidStudentPhoto(photo)) {
+      return NextResponse.json(
+        { success: false, error: 'Profile photo must be an image (JPG/PNG/WebP) or an https photo URL.' },
+        { status: 400 }
+      );
+    }
 
     // Basic required field validations
     if (!fullName || !email || !regNo) {
@@ -190,6 +199,7 @@ export async function POST(request: NextRequest) {
       admission_date: new Date().toISOString().split('T')[0],
       cgpa: 0.0,
       fee_balance: body.fee_balance === undefined ? 55000 : Number(body.fee_balance),
+      ...(photo ? { photo_url: photo } : {}),
     };
 
     studentsStore.unshift(newStudent);
@@ -396,6 +406,16 @@ export async function PATCH(request: NextRequest) {
     }
     if (body.fee_balance !== undefined) {
       student.fee_balance = Number(body.fee_balance);
+    }
+    const patchPhoto = extractStudentPhoto(body);
+    if (patchPhoto !== undefined) {
+      if (patchPhoto === null) {
+        delete student.photo_url;
+      } else if (!isValidStudentPhoto(patchPhoto)) {
+        return NextResponse.json({ success: false, error: 'Profile photo must be an image (JPG/PNG/WebP) or an https photo URL.' }, { status: 400 });
+      } else {
+        student.photo_url = patchPhoto;
+      }
     }
 
     recordAuditEvent({

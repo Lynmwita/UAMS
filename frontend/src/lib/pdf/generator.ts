@@ -485,6 +485,8 @@ export function generateStudentIDCardPDF(data: {
   student: PDFStudentInfo;
   issueDate?: string;
   expiryDate?: string;
+  /** The student's profile photo as a data URL - the same photo shown on screen. */
+  photoDataUrl?: string;
 }) {
   // CR80 Card Size in Landscape (85.6mm x 54mm)
   const doc = new jsPDF({
@@ -521,9 +523,25 @@ export function generateStudentIDCardPDF(data: {
   doc.setDrawColor(203, 213, 225);
   doc.roundedRect(6, 16, 22, 28, 1, 1, 'S');
 
-  doc.setFontSize(6);
-  doc.setTextColor(SLATE[0], SLATE[1], SLATE[2]);
-  doc.text('PHOTO', 17, 30, { align: 'center' });
+  // Student photo: print the real profile photo when we have it as a data
+  // URL (the same photo as the on-screen card); otherwise keep the placeholder.
+  let photoDrawn = false;
+  if (data.photoDataUrl && data.photoDataUrl.startsWith('data:image/')) {
+    try {
+      const format = data.photoDataUrl.includes('image/png') ? 'PNG' : data.photoDataUrl.includes('image/webp') ? 'WEBP' : 'JPEG';
+      doc.addImage(data.photoDataUrl, format as any, 6, 16, 22, 28);
+      doc.setDrawColor(203, 213, 225);
+      doc.roundedRect(6, 16, 22, 28, 1, 1, 'S');
+      photoDrawn = true;
+    } catch {
+      photoDrawn = false;
+    }
+  }
+  if (!photoDrawn) {
+    doc.setFontSize(6);
+    doc.setTextColor(SLATE[0], SLATE[1], SLATE[2]);
+    doc.text('PHOTO', 17, 30, { align: 'center' });
+  }
 
   // Student Details
   doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { TokenPayload } from '@/lib/auth/server-auth';
-import { callInstitutional, readStudents } from './institutional';
+import { callInstitutional, institutionalDatabase, readStudents } from './institutional';
+import { extractStudentPhoto, isValidStudentPhoto } from '@/lib/students/photo';
 
 /** Keep the existing registrar PATCH contract on the durable workflow. */
 export async function updateInstitutionalStudent(request: Request, actor: TokenPayload) {
@@ -28,7 +29,15 @@ export async function updateInstitutionalStudent(request: Request, actor: TokenP
       if (body[key] !== undefined) update[key] = body[key];
     }
     if (body.current_year_of_study !== undefined || body.year_of_study !== undefined) update.current_year_of_study = body.current_year_of_study ?? body.year_of_study;
+    const photo = extractStudentPhoto(body as Record<string, unknown>);
+    if (photo !== undefined && photo !== null && !isValidStudentPhoto(photo)) return fail('Profile photo must be an image (JPG/PNG/WebP) or an https photo URL.');
     const data = await callInstitutional('student.update', update, actor);
+    if (photo !== undefined) {
+      // The durable photo home is users.avatar_url; the student records view exposes it as photo_url.
+      const { error: photoError } = await institutionalDatabase().from('users').update({ avatar_url: photo }).eq('id', student.user_id);
+      if (photoError) return fail('Student saved, but the profile photo could not be saved. Try the photo again from Edit.');
+      if (data && typeof data === 'object') (data as Record<string, unknown>).photo_url = photo;
+    }
     return NextResponse.json({ success: true, data, message: 'Student record saved to the institutional database.' });
   } catch (error: unknown) {
     const code = (error as { code?: string })?.code;

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { TokenPayload } from '@/lib/auth/server-auth';
 import { institutionalRows,institutionalDatabase,readStudents,readGrades,courseScope,callInstitutional } from './institutional';
+import { extractStudentPhoto, isValidStudentPhoto } from '@/lib/students/photo';
 
 const fail=(error:string,status=400)=>NextResponse.json({success:false,error},{status});
 const resources:Record<string,string>={staff:'uams_staff_records',admissions:'uams_admission_records',schools:'schools',departments:'departments',programs:'programs',courses:'uams_course_records',events:'campus_events','courses/register':'uams_registration_records','finance/bank/record':'uams_bank_records','finance/bank/reconcile':'uams_bank_records'};
@@ -76,7 +77,16 @@ export async function institutionalApi(request:Request,user:TokenPayload,module:
   }
   if(module==='finance/bank/reconcile')return fail('Use Record Bank Deposit to atomically verify and allocate the authoritative payment ledger.',409);
   if(!operation)return fail('Unsupported operation.',405);
-  const data=await callInstitutional(operation,body,user);
+  const data:any=await callInstitutional(operation,body,user);
+  if(module==='students'&&request.method==='POST') {
+   const photo=extractStudentPhoto(body);
+   if(photo!==undefined&&photo!==null&&!isValidStudentPhoto(photo))return fail('Profile photo must be an image (JPG/PNG/WebP) or an https photo URL.');
+   if(photo&&data?.user_id) {
+    // The durable photo home is users.avatar_url; the student records view exposes it as photo_url.
+    const {error:photoError}=await institutionalDatabase().from('users').update({avatar_url:photo}).eq('id',data.user_id);
+    if(!photoError)data.photo_url=photo;
+   }
+  }
   return NextResponse.json({success:true,data,message:'Saved to the institutional database.'},{status:request.method==='POST'?201:200});
  }catch(error:any){const code=error?.code;return fail(code==='42501'?'Operation outside your authorized scope.':code==='23505'?'Record already exists.':code==='P0002'?'Record not found.':code?'Institutional operation rejected. Check required fields and workflow prerequisites.':'Institutional database did not acknowledge the operation. Retry using the same reference where applicable.',code==='42501'?403:code==='23505'?409:code==='P0002'?404:code?400:503);}
 }

@@ -17,6 +17,8 @@ export interface StudentRecord {
   admission_date: string;
   cgpa: number;
   fee_balance: number;
+  /** The student's one profile photo (data URL or https URL). Same photo is printed on the ID card. */
+  photo_url?: string;
 }
 
 const seed: StudentRecord[] = [

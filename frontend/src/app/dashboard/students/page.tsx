@@ -23,11 +23,15 @@ import {
   AlertCircle,
   ExternalLink,
   Edit,
+  Camera,
+  Trash2,
   UserX,
   UserCheck,
   AlertTriangle,
 } from 'lucide-react';
 import { generateExamCardPDF, generateStudentIDCardPDF } from '@/lib/pdf/generator';
+import { StudentAvatar, StudentIdCard, StudentIdCardBack } from '@/components/StudentIdCard';
+import { fileToStudentPhotoDataUrl } from '@/lib/students/photo';
 
 const FACULTY_DEPARTMENTS: Record<string, string[]> = {
   'School of Computing & Informatics': [
@@ -160,6 +164,8 @@ export default function StudentsPage() {
     gpa: number;
     feeBalance: number;
     feeCleared: boolean;
+    /** The one profile photo - also the photo on the ID card. */
+    photoUrl?: string;
   };
 
   const [students, setStudents] = useState<StudentRow[]>([]);
@@ -179,6 +185,7 @@ export default function StudentsPage() {
     gpa: s.cgpa || 0,
     feeBalance: s.fee_balance || 0,
     feeCleared: (s.fee_balance || 0) === 0,
+    photoUrl: s.photo_url || s.avatar_url || s.profile_photo_url || undefined,
   });
 
   const fetchStudents = async () => {
@@ -220,6 +227,7 @@ export default function StudentsPage() {
         setIsModalOpen(false);
         setModalError('');
         setFieldErrors({});
+        setIdCardStudent(null);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -259,6 +267,19 @@ export default function StudentsPage() {
   const [yearOfStudy, setYearOfStudy] = useState(1);
   const [campusCode, setCampusCode] = useState('SMU-MAIN');
   const [password, setPassword] = useState('StudentPassword123!');
+  // Profile photo: one photo for the profile AND the ID card (live preview below).
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [photoError, setPhotoError] = useState('');
+
+  const handlePhotoFile = async (file: File | undefined, apply: (url: string) => void, setErr: (m: string) => void) => {
+    if (!file) return;
+    setErr('');
+    try {
+      apply(await fileToStudentPhotoDataUrl(file));
+    } catch (err: any) {
+      setErr(err.message || 'That photo could not be used.');
+    }
+  };
 
   const validateField = (
     field: 'fullName' | 'email' | 'regNo' | 'password' | 'program',
@@ -356,6 +377,8 @@ export default function StudentsPage() {
     setYearOfStudy(1);
     setCampusCode('SMU-MAIN');
     setPassword('StudentPassword123!');
+    setPhotoUrl('');
+    setPhotoError('');
     setModalError('');
     setFieldErrors({});
     setTouched({});
@@ -431,6 +454,7 @@ export default function StudentsPage() {
           year_of_study: yearOfStudy,
           campus_code: campusCode,
           initial_password: trimmedPassword,
+          ...(photoUrl ? { photo_url: photoUrl } : {}),
           ...(institutional?{program_id:programId,date_of_birth:birthDate,gender}:{}),
         }),
       });
@@ -483,6 +507,8 @@ export default function StudentsPage() {
   const [editYearOfStudy, setEditYearOfStudy] = useState(1);
   const [editCampusCode, setEditCampusCode] = useState('ZU-TECH');
   const [editFeeBalance, setEditFeeBalance] = useState(0);
+  const [editPhotoUrl, setEditPhotoUrl] = useState('');
+  const [editPhotoError, setEditPhotoError] = useState('');
   const [editModalError, setEditModalError] = useState('');
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editFieldErrors, setEditFieldErrors] = useState<{
@@ -518,6 +544,8 @@ export default function StudentsPage() {
     setEditProgram(matchedProg);
 
     setEditYearOfStudy(student.year || 1);
+    setEditPhotoUrl(student.photoUrl || '');
+    setEditPhotoError('');
     setEditCampusCode(student.campusCode || 'ZU-TECH');
     setEditFeeBalance(student.feeBalance || 0);
 
@@ -633,6 +661,8 @@ export default function StudentsPage() {
           year_of_study: editYearOfStudy,
           campus_code: editCampusCode,
           fee_balance: editFeeBalance,
+          // Send the photo only when it changed ('' on purpose = remove it).
+          ...(editPhotoUrl !== (editingStudent.photoUrl || '') ? { photo_url: editPhotoUrl } : {}),
         }),
       });
 
@@ -737,6 +767,8 @@ export default function StudentsPage() {
     doc.save(`Exam_Clearance_Card_${student.admissionNo.replace(/\//g, '_')}.pdf`);
   };
 
+  const [idCardStudent, setIdCardStudent] = useState<StudentRow | null>(null);
+
   const handleDownloadIDCard = (student: typeof students[0]) => {
     const doc = generateStudentIDCardPDF({
       student: {
@@ -747,6 +779,8 @@ export default function StudentsPage() {
         semesterNumber: student.semester,
       },
       expiryDate: 'DECEMBER 2027',
+      // Same profile photo, printed on the card (data URLs only - jsPDF cannot fetch remote URLs reliably).
+      photoDataUrl: student.photoUrl?.startsWith('data:image/') ? student.photoUrl : undefined,
     });
 
     doc.save(`Student_ID_${student.admissionNo.replace(/\//g, '_')}.pdf`);
@@ -892,7 +926,12 @@ export default function StudentsPage() {
               {filtered.map((s) => (
                 <tr key={s.id} className="hover:bg-slate-50/60 transition">
                   <td className="px-5 py-3.5 font-mono font-semibold text-academic-navy-800">{s.admissionNo}</td>
-                  <td className="px-5 py-3.5 font-medium text-slate-900">{s.name}</td>
+                  <td className="px-5 py-3.5 font-medium text-slate-900">
+                    <div className="flex items-center gap-2.5">
+                      <StudentAvatar name={s.name} photoUrl={s.photoUrl} size="sm" />
+                      <span>{s.name}</span>
+                    </div>
+                  </td>
                   <td className="px-5 py-3.5 font-mono text-xs text-slate-500">{s.email}</td>
                   {role !== 'finance_officer' && <td className="px-5 py-3.5 text-slate-600">{s.program}</td>}
                   {role !== 'finance_officer' && (
@@ -938,9 +977,9 @@ export default function StudentsPage() {
                     <div className="flex items-center justify-center space-x-1.5">
                       {role !== 'finance_officer' && (
                         <button
-                          onClick={() => handleDownloadIDCard(s)}
+                          onClick={() => setIdCardStudent(s)}
                           className="inline-flex items-center space-x-1 text-xs font-semibold px-2 py-1 rounded bg-academic-navy-50 hover:bg-academic-navy-100 text-academic-navy-800 border border-academic-navy-200 transition"
-                          title="Download PVC Student ID Card PDF"
+                          title="View Student ID Card"
                         >
                           <CreditCard className="h-3.5 w-3.5 text-academic-gold-600" />
                           <span className="hidden xl:inline">ID Card</span>
@@ -1014,7 +1053,7 @@ export default function StudentsPage() {
           }}
           className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
         >
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center space-x-2">
                 <Users className="h-5 w-5 text-academic-gold-500" />
@@ -1045,6 +1084,58 @@ export default function StudentsPage() {
             )}
 
             <form noValidate onSubmit={handleRegisterStudent} className="space-y-4 mt-4 text-sm">
+              {/* Profile photo + live ID card preview: ONE photo for both */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 bg-slate-50 border border-slate-200 rounded-xl p-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Profile Photo
+                  </label>
+                  <p className="text-[11px] text-slate-500 mb-3">
+                    This one photo becomes the student&apos;s profile photo <strong>and</strong> the photo on their Student ID Card.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <StudentAvatar name={fullName || 'New Student'} photoUrl={photoUrl || undefined} size="lg" />
+                    <div className="flex flex-col gap-1.5">
+                      <label htmlFor="student-photo-input" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-academic-navy-900 hover:bg-academic-navy-800 text-white rounded-lg text-xs font-semibold cursor-pointer transition">
+                        <Camera className="h-3.5 w-3.5 text-academic-gold-400" />
+                        <span>{photoUrl ? 'Change photo' : 'Upload photo'}</span>
+                      </label>
+                      <input
+                        id="student-photo-input"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => { handlePhotoFile(e.target.files?.[0], setPhotoUrl, setPhotoError); e.target.value = ''; }}
+                      />
+                      {photoUrl && (
+                        <button type="button" onClick={() => setPhotoUrl('')} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold transition">
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span>Remove</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {photoError && <p className="mt-2 text-xs text-rose-600 font-medium">{photoError}</p>}
+                  <p className="mt-2 text-[11px] text-slate-500">JPG or PNG. It is cropped square and resized automatically. You can also add it later from Edit.</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-700 uppercase mb-2">Student ID Card - Live Preview</p>
+                  <StudentIdCard
+                    compact
+                    student={{
+                      name: fullName || 'Student Name',
+                      admissionNo: regNo || 'REG/2026/0000',
+                      program: program,
+                      faculty,
+                      department,
+                      campusCode,
+                      year: yearOfStudy,
+                      photoUrl: photoUrl || undefined,
+                    }}
+                  />
+                </div>
+              </div>
+
               {/* Full Name */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
@@ -1364,6 +1455,35 @@ export default function StudentsPage() {
             )}
 
             <form noValidate onSubmit={handleSaveEdit} className="space-y-4 mt-4 text-sm">
+              {/* Profile photo - the same photo appears on the ID card */}
+              <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <StudentAvatar name={editFullName || editingStudent.name} photoUrl={editPhotoUrl || undefined} size="lg" />
+                <div>
+                  <p className="text-xs font-bold text-slate-700 uppercase">Profile Photo</p>
+                  <p className="text-[11px] text-slate-500 mb-1.5">Same photo on the profile and the Student ID Card.</p>
+                  <div className="flex items-center gap-1.5">
+                    <label htmlFor="edit-student-photo-input" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-academic-navy-900 hover:bg-academic-navy-800 text-white rounded-lg text-xs font-semibold cursor-pointer transition">
+                      <Camera className="h-3.5 w-3.5 text-academic-gold-400" />
+                      <span>{editPhotoUrl ? 'Change photo' : 'Upload photo'}</span>
+                    </label>
+                    <input
+                      id="edit-student-photo-input"
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(e) => { handlePhotoFile(e.target.files?.[0], setEditPhotoUrl, setEditPhotoError); e.target.value = ''; }}
+                    />
+                    {editPhotoUrl && (
+                      <button type="button" onClick={() => setEditPhotoUrl('')} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold transition">
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>Remove</span>
+                      </button>
+                    )}
+                  </div>
+                  {editPhotoError && <p className="mt-1.5 text-xs text-rose-600 font-medium">{editPhotoError}</p>}
+                </div>
+              </div>
+
               {/* Full Name */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
@@ -1606,6 +1726,45 @@ export default function StudentsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Student ID Card Viewer - the student's profile photo IS the card photo */}
+      {idCardStudent && (
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setIdCardStudent(null); }}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+        >
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center space-x-2">
+                <CreditCard className="h-5 w-5 text-academic-gold-500" />
+                <h3 className="text-lg font-bold text-academic-navy-950">Student ID Card</h3>
+              </div>
+              <button type="button" aria-label="Close" onClick={() => setIdCardStudent(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-4">
+              <div className="flex items-center gap-3">
+                <StudentAvatar name={idCardStudent.name} photoUrl={idCardStudent.photoUrl} size="lg" />
+                <div>
+                  <p className="font-bold text-slate-900">{idCardStudent.name}</p>
+                  <p className="text-xs text-slate-500">Profile photo and ID card photo are the same photo.</p>
+                  {!idCardStudent.photoUrl && <p className="text-xs text-amber-700 font-medium mt-0.5">No photo yet - add one from Edit and it will appear here.</p>}
+                </div>
+              </div>
+              <StudentIdCard student={{ name: idCardStudent.name, admissionNo: idCardStudent.admissionNo, program: idCardStudent.program, faculty: idCardStudent.faculty, department: idCardStudent.department, campusCode: idCardStudent.campusCode, year: idCardStudent.year, semester: idCardStudent.semester, status: idCardStudent.status, photoUrl: idCardStudent.photoUrl }} />
+              <StudentIdCardBack admissionNo={idCardStudent.admissionNo} />
+              <div className="flex items-center justify-end space-x-3 pt-2 border-t border-slate-100">
+                <button type="button" onClick={() => setIdCardStudent(null)} className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50">Close</button>
+                <button type="button" onClick={() => handleDownloadIDCard(idCardStudent)} className="px-5 py-2 bg-academic-navy-900 hover:bg-academic-navy-800 text-white rounded-lg text-sm font-bold shadow flex items-center space-x-2">
+                  <Download className="h-4 w-4 text-academic-gold-400" />
+                  <span>Download PDF Card</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
