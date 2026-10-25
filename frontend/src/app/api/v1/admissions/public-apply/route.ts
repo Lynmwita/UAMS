@@ -3,6 +3,7 @@ import { admissionsStore, generateReferenceNumber } from '@/lib/academic/admissi
 import { normalizeKenyanPhone } from '@/lib/communications/phone-sanitizer';
 import { executeDispatch } from '@/lib/communications/dispatcher-service';
 import { recordAuditEvent } from '@/lib/audit/audit-logger';
+import { programsStore } from '@/lib/academic/structure';
 import { UamsAdmissionApplication } from '@/types';
 
 export async function POST(request: NextRequest) {
@@ -59,6 +60,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Please select a degree programme.' }, { status: 400 });
     }
 
+    const programCodeClean = String(program_code).trim().toUpperCase();
+    const matchedProgram = programsStore.find(
+      (p) => p.code.toUpperCase() === programCodeClean && p.is_active
+    );
+    if (!matchedProgram) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Invalid programme code '${program_code}'. Please select an active degree programme from the catalogue.`,
+        },
+        { status: 400 }
+      );
+    }
+
     if (!kcse_grade) {
       return NextResponse.json({ success: false, error: 'KCSE mean grade is required.' }, { status: 400 });
     }
@@ -98,8 +113,8 @@ export async function POST(request: NextRequest) {
       applicant_phone: phoneSanitized.normalized,
       gender,
       date_of_birth: String(date_of_birth),
-      program_code: String(program_code).toUpperCase(),
-      program_name: program_name ? String(program_name) : String(program_code).toUpperCase(),
+      program_code: matchedProgram.code,
+      program_name: matchedProgram.name,
       intake: String(intake),
       intake_year: year,
       kcse_grade: String(kcse_grade).trim().toUpperCase(),

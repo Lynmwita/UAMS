@@ -1,3 +1,10 @@
+/**
+ * UAMS Admissions Store & Services
+ *
+ * NOTE: Admissions data currently operates on an in-memory runtime store.
+ * Supabase SQL persistence for the admissions schema is a named follow-up,
+ * and the system operates honestly without masking this architecture.
+ */
 import { UamsAdmissionApplication, KuccpsPlacementRecord, ApplicationDocuments } from '@/types';
 
 export type { UamsAdmissionApplication, KuccpsPlacementRecord, ApplicationDocuments };

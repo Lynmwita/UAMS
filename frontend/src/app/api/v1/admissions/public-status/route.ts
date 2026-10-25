@@ -13,6 +13,17 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // Under KDPA 2019 privacy rules, status check requires matching phone or email — never disclosure on ref alone
+  if (!verify) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Verification required. Provide matching applicant phone number (or last 4 digits) or email address (?verify=...).',
+      },
+      { status: 400 }
+    );
+  }
+
   // Find candidate by reference number or kcse_index
   const application = admissionsStore.find(
     (a) =>
@@ -28,24 +39,25 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // KDPA privacy verification: if verify is provided, ensure phone or email matches
-  if (verify) {
-    const phoneClean = application.applicant_phone.replace(/[^0-9]/g, '');
-    const verifyClean = verify.replace(/[^0-9]/g, '');
-    const phoneMatches =
-      verifyClean.length >= 4 &&
-      (phoneClean.endsWith(verifyClean) || phoneClean === verifyClean);
-    const emailMatches = application.applicant_email.toLowerCase() === verify;
+  // KDPA privacy verification: ensure phone or email matches
+  const phoneClean = (application.applicant_phone || '').replace(/[^0-9]/g, '');
+  const verifyClean = verify.replace(/[^0-9]/g, '');
+  const phoneMatches =
+    verifyClean.length >= 4 &&
+    (phoneClean.endsWith(verifyClean) || phoneClean === verifyClean);
+  const emailMatches =
+    application.applicant_email &&
+    application.applicant_email !== 'not provided' &&
+    application.applicant_email.toLowerCase() === verify;
 
-    if (!phoneMatches && !emailMatches) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Verification failed. The phone number or email provided does not match our records for this application.',
-        },
-        { status: 403 }
-      );
-    }
+  if (!phoneMatches && !emailMatches) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Verification failed. The phone number or email provided does not match our records for this application.',
+      },
+      { status: 403 }
+    );
   }
 
   // Checklist of documents

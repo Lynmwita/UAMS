@@ -118,14 +118,20 @@ export default function ApplyPage() {
     e.preventDefault();
     setTrackError('');
     setTrackResult(null);
+
+    if (!trackRef.trim()) {
+      setTrackError('Please provide an Application Reference or KCSE Index Number.');
+      return;
+    }
+    if (!trackVerify.trim()) {
+      setTrackError('Verification phone number or email is required under KDPA 2019.');
+      return;
+    }
+
     setTrackingLoading(true);
 
     try {
-      let url = `/api/v1/admissions/public-status?ref=${encodeURIComponent(trackRef.trim())}`;
-      if (trackVerify.trim()) {
-        url += `&verify=${encodeURIComponent(trackVerify.trim())}`;
-      }
-
+      const url = `/api/v1/admissions/public-status?ref=${encodeURIComponent(trackRef.trim())}&verify=${encodeURIComponent(trackVerify.trim())}`;
       const res = await fetch(url);
       const data = await res.json();
 
@@ -602,9 +608,10 @@ export default function ApplyPage() {
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Verification Mobile Phone or Email (Optional)
+                      Verification Mobile Phone or Email *
                     </label>
                     <input
+                      required
                       type="text"
                       placeholder="Last 4 digits of phone or email"
                       value={trackVerify}

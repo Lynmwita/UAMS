@@ -6,6 +6,7 @@
 
 import { KuccpsPlacementRecord } from '@/types';
 import { normalizeKenyanPhone } from '@/lib/communications/phone-sanitizer';
+import { programsStore } from '@/lib/academic/structure';
 
 export interface KuccpsParseError {
   row: number;
@@ -175,14 +176,28 @@ export function parseKuccpsCsv(csvContent: string, defaultIntakeYear = 2026): Ku
       continue;
     }
 
+    // Validate programme code against active catalogue
+    const programCodeClean = rawProgram.trim().toUpperCase();
+    const matchedProgram = programsStore.find(
+      (p) => p.code.toUpperCase() === programCodeClean && p.is_active
+    );
+    if (!matchedProgram) {
+      errors.push({
+        row: i + 1,
+        error: `Programme code '${rawProgram}' does not match any active degree programme in the catalogue.`,
+        raw: rawMap,
+      });
+      continue;
+    }
+
     // Gender normalization
     let gender: 'male' | 'female' | 'other' = 'other';
     if (rawGender.startsWith('m')) gender = 'male';
     else if (rawGender.startsWith('f')) gender = 'female';
 
-    // Phone sanitization with E.164 normalization
-    let applicantPhone = '+254700000000';
-    if (rawPhone) {
+    // Phone sanitization with E.164 normalization (never invented/faked)
+    let applicantPhone = 'not provided';
+    if (rawPhone && rawPhone.trim()) {
       const sanitized = normalizeKenyanPhone(rawPhone);
       if (sanitized.valid && sanitized.normalized) {
         applicantPhone = sanitized.normalized;
@@ -196,18 +211,46 @@ export function parseKuccpsCsv(csvContent: string, defaultIntakeYear = 2026): Ku
       }
     }
 
-    // Email fallback
-    const emailCandidate = rawEmail.toLowerCase();
-    const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailCandidate);
-    const applicantEmail = isValidEmail
-      ? emailCandidate
-      : `${rawName.toLowerCase().replace(/[^a-z0-9]/g, '.')}.${kcseIndexClean.slice(-4)}@applicants.university.ac.ke`;
+    // Email verification (never invented/faked)
+    let applicantEmail = 'not provided';
+    if (rawEmail && rawEmail.trim()) {
+      const emailCandidate = rawEmail.trim().toLowerCase();
+      const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailCandidate);
+      if (isValidEmail) {
+        applicantEmail = emailCandidate;
+      } else {
+        errors.push({
+          row: i + 1,
+          error: `Invalid email address '${rawEmail}'.`,
+          raw: rawMap,
+        });
+        continue;
+      }
+    }
 
-    // Grade and Points
-    const cleanGrade = rawGrade.replace(/[^A-E+-]/g, '') || 'C+';
+    // Grade and Points (never invented/faked)
+    if (!rawGrade || !rawGrade.trim()) {
+      errors.push({
+        row: i + 1,
+        error: 'KCSE Mean Grade is required.',
+        raw: rawMap,
+      });
+      continue;
+    }
+
+    const cleanGrade = rawGrade.trim().toUpperCase().replace(/[^A-E+-]/g, '');
+    if (!cleanGrade || !KCSE_GRADE_POINTS[cleanGrade]) {
+      errors.push({
+        row: i + 1,
+        error: `Invalid KCSE Mean Grade '${rawGrade}'. Must be A through E.`,
+        raw: rawMap,
+      });
+      continue;
+    }
+
     let kcsePoints = Number(rawPoints);
     if (!Number.isFinite(kcsePoints) || kcsePoints <= 0) {
-      kcsePoints = KCSE_GRADE_POINTS[cleanGrade] || 49;
+      kcsePoints = KCSE_GRADE_POINTS[cleanGrade];
     }
 
     // Cluster weight
@@ -219,8 +262,8 @@ export function parseKuccpsCsv(csvContent: string, defaultIntakeYear = 2026): Ku
       gender,
       applicant_phone: applicantPhone,
       applicant_email: applicantEmail,
-      program_code: rawProgram,
-      program_name: rawProgramName || undefined,
+      program_code: matchedProgram.code,
+      program_name: rawProgramName || matchedProgram.name,
       cluster_weight: Number.isFinite(clusterWeight) ? clusterWeight : undefined,
       kcse_grade: cleanGrade,
       kcse_points: kcsePoints,

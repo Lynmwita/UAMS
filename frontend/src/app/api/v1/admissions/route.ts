@@ -1,5 +1,6 @@
 import { institutionalApi } from '@/lib/academic/institutional-api';
 import { admissionsStore, generateAdmissionNumber } from '@/lib/academic/admissions';
+import { programsStore } from '@/lib/academic/structure';
 import { requireServerAuth } from '@/lib/auth/server-auth';
 import { recordAuditEvent } from '@/lib/audit/audit-logger';
 import { NextRequest, NextResponse } from 'next/server';
@@ -47,6 +48,17 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const programCodeClean = String(program_code).trim().toUpperCase();
+    const matchedProgram = programsStore.find(
+      (p) => p.code.toUpperCase() === programCodeClean && p.is_active
+    );
+    if (!matchedProgram) {
+      return NextResponse.json(
+        { success: false, error: `Invalid programme code '${program_code}'. Programme code must exist in the university catalogue.` },
+        { status: 400 }
+      );
+    }
     const points = Number(kcse_points);
     if (!Number.isFinite(points) || points < 0 || points > 84) {
       return NextResponse.json({ success: false, error: 'kcse_points must be between 0 and 84.' }, { status: 400 });
@@ -64,8 +76,8 @@ export async function POST(request: NextRequest) {
       applicant_phone: String(applicant_phone).trim(),
       gender,
       date_of_birth: date_of_birth ? String(date_of_birth) : '',
-      program_code: String(program_code).toUpperCase(),
-      program_name: body.program_name || String(program_code).toUpperCase(),
+      program_code: matchedProgram.code,
+      program_name: body.program_name || matchedProgram.name,
       intake: body.intake || 'September',
       intake_year: Number(body.intake_year) || createdAt.getFullYear(),
       kcse_grade: String(kcse_grade).trim(),

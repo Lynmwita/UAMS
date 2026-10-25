@@ -84,7 +84,7 @@ export async function importKuccpsPlacements(
       applicant_email: record.applicant_email,
       applicant_phone: record.applicant_phone,
       gender: record.gender,
-      date_of_birth: '2006-01-01', // Standard default DOB for KUCCPS high school cohorts
+      date_of_birth: 'not provided', // Honest status: missing birth dates are not faked
       program_code: record.program_code,
       program_name: record.program_name || record.program_code,
       intake: intakeTerm,
