@@ -41,6 +41,7 @@ type Application = {
   admission_number?: string;
   offer_letter_generated_at?: string;
   submitted_at: string;
+  student_id?: string;
 };
 
 const STATUS_STYLES: Record<string, string> = {
@@ -48,6 +49,7 @@ const STATUS_STYLES: Record<string, string> = {
   under_review: 'bg-blue-100 text-blue-700 border-blue-200',
   shortlisted: 'bg-amber-100 text-amber-700 border-amber-200',
   admitted: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  converted: 'bg-teal-100 text-teal-800 border-teal-200 font-semibold',
   rejected: 'bg-rose-100 text-rose-700 border-rose-200',
 };
 
@@ -59,6 +61,7 @@ export default function AdmissionsPage() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(true);
+  const [convertingId, setConvertingId] = useState<string | null>(null);
 
   // KUCCPS Import Modal State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -117,6 +120,28 @@ export default function AdmissionsPage() {
     }
     setApplications((prev) => prev.map((a) => (a.id === application_id ? d.data : a)));
     setSuccessMsg(d.message || `Application status updated to ${status}.`);
+  };
+
+  const handleConvertToStudent = async (applicationId: string) => {
+    setError('');
+    setSuccessMsg('');
+    setConvertingId(applicationId);
+    try {
+      const res = await fetch(`/api/v1/admissions/${applicationId}/convert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Failed to convert applicant to student.');
+      setApplications((prev) =>
+        prev.map((a) => (a.id === applicationId ? { ...a, status: 'converted', student_id: d.data?.student?.id } : a))
+      );
+      setSuccessMsg(d.message || 'Applicant successfully converted into active student record.');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setConvertingId(null);
+    }
   };
 
   const handleDownloadSampleCsv = () => {
@@ -210,6 +235,19 @@ export default function AdmissionsPage() {
         </div>
       </div>
 
+      {/* Honest In-Memory Status Banner per Rule 2 */}
+      <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-xl text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <ShieldCheck className="w-4 h-4 text-amber-700 flex-shrink-0" />
+          <span>
+            <strong>Runtime Store Status:</strong> Admissions applications operate in-memory for this deployment. One-click conversion writes directly into the live student records store. The Supabase SQL persistence migration (<code className="font-mono text-[11px] bg-amber-100 px-1 py-0.5 rounded">20261025140000_admissions_persistence.sql</code>) is prepared for durable database deployment.
+          </span>
+        </div>
+        <span className="font-mono text-[10px] bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded font-bold uppercase shrink-0 self-start sm:self-auto">
+          In-Memory Mode
+        </span>
+      </div>
+
       {error && (
         <div className="p-4 bg-rose-50 border border-rose-200 rounded-lg text-sm text-rose-800 flex items-center gap-3">
           <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0" />
@@ -237,15 +275,15 @@ export default function AdmissionsPage() {
           </span>
         </div>
         <div className="p-4 bg-white border rounded-xl shadow-sm">
-          <span className="text-xs text-emerald-600 font-semibold block uppercase">Admitted / Letters Issued</span>
+          <span className="text-xs text-emerald-600 font-semibold block uppercase">Admitted / Letters</span>
           <span className="text-2xl font-extrabold text-emerald-700">
             {applications.filter((a) => a.status === 'admitted').length}
           </span>
         </div>
         <div className="p-4 bg-white border rounded-xl shadow-sm">
-          <span className="text-xs text-amber-600 font-semibold block uppercase">Pending Review</span>
-          <span className="text-2xl font-extrabold text-amber-700">
-            {applications.filter((a) => ['submitted', 'under_review'].includes(a.status)).length}
+          <span className="text-xs text-teal-600 font-semibold block uppercase">Converted to Students</span>
+          <span className="text-2xl font-extrabold text-teal-700">
+            {applications.filter((a) => a.status === 'converted').length}
           </span>
         </div>
       </div>
@@ -299,6 +337,7 @@ export default function AdmissionsPage() {
             <option value="under_review">Under Review</option>
             <option value="shortlisted">Shortlisted</option>
             <option value="admitted">Admitted</option>
+            <option value="converted">Converted to Student</option>
             <option value="rejected">Rejected</option>
           </select>
         </div>
@@ -368,13 +407,41 @@ export default function AdmissionsPage() {
                     <td className="p-3 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         {a.status === 'admitted' ? (
-                          <Link
-                            href={`/apply/letter/${encodeURIComponent(a.reference_number)}`}
-                            target="_blank"
-                            className="inline-flex items-center gap-1 text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100 px-2 py-1 rounded font-semibold transition"
-                          >
-                            <FileText className="w-3 h-3" /> Offer Letter
-                          </Link>
+                          <>
+                            <Link
+                              href={`/apply/letter/${encodeURIComponent(a.reference_number)}`}
+                              target="_blank"
+                              className="inline-flex items-center gap-1 text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100 px-2 py-1 rounded font-semibold transition"
+                            >
+                              <FileText className="w-3 h-3" /> Offer Letter
+                            </Link>
+                            <button
+                              onClick={() => handleConvertToStudent(a.id)}
+                              disabled={convertingId === a.id}
+                              className="inline-flex items-center gap-1 text-[11px] bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-700 px-2.5 py-1 rounded font-semibold shadow-xs transition disabled:opacity-50"
+                              title="Convert this admitted applicant into an active student record without retyping"
+                            >
+                              <UserPlus className="w-3 h-3" />
+                              {convertingId === a.id ? 'Converting...' : 'Convert to Student'}
+                            </button>
+                          </>
+                        ) : a.status === 'converted' ? (
+                          <>
+                            <Link
+                              href={`/apply/letter/${encodeURIComponent(a.reference_number)}`}
+                              target="_blank"
+                              className="inline-flex items-center gap-1 text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100 px-2 py-1 rounded font-semibold transition"
+                            >
+                              <FileText className="w-3 h-3" /> Offer Letter
+                            </Link>
+                            <Link
+                              href={`/dashboard/students?search=${encodeURIComponent(a.admission_number || a.applicant_name)}`}
+                              className="inline-flex items-center gap-1 text-[11px] bg-teal-50 text-teal-700 border border-teal-300 hover:bg-teal-100 px-2.5 py-1 rounded font-semibold transition"
+                              title="View registered student record in student registry"
+                            >
+                              <CheckCircle2 className="w-3 h-3 text-teal-600" /> View Student
+                            </Link>
+                          </>
                         ) : (
                           <button
                             className="text-[11px] border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded font-semibold transition flex items-center gap-1"
@@ -384,27 +451,31 @@ export default function AdmissionsPage() {
                           </button>
                         )}
 
-                        <button
-                          className="text-[11px] border rounded px-1.5 py-1 text-slate-600 hover:bg-slate-100"
-                          title="Set under review"
-                          onClick={() => updateStatus(a.id, 'under_review')}
-                        >
-                          Review
-                        </button>
-                        <button
-                          className="text-[11px] border rounded px-1.5 py-1 text-slate-600 hover:bg-slate-100"
-                          title="Shortlist candidate"
-                          onClick={() => updateStatus(a.id, 'shortlisted')}
-                        >
-                          Shortlist
-                        </button>
-                        <button
-                          className="text-[11px] border border-rose-200 rounded px-1.5 py-1 text-rose-600 hover:bg-rose-50"
-                          title="Reject candidate"
-                          onClick={() => updateStatus(a.id, 'rejected')}
-                        >
-                          Reject
-                        </button>
+                        {a.status !== 'converted' && (
+                          <>
+                            <button
+                              className="text-[11px] border rounded px-1.5 py-1 text-slate-600 hover:bg-slate-100"
+                              title="Set under review"
+                              onClick={() => updateStatus(a.id, 'under_review')}
+                            >
+                              Review
+                            </button>
+                            <button
+                              className="text-[11px] border rounded px-1.5 py-1 text-slate-600 hover:bg-slate-100"
+                              title="Shortlist candidate"
+                              onClick={() => updateStatus(a.id, 'shortlisted')}
+                            >
+                              Shortlist
+                            </button>
+                            <button
+                              className="text-[11px] border border-rose-200 rounded px-1.5 py-1 text-rose-600 hover:bg-rose-50"
+                              title="Reject candidate"
+                              onClick={() => updateStatus(a.id, 'rejected')}
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

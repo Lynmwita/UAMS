@@ -266,12 +266,14 @@ export interface UamsAdmissionApplication {
   entry_type: 'KUCCPS' | 'DIRECT';
   previous_institution?: string;
   documents?: ApplicationDocuments;
-  status: 'submitted' | 'under_review' | 'shortlisted' | 'admitted' | 'rejected';
+  status: 'submitted' | 'under_review' | 'shortlisted' | 'admitted' | 'rejected' | 'converted';
   reviewed_by?: string;
   reviewed_at?: string;
   admission_number?: string;
   offer_letter_generated_at?: string;
   submitted_at: string;
+  converted_at?: string;
+  student_id?: string;
 }
 
 export interface KuccpsPlacementRecord {

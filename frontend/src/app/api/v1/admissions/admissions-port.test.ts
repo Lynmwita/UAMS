@@ -2,10 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKuccpsCsv } from '@/lib/academic/kuccps-parser';
 import { importKuccpsPlacements } from '@/lib/academic/kuccps-importer';
-import { admissionsStore } from '@/lib/academic/admissions';
+import { admissionsStore, convertApplicantToStudent } from '@/lib/academic/admissions';
+import { studentsStore } from '@/lib/academic/student-records';
+import { getAuditLogs, AuditLogEntry } from '@/lib/audit/audit-logger';
 import { POST as publicApplyPOST } from './public-apply/route';
 import { GET as publicStatusGET } from './public-status/route';
 import { POST as kuccpsImportPOST } from './kuccps-import/route';
+import { POST as convertRoutePOST } from './[id]/convert/route';
+import { POST as convertBodyRoutePOST } from './convert/route';
 import { createSignedToken } from '@/lib/auth/server-auth';
 import { generateCaptchaChallenge } from '@/lib/auth/captcha';
 
@@ -222,4 +226,144 @@ test('kuccps-import route: staff import via CSV honours nulls and reports counts
   assert.equal(data.success, true);
   assert.equal(data.data.importedCount, 1);
   assert.equal(data.data.applications[0].applicant_phone, null);
+});
+
+test('conversion: admitted applicant converts to student record with Year 1 standing and audit trail', async () => {
+  // Create an admitted application in admissionsStore
+  const admApp = {
+    id: `adm-conv-test-${Date.now()}`,
+    reference_number: `UADM-2026-9991`,
+    applicant_name: 'Naomi Chepkoech',
+    applicant_email: 'naomi.chepkoech@gmail.com',
+    applicant_phone: '+254711998877',
+    gender: 'female' as const,
+    program_code: 'BCS',
+    program_name: 'Bachelor of Science in Computer Science',
+    intake: 'September',
+    intake_year: 2026,
+    kcse_grade: 'A-',
+    kcse_points: 79,
+    entry_type: 'DIRECT' as const,
+    status: 'admitted' as const,
+    admission_number: 'BCS/2026/9991',
+    submitted_at: '2026-09-01',
+  };
+  admissionsStore.push(admApp);
+
+  const initialStudentCount = studentsStore.length;
+  const result = convertApplicantToStudent(admApp.id, { email: 'registrar@university.ac.ke', role: 'registrar' });
+
+  assert.equal(result.alreadyConverted, false);
+  assert.equal(result.application.status, 'converted');
+  assert.ok(result.application.converted_at);
+  assert.equal(studentsStore.length, initialStudentCount + 1);
+
+  // Verify created student record details
+  const createdStudent = studentsStore.find((s) => s.admission_number === 'BCS/2026/9991');
+  assert.ok(createdStudent);
+  assert.equal(createdStudent.first_name, 'Naomi');
+  assert.equal(createdStudent.last_name, 'Chepkoech');
+  assert.equal(createdStudent.current_year_of_study, 1);
+  assert.equal(createdStudent.current_semester_number, 1);
+  assert.equal(createdStudent.status, 'active');
+  assert.equal(createdStudent.program_name, 'Bachelor of Science in Computer Science');
+
+  // Verify audit logging
+  const convAudit = getAuditLogs().find((l: AuditLogEntry) => l.action === 'ADMISSION_CONVERTED_TO_STUDENT' && l.entity_id === 'BCS/2026/9991');
+  assert.ok(convAudit, 'Audit log for conversion must be recorded');
+  assert.equal(convAudit.actor_email, 'registrar@university.ac.ke');
+
+  // Verify idempotency: running conversion again is a safe no-op
+  const secondResult = convertApplicantToStudent(admApp.id, { email: 'registrar@university.ac.ke', role: 'registrar' });
+  assert.equal(secondResult.alreadyConverted, true);
+  assert.equal(secondResult.student.admission_number, 'BCS/2026/9991');
+  assert.equal(studentsStore.length, initialStudentCount + 1);
+});
+
+test('conversion: unadmitted applicants are rejected from conversion', () => {
+  const pendingApp = {
+    id: `adm-pending-test-${Date.now()}`,
+    reference_number: `UADM-2026-9992`,
+    applicant_name: 'Pending Applicant',
+    applicant_email: 'pending@gmail.com',
+    applicant_phone: '+254711998878',
+    gender: 'male' as const,
+    program_code: 'BIT',
+    program_name: 'Bachelor of Science in Information Technology',
+    intake: 'September',
+    intake_year: 2026,
+    kcse_grade: 'B+',
+    kcse_points: 75,
+    entry_type: 'DIRECT' as const,
+    status: 'under_review' as const,
+    submitted_at: '2026-09-01',
+  };
+  admissionsStore.push(pendingApp);
+
+  assert.throws(
+    () => convertApplicantToStudent(pendingApp.id, { email: 'registrar@university.ac.ke', role: 'registrar' }),
+    /Only admitted applicants/
+  );
+});
+
+test('conversion routes: registrar can convert via endpoint; unauthenticated/student is denied', async () => {
+  const routeApp = {
+    id: `adm-route-test-${Date.now()}`,
+    reference_number: `UADM-2026-9993`,
+    applicant_name: 'Route Applicant',
+    applicant_email: 'route.app@gmail.com',
+    applicant_phone: '+254711998879',
+    gender: 'female' as const,
+    program_code: 'BCS',
+    program_name: 'Bachelor of Science in Computer Science',
+    intake: 'September',
+    intake_year: 2026,
+    kcse_grade: 'A',
+    kcse_points: 81,
+    entry_type: 'DIRECT' as const,
+    status: 'admitted' as const,
+    admission_number: 'BCS/2026/9993',
+    submitted_at: '2026-09-01',
+  };
+  admissionsStore.push(routeApp);
+
+  // 1. Unauthenticated request is 401
+  const unauthReq = new Request(`http://localhost:3000/api/v1/admissions/${routeApp.id}/convert`, { method: 'POST' });
+  const unauthRes = await convertRoutePOST(unauthReq as any, { params: Promise.resolve({ id: routeApp.id }) });
+  assert.equal(unauthRes.status, 401);
+
+  // 2. Student role is 403
+  const studentToken = createSignedToken({ id: 'usr-student-test', email: 'student@student.ac.ke', role: 'student' as any });
+  const forbiddenReq = new Request(`http://localhost:3000/api/v1/admissions/${routeApp.id}/convert`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${studentToken}` },
+  });
+  const forbiddenRes = await convertRoutePOST(forbiddenReq as any, { params: Promise.resolve({ id: routeApp.id }) });
+  assert.equal(forbiddenRes.status, 403);
+
+  // 3. Registrar role succeeds (200)
+  const registrarToken = createSignedToken({ id: 'usr-registrar-test', email: 'registrar@university.ac.ke', role: 'registrar' as any });
+  const authReq = new Request(`http://localhost:3000/api/v1/admissions/${routeApp.id}/convert`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${registrarToken}` },
+  });
+  const okRes = await convertRoutePOST(authReq as any, { params: Promise.resolve({ id: routeApp.id }) });
+  assert.equal(okRes.status, 200);
+  const okData = await okRes.json();
+  assert.equal(okData.success, true);
+  assert.equal(okData.data.student.admission_number, 'BCS/2026/9993');
+
+  // 4. Also test convert body route (POST /api/v1/admissions/convert)
+  const bodyReq = new Request('http://localhost:3000/api/v1/admissions/convert', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${registrarToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ application_id: routeApp.id }),
+  });
+  const bodyRes = await convertBodyRoutePOST(bodyReq as any);
+  assert.equal(bodyRes.status, 200);
+  const bodyData = await bodyRes.json();
+  assert.equal(bodyData.data.alreadyConverted, true);
 });

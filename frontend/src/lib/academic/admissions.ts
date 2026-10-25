@@ -1,4 +1,7 @@
 import { UamsAdmissionApplication, KuccpsPlacementRecord, ApplicationDocuments } from '@/types';
+import { studentsStore, StudentRecord } from '@/lib/academic/student-records';
+import { programsStore, departmentsStore } from '@/lib/academic/structure';
+import { recordAuditEvent } from '@/lib/audit/audit-logger';
 
 // NOTE (named follow-up): admissionsStore is in-memory only. KUCCPS imports
 // and public applications do not survive a redeploy and are not shared across
@@ -98,4 +101,142 @@ export function generateAdmissionNumber(programCode: string, intakeYear: number,
 export function generateReferenceNumber(entryType: 'KUCCPS' | 'DIRECT', year: number, sequence: number): string {
   const prefix = entryType === 'KUCCPS' ? 'KUCCPS' : 'UADM';
   return `${prefix}-${year}-${String(sequence).padStart(4, '0')}`;
+}
+
+export interface ConvertApplicantResult {
+  application: UamsAdmissionApplication;
+  student: StudentRecord;
+  alreadyConverted?: boolean;
+}
+
+/**
+ * One-click conversion of an admitted applicant into an active student record.
+ * Maps admission number to registration number, splits applicant name, creates institutional
+ * student record with Year 1 Semester 1 standing, links audit trail, and marks application as converted.
+ * Idempotent: re-calling for an already converted applicant returns the existing student record safely.
+ */
+export function convertApplicantToStudent(
+  applicationId: string,
+  actor: { email: string; role: any },
+  originIp: string = '127.0.0.1'
+): ConvertApplicantResult {
+  const application = admissionsStore.find(
+    (a) => a.id === applicationId || a.reference_number === applicationId || a.admission_number === applicationId
+  );
+  if (!application) {
+    throw new Error('Application not found.');
+  }
+
+  // Idempotency: if already converted, check if student exists
+  if (application.status === 'converted') {
+    const existingStudent = studentsStore.find(
+      (s) => s.admission_number === application.admission_number || s.id === application.student_id
+    );
+    if (existingStudent) {
+      return { application, student: existingStudent, alreadyConverted: true };
+    }
+  }
+
+  // Applicant must be in 'admitted' status to be converted
+  if (application.status !== 'admitted' && !application.admission_number) {
+    throw new Error('Only admitted applicants with an assigned admission number can be converted to student records.');
+  }
+
+  // Ensure admission number exists
+  if (!application.admission_number) {
+    const admittedCount = admissionsStore.filter(
+      (a) => a.admission_number && a.program_code === application.program_code
+    ).length;
+    application.admission_number = generateAdmissionNumber(
+      application.program_code,
+      application.intake_year || new Date().getFullYear(),
+      admittedCount + 1
+    );
+  }
+
+  // Check if a student with this admission number already exists in studentsStore
+  const existingByAdm = studentsStore.find((s) => s.admission_number === application.admission_number);
+  if (existingByAdm) {
+    application.status = 'converted';
+    application.student_id = existingByAdm.id;
+    application.converted_at = application.converted_at || new Date().toISOString();
+    return { application, student: existingByAdm, alreadyConverted: true };
+  }
+
+  // Split name safely
+  const nameParts = (application.applicant_name || 'Applicant').trim().split(/\s+/);
+  const firstName = nameParts[0] || 'Applicant';
+  const lastName = nameParts.slice(1).join(' ') || nameParts[0];
+
+  // Resolve institutional student email
+  const baseEmail =
+    application.applicant_email?.trim() ||
+    `${firstName.toLowerCase()}.${lastName.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.university.ac.ke`;
+  let studentEmail = baseEmail.toLowerCase();
+  if (studentsStore.some((s) => s.email?.toLowerCase() === studentEmail)) {
+    studentEmail = `${firstName.toLowerCase()}.${lastName.toLowerCase().replace(/[^a-z0-9]/g, '')}.${Date.now().toString().slice(-4)}@student.university.ac.ke`;
+  }
+
+  // Match programme and department from academic catalogue
+  const prog = programsStore.find((p) => p.code === application.program_code);
+  const dept = prog ? departmentsStore.find((d) => d.id === prog.department_id) : undefined;
+
+  let faculty = 'School of Computing & Informatics';
+  if (prog?.school_id === 'sch-biz') faculty = 'School of Business';
+  else if (prog?.school_id === 'sch-eng') faculty = 'School of Engineering';
+  else if (prog?.school_id === 'sch-edu') faculty = 'School of Education';
+
+  const department = dept?.name || application.program_name || 'General Studies';
+  const programName = application.program_name || prog?.name || application.program_code;
+  const programId = prog?.id || `prog-${application.program_code.toLowerCase()}`;
+
+  const newStudent: StudentRecord = {
+    id: `stu-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    user_id: `usr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    admission_number: application.admission_number,
+    first_name: firstName,
+    last_name: lastName,
+    email: studentEmail,
+    gender: application.gender,
+    faculty,
+    department,
+    campus_code: 'ZU-TECH',
+    program_id: programId,
+    program_name: programName,
+    current_year_of_study: 1,
+    current_semester_number: 1,
+    status: 'active',
+    admission_date: new Date().toISOString().split('T')[0],
+    cgpa: 0.0,
+    fee_balance: 55000,
+    photo_url: application.documents?.passport_photo,
+  };
+
+  studentsStore.unshift(newStudent);
+
+  // Mark application as converted
+  application.status = 'converted';
+  application.student_id = newStudent.id;
+  application.converted_at = new Date().toISOString();
+
+  // Audit log event
+  recordAuditEvent({
+    actor_email: actor.email,
+    actor_role: actor.role,
+    action: 'ADMISSION_CONVERTED_TO_STUDENT',
+    entity_type: 'students',
+    entity_id: newStudent.admission_number,
+    ip_address: originIp,
+    status: 'SUCCESS',
+    details: {
+      application_id: application.id,
+      reference_number: application.reference_number,
+      admission_number: newStudent.admission_number,
+      student_id: newStudent.id,
+      email: newStudent.email,
+      program_code: application.program_code,
+    },
+  });
+
+  return { application, student: newStudent, alreadyConverted: false };
 }
