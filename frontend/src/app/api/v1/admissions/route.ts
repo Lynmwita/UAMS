@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
       (a) =>
         a.applicant_name.toLowerCase().includes(search) ||
         a.reference_number.toLowerCase().includes(search) ||
-        a.applicant_email.toLowerCase().includes(search)
+        (a.applicant_email || '').toLowerCase().includes(search)
     );
   }
 
@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
       kcse_grade: String(kcse_grade).trim(),
       kcse_points: points,
       previous_institution: body.previous_institution || '',
+      entry_type: 'DIRECT' as const,
       status: 'submitted' as const,
       submitted_at: createdAt.toISOString().slice(0, 10),
     };

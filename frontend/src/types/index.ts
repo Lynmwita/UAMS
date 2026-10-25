@@ -235,3 +235,57 @@ export interface NotificationLog {
   dispatch_mode?: 'live' | 'mock';
 }
 
+
+// ---- Admissions (KUCCPS portal, ported onto the canonical line) ----
+// Nullable-by-design: a missing phone/email/grade is stored as null and
+// shown as "not provided" — never as an invented value that looks real.
+export interface ApplicationDocuments {
+  kcse_slip?: string;
+  national_id_doc?: string;
+  passport_photo?: string;
+  leaving_cert?: string;
+}
+
+export interface UamsAdmissionApplication {
+  id: string;
+  reference_number: string;
+  applicant_name: string;
+  applicant_email: string | null;
+  applicant_phone: string | null;
+  gender: 'male' | 'female' | 'other';
+  date_of_birth?: string | null;
+  program_code: string;
+  program_name: string;
+  intake: string;
+  intake_year: number;
+  kcse_grade: string | null;
+  kcse_points: number | null;
+  kcse_index?: string;
+  national_id?: string;
+  cluster_weight?: number;
+  entry_type: 'KUCCPS' | 'DIRECT';
+  previous_institution?: string;
+  documents?: ApplicationDocuments;
+  status: 'submitted' | 'under_review' | 'shortlisted' | 'admitted' | 'rejected';
+  reviewed_by?: string;
+  reviewed_at?: string;
+  admission_number?: string;
+  offer_letter_generated_at?: string;
+  submitted_at: string;
+}
+
+export interface KuccpsPlacementRecord {
+  kcse_index: string;
+  applicant_name: string;
+  gender: 'male' | 'female' | 'other';
+  applicant_phone: string | null;
+  applicant_email: string | null;
+  program_code: string;
+  program_name?: string;
+  cluster_weight?: number;
+  kcse_grade: string | null;
+  kcse_points: number | null;
+  national_id?: string;
+  intake_year?: number;
+  intake?: string;
+}
