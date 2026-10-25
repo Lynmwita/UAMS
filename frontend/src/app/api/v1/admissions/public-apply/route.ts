@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     const phoneSanitized = normalizeKenyanPhone(applicant_phone);
     if (!phoneSanitized.valid || !phoneSanitized.normalized) {
       return NextResponse.json(
-        { success: false, error: `Invalid Kenyan phone number: ${phoneSanitized.carrier || 'Format as 07XXXXXXXX or +254XXXXXXXXX'}` },
+        { success: false, error: `Invalid Kenyan phone number: ${phoneSanitized.error || 'Format as 07XXXXXXXX or +254XXXXXXXXX'}` },
         { status: 400 }
       );
     }

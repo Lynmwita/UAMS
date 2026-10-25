@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
       intake_year: Number(body.intake_year) || createdAt.getFullYear(),
       kcse_grade: String(kcse_grade).trim(),
       kcse_points: points,
+      entry_type: (body.entry_type === 'KUCCPS' ? 'KUCCPS' : 'DIRECT') as 'KUCCPS' | 'DIRECT',
       previous_institution: body.previous_institution || '',
       status: 'submitted' as const,
       submitted_at: createdAt.toISOString().slice(0, 10),

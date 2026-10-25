@@ -7,6 +7,7 @@ import { executeDispatch, retryDispatch, MAX_RETRY_LIMIT, demoNotificationLogs }
 import { GET, POST } from '@/app/api/v1/notifications/route';
 import { POST as RETRY_POST } from '@/app/api/v1/notifications/[id]/retry/route';
 import { createSignedToken } from '@/lib/auth/server-auth';
+import { UserRole } from '@/types';
 import { NextRequest } from 'next/server';
 
 const originalFetch = globalThis.fetch;
@@ -27,7 +28,7 @@ afterEach(() => {
   }
 });
 
-function createReq(role?: string, method = 'GET', body?: unknown, url = 'http://localhost:3000/api/v1/notifications') {
+function createReq(role?: UserRole, method = 'GET', body?: unknown, url = 'http://localhost:3000/api/v1/notifications') {
   const headers = new Headers();
   headers.set('Content-Type', 'application/json');
   headers.set('Origin', 'http://localhost:3000');

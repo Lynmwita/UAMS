@@ -189,7 +189,7 @@ export function parseKuccpsCsv(csvContent: string, defaultIntakeYear = 2026): Ku
       } else {
         errors.push({
           row: i + 1,
-          error: `Invalid Kenyan phone number '${rawPhone}': ${sanitized.carrier || 'Must be valid format e.g. 0712345678 or +254...'}`,
+          error: `Invalid Kenyan phone number '${rawPhone}': ${sanitized.error || 'Must be valid format e.g. 0712345678 or +254...'}`,
           raw: rawMap,
         });
         continue;
