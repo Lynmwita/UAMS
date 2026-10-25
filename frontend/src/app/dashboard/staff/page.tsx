@@ -132,8 +132,16 @@ export default function StaffPage() {
             <option value="library">Library Staff</option>
             <option value="hostel_warden">Hostel Warden</option>
             <option value="it_support">IT Support</option>
+            <option value="support_staff">Support Staff (Catering / Facilities / Security)</option>
           </select>
-          <select aria-label="Department" className="border rounded px-3 py-2" value={form.department_id} onChange={(e) => setForm({ ...form, department_id: e.target.value })}><option value="">Choose department</option>{departments.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select>
+          <select aria-label="Department" className="border rounded px-3 py-2" value={form.department_id} onChange={(e) => setForm({ ...form, department_id: e.target.value })}>
+            <option value="">Choose department</option>
+            {departments.map((d: any) => (
+              <option key={d.id} value={d.id}>
+                {d.name} {d.category === 'non_academic' || d.school_id === 'central' ? '🌐 (Whole University)' : ''}
+              </option>
+            ))}
+          </select>
           <input className="border rounded px-3 py-2" placeholder="Job title" value={form.job_title} onChange={(e) => setForm({ ...form, job_title: e.target.value })} />
           <input className="border rounded px-3 py-2" placeholder="Qualification" value={form.qualification} onChange={(e) => setForm({ ...form, qualification: e.target.value })} />
           <button className="bg-sky-700 text-white text-sm px-4 py-2 rounded-md hover:bg-sky-800" onClick={createStaff}>

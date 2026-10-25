@@ -11,10 +11,12 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const schoolId = searchParams.get('school_id');
+  const category = searchParams.get('category');
   const search = searchParams.get('search')?.toLowerCase();
 
   let results = [...departmentsStore];
   if (schoolId) results = results.filter((d) => d.school_id === schoolId);
+  if (category) results = results.filter((d) => (d.category || (d.school_id === 'central' ? 'non_academic' : 'academic')) === category);
   if (search) {
     results = results.filter(
       (d) => d.code.toLowerCase().includes(search) || d.name.toLowerCase().includes(search) || d.hod.toLowerCase().includes(search)
@@ -30,6 +32,13 @@ export async function POST(request: NextRequest) {
   if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'departments');
   try {
     const body = await request.json();
+    const isNonAcademic =
+      body.category === 'non_academic' ||
+      body.school_id === 'central' ||
+      body.school_id === 'sch-central' ||
+      !body.school_id;
+    const resolvedSchoolId = isNonAcademic ? (body.school_id || 'central') : body.school_id;
+
     if (
       typeof body?.code !== 'string' ||
       !body.code.trim() ||
@@ -37,25 +46,34 @@ export async function POST(request: NextRequest) {
       typeof body.name !== 'string' ||
       !body.name.trim() ||
       body.name.length > 255 ||
-      typeof body.school_id !== 'string' ||
-      !body.school_id
+      (!isNonAcademic && (!resolvedSchoolId || typeof resolvedSchoolId !== 'string'))
     ) {
-      return NextResponse.json({ success: false, error: 'code, name, and school_id are required' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: 'code and name are required (and school_id for academic departments)' },
+        { status: 400 }
+      );
     }
 
-    if (departmentsStore.some((d) => d.code.toUpperCase() === body.code.trim().toUpperCase() && d.school_id === body.school_id)) {
-      return NextResponse.json({ success: false, error: 'Department code already exists for this school.' }, { status: 409 });
+    if (
+      departmentsStore.some(
+        (d) =>
+          d.code.toUpperCase() === body.code.trim().toUpperCase() &&
+          (d.school_id === resolvedSchoolId || (!d.school_id && !resolvedSchoolId))
+      )
+    ) {
+      return NextResponse.json({ success: false, error: 'Department code already exists.' }, { status: 409 });
     }
 
     const newDepartment = {
       id: `dep-${Date.now()}`,
-      school_id: body.school_id,
+      school_id: resolvedSchoolId,
       code: body.code.trim().toUpperCase(),
-      name: body.name,
+      name: body.name.trim(),
       hod: body.hod || 'Pending Appointment',
       hod_email: body.hod_email || '',
       programs_count: 0,
       is_active: true,
+      category: isNonAcademic ? ('non_academic' as const) : ('academic' as const),
     };
 
     departmentsStore.push(newDepartment);
@@ -67,7 +85,7 @@ export async function POST(request: NextRequest) {
       entity_id: newDepartment.id,
       ip_address: request.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1',
       status: 'SUCCESS',
-      details: { code: newDepartment.code, school_id: newDepartment.school_id },
+      details: { code: newDepartment.code, school_id: newDepartment.school_id, category: newDepartment.category },
     });
     return NextResponse.json({ success: true, data: newDepartment }, { status: 201 });
   } catch (err: any) {

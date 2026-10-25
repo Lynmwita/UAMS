@@ -36,16 +36,27 @@ const programsSeed = [
   { id: 'prog-ba-ps', department_id: 'dep-huma', school_id: 'sch-edu', code: 'BA-PS', name: 'Bachelor of Arts in Political Science', duration_years: 4, credit_limit: 44, level: 'undergraduate', is_active: true },
 ];
 
+export type UamsDepartment = {
+  id: string;
+  school_id: string | null;
+  code: string;
+  name: string;
+  hod: string;
+  hod_email: string;
+  programs_count: number;
+  is_active: boolean;
+  category?: 'academic' | 'non_academic';
+};
+
+export type UamsProgram = (typeof programsSeed)[number];
+
 const runtime = globalThis as typeof globalThis & {
-  __uams_departmentsStore?: typeof departmentsSeed;
+  __uams_departmentsStore?: UamsDepartment[];
   __uams_programsStore?: typeof programsSeed;
 };
 
-export const departmentsStore =
+export const departmentsStore: UamsDepartment[] =
   runtime.__uams_departmentsStore || (runtime.__uams_departmentsStore = [...departmentsSeed]);
 
 export const programsStore =
   runtime.__uams_programsStore || (runtime.__uams_programsStore = [...programsSeed]);
-
-export type UamsDepartment = (typeof departmentsSeed)[number];
-export type UamsProgram = (typeof programsSeed)[number];

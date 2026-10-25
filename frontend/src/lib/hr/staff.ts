@@ -5,10 +5,10 @@ export type UamsStaffMember = {
   last_name: string;
   email: string;
   phone: string;
-  role: 'admin' | 'registrar' | 'hod' | 'lecturer' | 'finance_officer' | 'library' | 'hostel_warden' | 'it_support';
+  role: 'admin' | 'registrar' | 'hod' | 'lecturer' | 'finance_officer' | 'library' | 'hostel_warden' | 'it_support' | 'support_staff' | string;
   department_id: string;
   department_name: string;
-  school_id: string;
+  school_id: string | null;
   job_title: string;
   qualification: string;
   is_active: boolean;

@@ -4,17 +4,84 @@ import { useState, useEffect } from 'react';
 import { Building2, Plus, School, BookOpen, Layers, X, Check } from 'lucide-react';
 
 export default function StructurePage() {
-  const [createKind,setCreateKind]=useState<'departments'|'programs'>('departments');
-  const [entry,setEntry]=useState({code:'',name:'',school_id:'',department_id:'',duration_years:'4',credit_limit:'48'});
-  const createEntry=async(e:React.FormEvent)=>{e.preventDefault();try{const r=await fetch('/api/v1/'+createKind,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...entry,duration_years:Number(entry.duration_years),credit_limit:Number(entry.credit_limit)})});const d=await r.json();if(!r.ok)throw new Error(d.error);window.location.reload();}catch(e:any){setError(e.message);}};
+  const [createKind, setCreateKind] = useState<'departments' | 'programs'>('departments');
+  const [deptCategory, setDeptCategory] = useState<'academic' | 'non_academic'>('academic');
+  const [entry, setEntry] = useState({
+    code: '',
+    name: '',
+    school_id: '',
+    department_id: '',
+    duration_years: '4',
+    credit_limit: '48',
+  });
+
+  const createEntry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        ...entry,
+        category: createKind === 'departments' ? deptCategory : undefined,
+        school_id:
+          createKind === 'departments' && deptCategory === 'non_academic'
+            ? 'central'
+            : entry.school_id,
+        duration_years: Number(entry.duration_years),
+        credit_limit: Number(entry.credit_limit),
+      };
+      const r = await fetch('/api/v1/' + createKind, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      window.location.reload();
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
   const [activeTab, setActiveTab] = useState<'schools' | 'departments' | 'programs'>('schools');
 
-  const [error,setError]=useState('');
-  const [schools,setSchools]=useState<{id:string;code:string;name:string;dean:string;deanEmail:string;depts:number;programs:number}[]>([]);
-  const mapSchool=(s:any)=>({id:s.id,code:s.code,name:s.name,dean:s.dean,deanEmail:s.dean_email,depts:s.departments_count,programs:s.programs_count});
-  useEffect(()=>{fetch('/api/v1/schools').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);setSchools(d.data.map(mapSchool));}).catch(e=>setError(e.message));},[]);
-  const [departments,setDepartments]=useState<{id:string;code:string;name:string;school:string;hod:string;lecturers:number;programs:number}[]>([]);
-  const [programs,setPrograms]=useState<{id:string;code:string;name:string;level:string;duration:string;department:string;credits:number}[]>([]);
+  const [error, setError] = useState('');
+  const [schools, setSchools] = useState<
+    { id: string; code: string; name: string; dean: string; deanEmail: string; depts: number; programs: number }[]
+  >([]);
+  const mapSchool = (s: any) => ({
+    id: s.id,
+    code: s.code,
+    name: s.name,
+    dean: s.dean,
+    deanEmail: s.dean_email,
+    depts: s.departments_count,
+    programs: s.programs_count,
+  });
+
+  useEffect(() => {
+    fetch('/api/v1/schools')
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        setSchools(d.data.map(mapSchool));
+      })
+      .catch((e) => setError(e.message));
+  }, []);
+
+  const [departments, setDepartments] = useState<
+    {
+      id: string;
+      code: string;
+      name: string;
+      school: string | null;
+      hod: string;
+      lecturers: number;
+      programs: number;
+      category: 'academic' | 'non_academic';
+    }[]
+  >([]);
+  const [programs, setPrograms] = useState<
+    { id: string; code: string; name: string; level: string; duration: string; department: string; credits: number }[]
+  >([]);
 
   useEffect(() => {
     fetch('/api/v1/departments')
@@ -22,20 +89,44 @@ export default function StructurePage() {
         const d = await r.json();
         if (!r.ok) throw new Error(d.error);
         setDepartments(
-          d.data.map((dep: any) => ({ id: dep.id, code: dep.code, name: dep.name, school: dep.school_id, hod: dep.hod, lecturers: 0, programs: dep.programs_count }))
+          d.data.map((dep: any) => ({
+            id: dep.id,
+            code: dep.code,
+            name: dep.name,
+            school: dep.school_id,
+            hod: dep.hod,
+            lecturers: 0,
+            programs: dep.programs_count,
+            category:
+              dep.category ||
+              (dep.school_id === 'central' || dep.school_id === 'sch-central' || !dep.school_id
+                ? 'non_academic'
+                : 'academic'),
+          }))
         );
       })
-      .catch(e=>setError(e.message));
+      .catch((e) => setError(e.message));
+
     fetch('/api/v1/programs')
       .then(async (r) => {
         const d = await r.json();
         if (!r.ok) throw new Error(d.error);
         setPrograms(
-          d.data.map((p: any) => ({ id: p.id, code: p.code, name: p.name, level: p.level, duration: `${p.duration_years} Years`, department: p.department_id, credits: p.credit_limit }))
+          d.data.map((p: any) => ({
+            id: p.id,
+            code: p.code,
+            name: p.name,
+            level: p.level,
+            duration: `${p.duration_years} Years`,
+            department: p.department_id,
+            credits: p.credit_limit,
+          }))
         );
       })
-      .catch(e=>setError(e.message));
+      .catch((e) => setError(e.message));
   }, []);
+
+  const schoolMap = Object.fromEntries(schools.map((s) => [s.id, s.name]));
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newSchool, setNewSchool] = useState({
@@ -45,21 +136,39 @@ export default function StructurePage() {
     deanEmail: '',
   });
 
-  const handleAddSchool=async(e:React.FormEvent)=>{
+  const handleAddSchool = async (e: React.FormEvent) => {
     e.preventDefault();
-    try{const r=await fetch('/api/v1/schools',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:newSchool.code,name:newSchool.name,dean:newSchool.dean,dean_email:newSchool.deanEmail})});const d=await r.json();if(!r.ok)throw new Error(d.error);setSchools(prev=>[...prev,mapSchool(d.data)]);setIsModalOpen(false);setError('');}catch(e){setError(e instanceof Error?e.message:'School creation failed.');}
+    try {
+      const r = await fetch('/api/v1/schools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: newSchool.code,
+          name: newSchool.name,
+          dean: newSchool.dean,
+          dean_email: newSchool.deanEmail,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      setSchools((prev) => [...prev, mapSchool(d.data)]);
+      setIsModalOpen(false);
+      setError('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'School creation failed.');
+    }
   };
 
   return (
     <div className="space-y-6">
-      {error&&<p role="alert" className="text-rose-700">{error}</p>}
+      {error && <p role="alert" className="text-rose-700 font-semibold">{error}</p>}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-200 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-academic-navy-950 tracking-tight">
             Academic Hierarchy & Structure
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Institutional academic organization, faculties, academic departments, and accredited degree programs.
+            Institutional organization: faculties, academic departments, central non-academic services, and degree programs.
           </p>
         </div>
 
@@ -72,8 +181,169 @@ export default function StructurePage() {
         </button>
       </div>
 
-      {/* Tabs */}
-      <form onSubmit={createEntry} className="border rounded p-4 flex flex-wrap gap-3"><label>Create<select aria-label="Record type" value={createKind} onChange={e=>setCreateKind(e.target.value as 'departments'|'programs')} className="block border p-2"><option value="departments">Department</option><option value="programs">Program</option></select></label><label>Code<input required className="block border p-2" value={entry.code} onChange={e=>setEntry({...entry,code:e.target.value})}/></label><label>Name<input required className="block border p-2" value={entry.name} onChange={e=>setEntry({...entry,name:e.target.value})}/></label>{createKind==='departments'?<label>School<select required className="block border p-2" value={entry.school_id} onChange={e=>setEntry({...entry,school_id:e.target.value})}><option value="">Choose school</option>{schools.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>:<><label>Department<select required className="block border p-2" value={entry.department_id} onChange={e=>setEntry({...entry,department_id:e.target.value})}><option value="">Choose department</option>{departments.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label><label>Duration (years)<input required type="number" min="1" max="8" className="block border p-2" value={entry.duration_years} onChange={e=>setEntry({...entry,duration_years:e.target.value})}/></label><label>Semester credit limit<input required type="number" min="1" className="block border p-2" value={entry.credit_limit} onChange={e=>setEntry({...entry,credit_limit:e.target.value})}/></label></>}<button className="border rounded px-3">Save {createKind==='departments'?'department':'program'}</button></form>
+      {/* Creation Bar */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+        <form onSubmit={createEntry} className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Create:</span>
+              <div className="flex items-center rounded-lg bg-slate-100 p-0.5 border border-slate-200 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setCreateKind('departments')}
+                  className={`px-3 py-1.5 rounded-md transition ${createKind === 'departments' ? 'bg-white shadow-xs text-academic-navy-950 font-bold' : 'text-slate-600 hover:text-slate-900'}`}
+                >
+                  Department / Service Unit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCreateKind('programs')}
+                  className={`px-3 py-1.5 rounded-md transition ${createKind === 'programs' ? 'bg-white shadow-xs text-academic-navy-950 font-bold' : 'text-slate-600 hover:text-slate-900'}`}
+                >
+                  Degree Program
+                </button>
+              </div>
+            </div>
+
+            {createKind === 'departments' && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-medium">Scope:</span>
+                <div className="flex items-center rounded-lg bg-slate-100 p-0.5 border border-slate-200 text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeptCategory('academic');
+                      setEntry((prev) => ({ ...prev, school_id: '' }));
+                    }}
+                    className={`px-2.5 py-1 rounded-md transition ${deptCategory === 'academic' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-600 hover:text-slate-900'}`}
+                  >
+                    Academic (Faculty-Specific)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeptCategory('non_academic');
+                      setEntry((prev) => ({ ...prev, school_id: 'central' }));
+                    }}
+                    className={`px-2.5 py-1 rounded-md transition ${deptCategory === 'non_academic' ? 'bg-purple-600 text-white font-bold' : 'text-slate-600 hover:text-slate-900'}`}
+                  >
+                    Non-Academic (Whole University)
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Code</label>
+              <input
+                required
+                placeholder={createKind === 'departments' ? (deptCategory === 'non_academic' ? 'e.g. CATERING' : 'e.g. CS') : 'e.g. BCS'}
+                className="w-full border rounded-lg px-3 py-2 text-xs uppercase bg-white focus:ring-2 focus:ring-indigo-500 font-mono"
+                value={entry.code}
+                onChange={(e) => setEntry({ ...entry, code: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Name</label>
+              <input
+                required
+                placeholder={createKind === 'departments' ? (deptCategory === 'non_academic' ? 'e.g. Catering & Dining Services' : 'e.g. Computer Science') : 'e.g. Bachelor of Science in CS'}
+                className="w-full border rounded-lg px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-indigo-500"
+                value={entry.name}
+                onChange={(e) => setEntry({ ...entry, name: e.target.value })}
+              />
+            </div>
+
+            {createKind === 'departments' ? (
+              deptCategory === 'academic' ? (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">School / Faculty</label>
+                  <select
+                    required
+                    className="w-full border rounded-lg px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-indigo-500"
+                    value={entry.school_id}
+                    onChange={(e) => setEntry({ ...entry, school_id: e.target.value })}
+                  >
+                    <option value="">Choose school / faculty</option>
+                    {schools.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-semibold text-purple-900 mb-1">Service Scope</label>
+                  <div className="px-3 py-2 rounded-lg bg-purple-50 border border-purple-200 text-purple-800 text-xs font-semibold flex items-center gap-1.5">
+                    <span>🌐 Whole University (Serves All Schools)</span>
+                  </div>
+                </div>
+              )
+            ) : (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Department</label>
+                <select
+                  required
+                  className="w-full border rounded-lg px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-indigo-500"
+                  value={entry.department_id}
+                  onChange={(e) => setEntry({ ...entry, department_id: e.target.value })}
+                >
+                  <option value="">Choose department</option>
+                  {departments
+                    .filter((d) => d.category !== 'non_academic' && d.school !== 'central')
+                    .map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name} ({d.code})
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
+
+            <div>
+              <button
+                type="submit"
+                className="w-full bg-academic-navy-900 hover:bg-academic-navy-800 text-white font-bold py-2 px-4 rounded-lg text-xs shadow-sm transition flex items-center justify-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Save {createKind === 'departments' ? (deptCategory === 'non_academic' ? 'Central Service' : 'Department') : 'Program'}</span>
+              </button>
+            </div>
+          </div>
+
+          {createKind === 'programs' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Duration (years)</label>
+                <input
+                  required
+                  type="number"
+                  min="1"
+                  max="8"
+                  className="w-full border rounded-lg px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-indigo-500"
+                  value={entry.duration_years}
+                  onChange={(e) => setEntry({ ...entry, duration_years: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Semester Credit Limit</label>
+                <input
+                  required
+                  type="number"
+                  min="1"
+                  className="w-full border rounded-lg px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-indigo-500"
+                  value={entry.credit_limit}
+                  onChange={(e) => setEntry({ ...entry, credit_limit: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
+        </form>
+      </div>
       <div className="flex items-center space-x-2 border-b border-slate-200 pb-2">
         <button
           onClick={() => setActiveTab('schools')}
@@ -150,27 +420,57 @@ export default function StructurePage() {
               <tr>
                 <th className="px-5 py-3.5">Code</th>
                 <th className="px-5 py-3.5">Department Name</th>
-                <th className="px-5 py-3.5">Faculty / School</th>
+                <th className="px-5 py-3.5">Category</th>
+                <th className="px-5 py-3.5">Faculty / Service Scope</th>
                 <th className="px-5 py-3.5">Head of Department (HOD)</th>
-                <th className="px-5 py-3.5 text-center">Faculty Members</th>
+                <th className="px-5 py-3.5 text-center">Faculty / Staff</th>
                 <th className="px-5 py-3.5 text-center">Programs</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {departments.map((d) => (
-                <tr key={d.id} className="hover:bg-slate-50/60 transition">
-                  <td className="px-5 py-3.5 font-mono font-bold text-academic-navy-800">{d.code}</td>
-                  <td className="px-5 py-3.5 font-medium text-slate-900">{d.name}</td>
-                  <td className="px-5 py-3.5 text-xs text-slate-500 font-bold">{d.school}</td>
-                  <td className="px-5 py-3.5 text-slate-700 font-medium">{d.hod}</td>
-                  <td className="px-5 py-3.5 text-center font-mono text-slate-600">{d.lecturers} Lecturers</td>
-                  <td className="px-5 py-3.5 text-center">
-                    <span className="px-2.5 py-0.5 rounded text-xs font-bold bg-academic-navy-50 text-academic-navy-900">
-                      {d.programs} Programs
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {departments.map((d) => {
+                const isNonAcademic =
+                  d.category === 'non_academic' || d.school === 'central' || !d.school;
+                return (
+                  <tr key={d.id} className="hover:bg-slate-50/60 transition">
+                    <td className="px-5 py-3.5 font-mono font-bold text-academic-navy-800">{d.code}</td>
+                    <td className="px-5 py-3.5 font-medium text-slate-900">{d.name}</td>
+                    <td className="px-5 py-3.5">
+                      {isNonAcademic ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                          Non-Academic
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                          Academic
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3.5 text-xs font-bold">
+                      {isNonAcademic ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                          🌐 Whole University (All Faculties)
+                        </span>
+                      ) : (
+                        <span className="text-slate-800 font-medium">
+                          {schoolMap[d.school || ''] || d.school}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-700 font-medium">{d.hod}</td>
+                    <td className="px-5 py-3.5 text-center font-mono text-slate-600">{d.lecturers} Members</td>
+                    <td className="px-5 py-3.5 text-center">
+                      {isNonAcademic ? (
+                        <span className="text-xs text-slate-400 italic">Central Service (N/A)</span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 rounded text-xs font-bold bg-academic-navy-50 text-academic-navy-900">
+                          {d.programs} Programs
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

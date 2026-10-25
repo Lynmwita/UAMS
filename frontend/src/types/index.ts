@@ -30,10 +30,11 @@ export interface School {
 
 export interface Department {
   id: string;
-  school_id: string;
+  school_id: string | null;
   code: string;
   name: string;
   hod_id?: string;
+  category?: 'academic' | 'non_academic';
   is_active: boolean;
 }
 

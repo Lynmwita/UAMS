@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       role,
       department_id,
       department_name: department.name,
-      school_id: department.school_id,
+      school_id: department.school_id || 'central',
       job_title: job_title || role,
       qualification: qualification || '',
       is_active: true,
