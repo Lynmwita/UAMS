@@ -7,6 +7,7 @@ import { POST as publicApplyPOST } from './public-apply/route';
 import { GET as publicStatusGET } from './public-status/route';
 import { POST as kuccpsImportPOST } from './kuccps-import/route';
 import { createSignedToken } from '@/lib/auth/server-auth';
+import { generateCaptchaChallenge } from '@/lib/auth/captcha';
 
 const CSV_HEADER = 'KCSE Index,Full Name,Gender,Phone Number,Email Address,Programme Code,Programme Name,Cluster Weight,KCSE Mean Grade,KCSE Points,National ID';
 
@@ -114,7 +115,7 @@ test('public-status: verification is mandatory, wrong verify is 403, correct ver
   assert.equal(okData.data.reference_number, 'UADM-2026-0001');
 });
 
-test('public-apply: unknown programme is rejected; valid application is created', async () => {
+test('public-apply: unknown programme is rejected; valid application is created with captcha challenge', async () => {
   const bad = await publicApplyPOST(jsonRequest('http://localhost:3000/api/v1/admissions/public-apply', {
     applicant_name: 'Apply Test', applicant_email: 'apply.test@gmail.com', applicant_phone: '0712345678',
     gender: 'female', date_of_birth: '2006-05-05', program_code: 'NOPE123', kcse_grade: 'B+', kcse_points: 70,
@@ -123,15 +124,94 @@ test('public-apply: unknown programme is rejected; valid application is created'
   const badData = await bad.json();
   assert.match(badData.error, /Unknown programme code/);
 
+  const challenge = generateCaptchaChallenge();
+  const m = challenge.question.match(/(\d+)\s*\+\s*(\d+)/);
+  const ans = m ? Number(m[1]) + Number(m[2]) : 0;
+
   const good = await publicApplyPOST(jsonRequest('http://localhost:3000/api/v1/admissions/public-apply', {
     applicant_name: 'Apply Test', applicant_email: 'apply.test.port@gmail.com', applicant_phone: '0712345678',
     gender: 'female', date_of_birth: '2006-05-05', program_code: 'BCS', kcse_grade: 'B+', kcse_points: 70,
     kcse_index: '99900022201/2025',
+    challenge_token: challenge.challenge_token,
+    captcha_answer: ans,
   }));
   assert.equal(good.status, 201);
   const goodData = await good.json();
   assert.ok(goodData.reference_number);
   assert.equal(goodData.data.program_code, 'BCS');
+});
+
+test('public-apply: honeypot detection traps automated bots and rejects with 400', async () => {
+  const res = await publicApplyPOST(jsonRequest('http://localhost:3000/api/v1/admissions/public-apply', {
+    applicant_name: 'Bot Spammer', applicant_email: 'bot@spam.com', applicant_phone: '0712345999',
+    gender: 'other', date_of_birth: '2005-01-01', program_code: 'BCS', kcse_grade: 'A', kcse_points: 82,
+    website_hp: 'https://spam-bot-trap.com',
+  }));
+  assert.equal(res.status, 400);
+  const data = await res.json();
+  assert.match(data.error, /Spam submission detected/i);
+});
+
+test('public-apply: missing or incorrect security challenge fails with 400', async () => {
+  const missingChallenge = await publicApplyPOST(jsonRequest('http://localhost:3000/api/v1/admissions/public-apply', {
+    applicant_name: 'Human Candidate', applicant_email: 'human@test.com', applicant_phone: '0712345111',
+    gender: 'female', date_of_birth: '2005-01-01', program_code: 'BCS', kcse_grade: 'A', kcse_points: 82,
+  }));
+  assert.equal(missingChallenge.status, 400);
+  const missingData = await missingChallenge.json();
+  assert.match(missingData.error, /Security challenge token is missing/i);
+
+  const challenge = generateCaptchaChallenge();
+  const wrongAnswer = await publicApplyPOST(jsonRequest('http://localhost:3000/api/v1/admissions/public-apply', {
+    applicant_name: 'Human Candidate', applicant_email: 'human@test.com', applicant_phone: '0712345111',
+    gender: 'female', date_of_birth: '2005-01-01', program_code: 'BCS', kcse_grade: 'A', kcse_points: 82,
+    challenge_token: challenge.challenge_token,
+    captcha_answer: 9999, // Intentional wrong answer
+  }));
+  assert.equal(wrongAnswer.status, 400);
+  const wrongData = await wrongAnswer.json();
+  assert.match(wrongData.error, /Incorrect answer to security verification/i);
+});
+
+test('public-apply: rate limiter blocks rapid abuse and returns 429', async () => {
+  const testIp = '198.51.100.99';
+  const makeReqWithIp = (phone: string, kcse: string) => {
+    const challenge = generateCaptchaChallenge();
+    const m = challenge.question.match(/(\d+)\s*\+\s*(\d+)/);
+    const ans = m ? Number(m[1]) + Number(m[2]) : 0;
+    return new Request('http://localhost:3000/api/v1/admissions/public-apply', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-forwarded-for': testIp,
+      },
+      body: JSON.stringify({
+        applicant_name: 'Rapid Submitter',
+        applicant_email: `rapid.${Math.random()}@test.com`,
+        applicant_phone: phone,
+        gender: 'male',
+        date_of_birth: '2005-01-01',
+        program_code: 'BCS',
+        kcse_grade: 'B+',
+        kcse_points: 70,
+        kcse_index: kcse,
+        challenge_token: challenge.challenge_token,
+        captcha_answer: ans,
+      }),
+    }) as any;
+  };
+
+  // Submit 5 requests within the limit
+  for (let i = 0; i < 5; i++) {
+    await publicApplyPOST(makeReqWithIp(`0712345${i}00`, `999000888${i}1/2025`));
+  }
+
+  // The 6th request from the same IP must be rate-limited (429)
+  const rateLimitedRes = await publicApplyPOST(makeReqWithIp('0712345999', '99900088899/2025'));
+  assert.equal(rateLimitedRes.status, 429);
+  const data = await rateLimitedRes.json();
+  assert.match(data.error, /Too many applications submitted/i);
+  assert.ok(rateLimitedRes.headers.get('Retry-After'));
 });
 
 test('kuccps-import route: staff import via CSV honours nulls and reports counts', async () => {

@@ -82,7 +82,8 @@ export async function sendEmailViaResend(
 export type SmtpSender = (mail: EmailMessage & { from: string }, config: SmtpConfig) => Promise<{ messageId: string }>;
 
 const defaultSmtpSender: SmtpSender = async (mail, config) => {
-  const nodemailer = (await import('nodemailer')).default;
+  // Optional dynamic runtime load without strict compile-time dependency
+  const nodemailer: any = (await (Function('return import("nodemailer")')() as Promise<any>)).default;
   const transporter = nodemailer.createTransport({
     host: config.host,
     port: config.port,

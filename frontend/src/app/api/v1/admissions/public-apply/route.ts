@@ -4,6 +4,8 @@ import { normalizeKenyanPhone } from '@/lib/messaging/phone';
 import { dispatchNotification } from '@/lib/messaging/dispatcher';
 import { isKnownProgrammeCode } from '@/lib/academic/kuccps-parser';
 import { recordAuditEvent } from '@/lib/audit/audit-logger';
+import { checkRateLimit } from '@/lib/auth/rate-limiter';
+import { verifyCaptchaChallenge } from '@/lib/auth/captcha';
 import { UamsAdmissionApplication } from '@/types';
 
 export async function POST(request: NextRequest) {
@@ -25,7 +27,34 @@ export async function POST(request: NextRequest) {
       national_id,
       previous_institution,
       documents,
+      website_hp,
+      challenge_token,
+      captcha_answer,
     } = body;
+
+    // 1. Honeypot Anti-Bot Filter
+    if (website_hp && String(website_hp).trim().length > 0) {
+      return NextResponse.json(
+        { success: false, error: 'Spam submission detected by automated security filters.' },
+        { status: 400 }
+      );
+    }
+
+    // 2. IP Rate Limiting (max 5 applications per 5 minutes per IP)
+    const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
+    const ipLimit = checkRateLimit(`public_apply:ip:${clientIp}`, 5, 300);
+    if (!ipLimit.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Too many applications submitted from your network. Please wait ${ipLimit.resetSeconds} seconds before trying again.`,
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(ipLimit.resetSeconds) },
+        }
+      );
+    }
 
     // Required fields validation
     if (!applicant_name || typeof applicant_name !== 'string' || applicant_name.trim().length < 2) {
@@ -45,6 +74,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Invalid Kenyan phone number: format as 07XXXXXXXX or +254XXXXXXXXX' },
         { status: 400 }
+      );
+    }
+
+    // 4. Target Phone Rate Limiting (max 2 applications per 15 mins per phone number)
+    const phoneLimit = checkRateLimit(`public_apply:phone:${phoneNormalized}`, 2, 900);
+    if (!phoneLimit.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Too many submissions for this phone number. Please wait ${phoneLimit.resetSeconds} seconds before trying again.`,
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(phoneLimit.resetSeconds) },
+        }
       );
     }
 
@@ -75,6 +119,15 @@ export async function POST(request: NextRequest) {
     const points = Number(kcse_points);
     if (!Number.isFinite(points) || points < 0 || points > 84) {
       return NextResponse.json({ success: false, error: 'KCSE aggregate points must be between 0 and 84.' }, { status: 400 });
+    }
+
+    // 3. CAPTCHA Proof-of-Human Challenge Verification
+    const captchaCheck = verifyCaptchaChallenge(challenge_token, captcha_answer);
+    if (!captchaCheck.valid) {
+      return NextResponse.json(
+        { success: false, error: captchaCheck.error || 'Security verification challenge failed.' },
+        { status: 400 }
+      );
     }
 
     // Duplicate check

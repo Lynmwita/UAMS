@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   GraduationCap,
@@ -56,6 +56,32 @@ export default function ApplyPage() {
     program_name: string;
   } | null>(null);
 
+  // Security Challenge / Anti-Bot State
+  const [captchaChallenge, setCaptchaChallenge] = useState<{ question: string; challenge_token: string } | null>(null);
+  const [captchaAnswer, setCaptchaAnswer] = useState('');
+  const [captchaLoading, setCaptchaLoading] = useState(false);
+  const [honeypot, setHoneypot] = useState('');
+
+  const loadCaptcha = async () => {
+    try {
+      setCaptchaLoading(true);
+      const res = await fetch('/api/v1/admissions/challenge');
+      const json = await res.json();
+      if (json.success && json.data) {
+        setCaptchaChallenge(json.data);
+        setCaptchaAnswer('');
+      }
+    } catch {
+      // Fallback
+    } finally {
+      setCaptchaLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCaptcha();
+  }, []);
+
   // Tracking State
   const [trackRef, setTrackRef] = useState('');
   const [trackVerify, setTrackVerify] = useState('');
@@ -95,11 +121,17 @@ export default function ApplyPage() {
         body: JSON.stringify({
           ...formData,
           documents: uploadedFiles,
+          website_hp: honeypot,
+          challenge_token: captchaChallenge?.challenge_token,
+          captcha_answer: captchaAnswer,
         }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to submit application.');
+      if (!res.ok) {
+        loadCaptcha();
+        throw new Error(data.error || 'Failed to submit application.');
+      }
 
       setApplySuccess({
         reference_number: data.reference_number,
@@ -107,6 +139,7 @@ export default function ApplyPage() {
       });
       // Pre-fill tracking for instant convenience
       setTrackRef(data.reference_number);
+      loadCaptcha();
     } catch (err: any) {
       setApplyError(err.message || 'Submission error occurred.');
     } finally {
@@ -516,6 +549,47 @@ export default function ApplyPage() {
                           </label>
                         </div>
                       </div>
+                    </div>
+
+                    {/* Honeypot hidden input to trap automated scrapers/bots */}
+                    <input
+                      type="text"
+                      name="website_hp"
+                      value={honeypot}
+                      onChange={(e) => setHoneypot(e.target.value)}
+                      tabIndex={-1}
+                      autoComplete="off"
+                      className="hidden"
+                      aria-hidden="true"
+                    />
+
+                    {/* Security Verification & Abuse Protection */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                          <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                          {captchaChallenge ? captchaChallenge.question : 'Loading security verification...'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={loadCaptcha}
+                          disabled={captchaLoading}
+                          className="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium"
+                        >
+                          Refresh Question
+                        </button>
+                      </div>
+                      <input
+                        required
+                        type="number"
+                        placeholder="Enter number answer"
+                        value={captchaAnswer}
+                        onChange={(e) => setCaptchaAnswer(e.target.value)}
+                        className="w-full sm:w-48 px-3 py-1.5 border rounded-md text-sm focus:ring-2 focus:ring-indigo-500 bg-white"
+                      />
+                      <p className="text-[11px] text-slate-500">
+                        Anti-abuse security check to protect institutional messaging and admissions quota.
+                      </p>
                     </div>
 
                     <div className="pt-4">
