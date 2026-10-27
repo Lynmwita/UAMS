@@ -31,13 +31,20 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireServerAuth(request, ['super_admin', 'admin']);
+  const auth = await requireServerAuth(request, ['super_admin', 'admin', 'registrar']);
   if ('errorResponse' in auth) return auth.errorResponse;
   if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'staff');
 
   try {
     const body = await request.json();
     const { first_name, last_name, email, phone, role, department_id, job_title, qualification } = body;
+
+    if (auth.user.role === 'registrar' && (role === 'admin' || role === 'super_admin')) {
+      return NextResponse.json(
+        { success: false, error: 'Registrars cannot register or assign administrative roles.' },
+        { status: 403 }
+      );
+    }
 
     if (!first_name || !last_name || !email || !role) {
       return NextResponse.json(
@@ -116,13 +123,20 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const auth = await requireServerAuth(request, ['super_admin', 'admin']);
+  const auth = await requireServerAuth(request, ['super_admin', 'admin', 'registrar']);
   if ('errorResponse' in auth) return auth.errorResponse;
   if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'staff');
   try {
     const body = await request.json();
     const staff = staffStore.find((s) => s.id === body.staff_id);
     if (!staff) return NextResponse.json({ success: false, error: 'Staff member not found.' }, { status: 404 });
+
+    if (auth.user.role === 'registrar' && (staff.role === 'admin' || staff.role === 'super_admin')) {
+      return NextResponse.json(
+        { success: false, error: 'Registrars cannot modify administrative accounts.' },
+        { status: 403 }
+      );
+    }
 
     if (typeof body.is_active === 'boolean') staff.is_active = body.is_active;
     if (body.job_title) staff.job_title = String(body.job_title);

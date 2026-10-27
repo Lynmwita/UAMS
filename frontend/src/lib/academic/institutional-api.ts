@@ -56,6 +56,9 @@ export async function institutionalApi(request:Request,user:TokenPayload,module:
   let body:Record<string,any>;
   try {const raw=await request.json();if(!raw||typeof raw!=='object'||Array.isArray(raw))return fail('Provide a JSON object.');body=raw;}catch{return fail('Provide valid JSON.');}
   const validation=validate(module,body,request.method);if(validation)return fail(validation);
+  if(module==='staff'&&request.method==='POST'&&user.role==='registrar'&&['admin','super_admin'].includes(body.role)){
+    return fail('Registrars cannot register or assign administrative roles.',403);
+  }
   if(module==='notifications'&&request.method==='PATCH') {
    // A3 retry: re-dispatch a failed/queued institutional notification and
    // write the new outcome back onto its notification_logs row.

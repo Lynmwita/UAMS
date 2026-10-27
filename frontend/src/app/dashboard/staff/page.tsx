@@ -65,7 +65,7 @@ const DEFAULT_ROLES = [
 
 export default function StaffPage() {
   const {role}=useAuth();
-  const canManage=['admin','super_admin'].includes(role);
+  const canManage=['admin','super_admin','registrar'].includes(role);
   const [departments,setDepartments]=useState<{id:string;name:string;category?:string;school_id?:string}[]>([]);
   const [notice,setNotice]=useState('');
   const [allocation,setAllocation]=useState({lecturer_staff_id:'',course_code:''});
@@ -171,6 +171,10 @@ export default function StaffPage() {
     const trimmed = customRoleInput.trim();
     if (!trimmed) return;
     const value = trimmed.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    if (role === 'registrar' && (value === 'admin' || value === 'super_admin' || value.includes('admin'))) {
+      setError('Registrars cannot register or assign administrative roles.');
+      return;
+    }
     const newRole = { value, label: trimmed, group: 'Custom Roles' };
     if (!rolesList.some((r) => r.value === value)) {
       setRolesList((prev) => [...prev, newRole]);
@@ -179,6 +183,10 @@ export default function StaffPage() {
     setIsCustomRole(false);
     setCustomRoleInput('');
   };
+
+  const availableRoles = role === 'registrar'
+    ? rolesList.filter((r) => r.value !== 'admin' && r.value !== 'super_admin')
+    : rolesList;
 
   const filtered = staff.filter(
     (s) =>
@@ -437,9 +445,9 @@ export default function StaffPage() {
                   }
                 }}
               >
-                {Array.from(new Set(rolesList.map((r) => r.group))).map((group) => (
+                {Array.from(new Set(availableRoles.map((r) => r.group))).map((group) => (
                   <optgroup key={group} label={group}>
-                    {rolesList
+                    {availableRoles
                       .filter((r) => r.group === group)
                       .map((r) => (
                         <option key={r.value} value={r.value}>
