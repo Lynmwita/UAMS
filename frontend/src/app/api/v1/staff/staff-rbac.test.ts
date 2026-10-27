@@ -1,16 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { POST as createStaff, PATCH as updateStaff } from './route';
+import { POST as inviteStaff } from './invite/route';
 import { createSignedToken } from '@/lib/auth/server-auth';
 import type { UserRole } from '@/types';
 
-function makeRequest(role: UserRole, method: string, body?: unknown) {
+function makeRequest(role: UserRole, method: string, body?: unknown, url = 'http://localhost:3000/api/v1/staff') {
   const token = createSignedToken({
     id: `usr-test-${role}-${Date.now()}`,
     email: `${role}@university.ac.ke`,
     role,
   });
-  return new Request('http://localhost:3000/api/v1/staff', {
+  return new Request(url, {
     method,
     headers: {
       Authorization: `Bearer ${token}`,
@@ -95,4 +96,37 @@ test('staff registration: admin CAN register administrative and regular roles', 
     })
   );
   assert.equal(res.status, 201);
+});
+
+test('staff invitation: unauthorized role (student) is rejected with 403', async () => {
+  const res = await inviteStaff(
+    makeRequest('student', 'POST', { email: 'staff@university.ac.ke' }, 'http://localhost:3000/api/v1/staff/invite')
+  );
+  assert.equal(res.status, 403);
+});
+
+test('staff invitation: registrar CANNOT invite admin or super_admin accounts', async () => {
+  const res = await inviteStaff(
+    makeRequest('registrar', 'POST', {
+      email: 'admin.target@university.ac.ke',
+      role: 'admin'
+    }, 'http://localhost:3000/api/v1/staff/invite')
+  );
+  assert.equal(res.status, 403);
+  const data = await res.json();
+  assert.match(data.error, /Registrars may not invite administrator accounts/i);
+});
+
+test('staff invitation: demo users are not rejected with "Invitations require an institutional administrator"', async () => {
+  const res = await inviteStaff(
+    makeRequest('admin', 'POST', {
+      email: 'invalid-email-format',
+      role: 'lecturer'
+    }, 'http://localhost:3000/api/v1/staff/invite')
+  );
+  // Fails with email validation (400), proving demo user was NOT blocked by demo guard (403)
+  assert.equal(res.status, 400);
+  const data = await res.json();
+  assert.notEqual(data.error, 'Invitations require an institutional administrator.');
+  assert.match(data.error, /Valid academic record email required/i);
 });

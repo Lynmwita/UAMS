@@ -112,7 +112,7 @@ export default function StaffPage() {
     fetch('/api/v1/departments').then(r=>r.json()).then(d=>{if(d.success)setDepartments(d.data);});
   }, []);
 
-  const invite = async (email: string) => {
+  const invite = async (email: string, role?: string, firstName?: string, lastName?: string) => {
     setError('');
     setNotice('');
     setInvitingEmail(email);
@@ -121,7 +121,12 @@ export default function StaffPage() {
       const r = await fetch('/api/v1/staff/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({
+          email,
+          role,
+          first_name: firstName,
+          last_name: lastName,
+        }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Failed to send invite.');
@@ -696,7 +701,7 @@ export default function StaffPage() {
                         <button
                           disabled={invitingEmail === s.email}
                           className="text-xs border rounded px-2.5 py-1 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5 font-medium transition"
-                          onClick={() => invite(s.email)}
+                          onClick={() => invite(s.email, s.role, s.first_name, s.last_name)}
                         >
                           {invitingEmail === s.email ? (
                             <>
