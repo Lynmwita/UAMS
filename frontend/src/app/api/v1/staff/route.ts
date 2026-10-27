@@ -53,7 +53,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'A staff member with this email already exists.' }, { status: 409 });
     }
 
-    const fallbackDeptId = role === 'library' ? 'dep-library' : 'dep-general';
+    let fallbackDeptId = 'dep-general';
+    if (role === 'library') {
+      fallbackDeptId = 'dep-library';
+    } else if (['admin', 'super_admin', 'registrar', 'admissions_officer', 'examinations_officer', 'hr_officer', 'legal_officer', 'procurement_officer'].includes(role)) {
+      fallbackDeptId = 'dep-admin';
+    } else if (['finance_officer', 'accountant'].includes(role)) {
+      fallbackDeptId = 'dep-finance';
+    }
     const resolvedDeptId = (!department_id || department_id === 'none' || department_id === 'other' || department_id === 'dep-general') ? fallbackDeptId : department_id;
     let department = departmentsStore.find((d) => d.id === resolvedDeptId);
     if (!department) {

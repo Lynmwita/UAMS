@@ -94,7 +94,14 @@ export async function institutionalApi(request:Request,user:TokenPayload,module:
   if(module==='finance/bank/reconcile')return fail('Use Record Bank Deposit to atomically verify and allocate the authoritative payment ledger.',409);
   if(module==='staff'&&(!body.department_id||body.department_id==='dep-general'||body.department_id==='none')){
    const depts=await institutionalRows('departments');
-   const targetDept=body.role==='library'?depts.find(d=>d.code==='LIB'||d.name?.toLowerCase().includes('library')):null;
+   let targetDept=null;
+   if(body.role==='library'){
+     targetDept=depts.find(d=>d.code==='LIB'||d.name?.toLowerCase().includes('library'));
+   } else if(['admin','super_admin','registrar','admissions_officer','examinations_officer','hr_officer','legal_officer','procurement_officer'].includes(body.role)){
+     targetDept=depts.find(d=>d.code==='ADM'||d.name?.toLowerCase().includes('admin'));
+   } else if(['finance_officer','accountant'].includes(body.role)){
+     targetDept=depts.find(d=>d.code==='FIN'||d.name?.toLowerCase().includes('finance'));
+   }
    const central=targetDept||depts.find(d=>d.school_id==='central'||d.category==='non_academic')||depts[0];
    if(central)body.department_id=central.id;
   }

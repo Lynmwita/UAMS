@@ -191,6 +191,12 @@ export default function StaffPage() {
     if (form.role === 'library') {
       const libDept = departments.find((d: any) => d.id === 'dep-library' || d.code === 'LIB' || d.name?.toLowerCase().includes('library'));
       fallbackDept = libDept?.id || 'dep-library';
+    } else if (['admin', 'super_admin', 'registrar', 'admissions_officer', 'examinations_officer', 'hr_officer', 'legal_officer', 'procurement_officer'].includes(form.role)) {
+      const adminDept = departments.find((d: any) => d.id === 'dep-admin' || d.code === 'ADM' || d.name?.toLowerCase().includes('administration'));
+      fallbackDept = adminDept?.id || 'dep-admin';
+    } else if (['finance_officer', 'accountant'].includes(form.role)) {
+      const finDept = departments.find((d: any) => d.id === 'dep-finance' || d.code === 'FIN' || d.name?.toLowerCase().includes('finance'));
+      fallbackDept = finDept?.id || 'dep-finance';
     }
     const payload = {
       ...form,
@@ -406,13 +412,21 @@ export default function StaffPage() {
                   if (val === '__other__') {
                     setIsCustomRole(true);
                   } else {
-                    const nonAcademicRoles = ['cleaner', 'catering_assistant', 'chef_cook', 'security_officer', 'maintenance_technician', 'driver', 'storekeeper', 'nurse', 'hostel_warden'];
                     let targetDept = form.department_id;
                     if (val === 'library') {
                       const libDept = departments.find((d: any) => d.id === 'dep-library' || d.code === 'LIB' || d.name?.toLowerCase().includes('library'));
                       targetDept = libDept?.id || 'dep-library';
-                    } else if (nonAcademicRoles.includes(val) && (!form.department_id || form.department_id.startsWith('dep-cs') || form.department_id.startsWith('dep-elec') || form.department_id.startsWith('dep-mech') || form.department_id.startsWith('dep-civil') || form.department_id.startsWith('dep-bit') || form.department_id.startsWith('dep-is') || form.department_id.startsWith('dep-bba') || form.department_id.startsWith('dep-econ') || form.department_id.startsWith('dep-edu') || form.department_id.startsWith('dep-huma'))) {
-                      targetDept = 'dep-general';
+                    } else if (['admin', 'super_admin', 'registrar', 'admissions_officer', 'examinations_officer', 'hr_officer', 'legal_officer', 'procurement_officer'].includes(val)) {
+                      const adminDept = departments.find((d: any) => d.id === 'dep-admin' || d.code === 'ADM' || d.name?.toLowerCase().includes('administration'));
+                      targetDept = adminDept?.id || 'dep-admin';
+                    } else if (['finance_officer', 'accountant'].includes(val)) {
+                      const finDept = departments.find((d: any) => d.id === 'dep-finance' || d.code === 'FIN' || d.name?.toLowerCase().includes('finance'));
+                      targetDept = finDept?.id || 'dep-finance';
+                    } else {
+                      const nonAcademicRoles = ['cleaner', 'catering_assistant', 'chef_cook', 'security_officer', 'maintenance_technician', 'driver', 'storekeeper', 'nurse', 'hostel_warden'];
+                      if (nonAcademicRoles.includes(val) && (!form.department_id || form.department_id.startsWith('dep-cs') || form.department_id.startsWith('dep-elec') || form.department_id.startsWith('dep-mech') || form.department_id.startsWith('dep-civil') || form.department_id.startsWith('dep-bit') || form.department_id.startsWith('dep-is') || form.department_id.startsWith('dep-bba') || form.department_id.startsWith('dep-econ') || form.department_id.startsWith('dep-edu') || form.department_id.startsWith('dep-huma'))) {
+                        targetDept = 'dep-general';
+                      }
                     }
                     setForm((prev) => ({
                       ...prev,
@@ -441,7 +455,7 @@ export default function StaffPage() {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-xs font-semibold text-slate-700">
-                  Department / Unit <span className="font-normal text-slate-400">(Optional for librarians & support staff)</span>
+                  Department / Unit <span className="font-normal text-slate-400">(Optional for admins, registrars, librarians & support)</span>
                 </label>
                 <button
                   type="button"
