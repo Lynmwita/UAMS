@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { IdCard, Search, Plus, ShieldX, ShieldCheck, Loader2, CheckCircle2, AlertCircle, GraduationCap } from 'lucide-react';
+import { IdCard, Search, Plus, ShieldX, ShieldCheck, Loader2, CheckCircle2, AlertCircle, GraduationCap, KeyRound, Pencil, Mail, Lock, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth/context';
 
 type StaffMember = {
@@ -47,7 +47,7 @@ const DEFAULT_ROLES = [
   { value: 'accountant', label: 'Accountant / Cashier', group: 'Finance & Accounts' },
 
   // Student Welfare & Services
-  { value: 'library', label: 'Librarian / Library Staff', group: 'Student Welfare & Services' },
+  { value: 'librarian', label: 'Librarian / Library Staff', group: 'Student Welfare & Services' },
   { value: 'hostel_warden', label: 'Hostel Warden / Residence Manager', group: 'Student Welfare & Services' },
   { value: 'counselor', label: 'Student Counselor / Welfare Officer', group: 'Student Welfare & Services' },
   { value: 'nurse', label: 'Campus Nurse / Medical Officer', group: 'Student Welfare & Services' },
@@ -86,6 +86,25 @@ export default function StaffPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+
+  const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
+  const [editForm, setEditForm] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    role: '',
+    department_id: '',
+    job_title: '',
+    qualification: '',
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const [passwordStaff, setPasswordStaff] = useState<StaffMember | null>(null);
+  const [directPassword, setDirectPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordModalMessage, setPasswordModalMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   const [form, setForm] = useState({
     first_name: '',
     last_name: '',
@@ -96,6 +115,112 @@ export default function StaffPage() {
     job_title: '',
     qualification: '',
   });
+
+  const handleOpenEdit = (s: StaffMember) => {
+    setEditingStaff(s);
+    setEditForm({
+      first_name: s.first_name,
+      last_name: s.last_name,
+      email: s.email,
+      phone: s.phone || '',
+      role: s.role,
+      department_id: (s as any).department_id || '',
+      job_title: s.job_title || '',
+      qualification: s.qualification || '',
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingStaff) return;
+    setSavingEdit(true);
+    setError('');
+    try {
+      const res = await fetch('/api/v1/staff', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          staff_id: editingStaff.id,
+          first_name: editForm.first_name,
+          last_name: editForm.last_name,
+          email: editForm.email,
+          phone: editForm.phone,
+          role: editForm.role,
+          department_id: editForm.department_id,
+          job_title: editForm.job_title,
+          qualification: editForm.qualification,
+        }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Failed to update staff member.');
+      setStaff((prev) => prev.map((s) => (s.id === editingStaff.id ? { ...s, ...d.data } : s)));
+      setNotice(`Staff details for ${editForm.email} updated successfully.`);
+      setEditingStaff(null);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleSetPassword = async () => {
+    if (!passwordStaff || !directPassword) return;
+    setSavingPassword(true);
+    setPasswordModalMessage(null);
+    try {
+      const res = await fetch('/api/v1/staff/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: passwordStaff.email,
+          action: 'set',
+          password: directPassword,
+          role: passwordStaff.role,
+          first_name: passwordStaff.first_name,
+          last_name: passwordStaff.last_name,
+        }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Failed to set password.');
+      setPasswordModalMessage({ type: 'success', text: d.message });
+      setRowStatus((prev) => ({
+        ...prev,
+        [passwordStaff.email]: { type: 'success', message: 'Password set directly. Account active.' },
+      }));
+      setDirectPassword('');
+    } catch (err: any) {
+      setPasswordModalMessage({ type: 'error', text: err.message });
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  const handleSendResetLink = async () => {
+    if (!passwordStaff) return;
+    setSavingPassword(true);
+    setPasswordModalMessage(null);
+    try {
+      const res = await fetch('/api/v1/staff/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: passwordStaff.email,
+          action: 'reset_link',
+          role: passwordStaff.role,
+        }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Failed to dispatch reset link.');
+      setPasswordModalMessage({ type: 'success', text: d.message });
+      setRowStatus((prev) => ({
+        ...prev,
+        [passwordStaff.email]: { type: 'success', message: 'Password reset link sent to email.' },
+      }));
+    } catch (err: any) {
+      setPasswordModalMessage({ type: 'error', text: err.message });
+    } finally {
+      setSavingPassword(false);
+    }
+  };
 
   const load = () =>
     fetch('/api/v1/staff')
@@ -702,6 +827,7 @@ export default function StaffPage() {
                           disabled={invitingEmail === s.email}
                           className="text-xs border rounded px-2.5 py-1 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5 font-medium transition"
                           onClick={() => invite(s.email, s.role, s.first_name, s.last_name)}
+                          title="Send Supabase account invite email"
                         >
                           {invitingEmail === s.email ? (
                             <>
@@ -709,10 +835,40 @@ export default function StaffPage() {
                               <span>Sending...</span>
                             </>
                           ) : (
-                            'Invite / link account'
+                            <>
+                              <Mail className="w-3.5 h-3.5 text-sky-600" />
+                              <span>Invite / link</span>
+                            </>
                           )}
                         </button>
                       )}
+
+                      {canInvite && !(role === 'registrar' && (s.role === 'admin' || s.role === 'super_admin')) && (
+                        <button
+                          className="text-xs border border-indigo-200 bg-indigo-50/50 hover:bg-indigo-50 text-indigo-700 rounded px-2 py-1 inline-flex items-center gap-1 font-medium transition"
+                          onClick={() => {
+                            setPasswordStaff(s);
+                            setDirectPassword('');
+                            setPasswordModalMessage(null);
+                          }}
+                          title="Set password directly or send reset link"
+                        >
+                          <KeyRound className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>Password</span>
+                        </button>
+                      )}
+
+                      {canInvite && !(role === 'registrar' && (s.role === 'admin' || s.role === 'super_admin')) && (
+                        <button
+                          className="text-xs border rounded px-2 py-1 hover:bg-slate-50 text-slate-700 inline-flex items-center gap-1 font-medium transition"
+                          onClick={() => handleOpenEdit(s)}
+                          title="Edit staff details"
+                        >
+                          <Pencil className="w-3.5 h-3.5 text-slate-600" />
+                          <span>Edit</span>
+                        </button>
+                      )}
+
                       <button
                         hidden={!canManage}
                         className="text-xs border rounded px-2 py-1 hover:bg-slate-50 inline-flex items-center gap-1 text-slate-700 transition"
@@ -743,6 +899,259 @@ export default function StaffPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Password & Access Management Modal */}
+      {passwordStaff && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <KeyRound className="w-5 h-5 text-indigo-600" />
+                  <span>Manage Password & Access</span>
+                </h3>
+                <p className="text-xs text-slate-600 mt-1">
+                  {passwordStaff.first_name} {passwordStaff.last_name} &bull; <span className="font-mono">{passwordStaff.email}</span>
+                </p>
+              </div>
+              <button
+                onClick={() => setPasswordStaff(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {passwordModalMessage && (
+              <div
+                className={`p-3 rounded-lg text-xs font-medium flex items-start gap-2 ${
+                  passwordModalMessage.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    : 'bg-rose-50 text-rose-800 border border-rose-200'
+                }`}
+              >
+                {passwordModalMessage.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                )}
+                <span>{passwordModalMessage.text}</span>
+              </div>
+            )}
+
+            <div className="space-y-4 pt-1">
+              {/* Option 1: Direct Set Password */}
+              <div className="p-4 bg-slate-50 border rounded-xl space-y-3">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-indigo-600" />
+                  <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                    Option 1: Set Password Directly
+                  </h4>
+                </div>
+                <p className="text-xs text-slate-600">
+                  Instantly set their password and activate this account so they can log in immediately without waiting for email confirmation.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={directPassword}
+                    onChange={(e) => setDirectPassword(e.target.value)}
+                    placeholder="Enter new password (min. 6 characters)"
+                    className="flex-1 border rounded-lg px-3 py-2 text-xs bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    disabled={savingPassword || directPassword.length < 6}
+                    onClick={handleSetPassword}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-3.5 py-2 rounded-lg text-xs disabled:opacity-50 transition inline-flex items-center gap-1.5 shrink-0"
+                  >
+                    {savingPassword ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                    <span>Set Password</span>
+                  </button>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+                  <span>Quick default:</span>
+                  <button
+                    type="button"
+                    onClick={() => setDirectPassword('DemoPassword2026!')}
+                    className="text-indigo-600 hover:underline font-mono"
+                  >
+                    Use DemoPassword2026!
+                  </button>
+                </div>
+              </div>
+
+              {/* Option 2: Send Password Reset Link */}
+              <div className="p-4 bg-slate-50 border rounded-xl space-y-3">
+                <div className="flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-sky-600" />
+                  <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                    Option 2: Dispatch Reset Email
+                  </h4>
+                </div>
+                <p className="text-xs text-slate-600">
+                  Email a password reset link to <strong className="font-mono text-slate-900">{passwordStaff.email}</strong> allowing them to choose their own password.
+                </p>
+                <button
+                  type="button"
+                  disabled={savingPassword}
+                  onClick={handleSendResetLink}
+                  className="w-full bg-white hover:bg-slate-100 text-slate-800 border font-medium py-2 rounded-lg text-xs transition inline-flex items-center justify-center gap-1.5"
+                >
+                  {savingPassword ? <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-600" /> : <Mail className="w-3.5 h-3.5 text-sky-600" />}
+                  <span>Send Password Reset Email</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setPasswordStaff(null)}
+                className="px-4 py-2 text-xs font-medium border rounded-lg hover:bg-slate-50 text-slate-700 transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Staff Details Modal */}
+      {editingStaff && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <Pencil className="w-5 h-5 text-slate-700" />
+                  <span>Edit Staff Member</span>
+                </h3>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  Staff No: <span className="font-mono font-semibold">{editingStaff.staff_number}</span>
+                </p>
+              </div>
+              <button
+                onClick={() => setEditingStaff(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">First Name</label>
+                <input
+                  type="text"
+                  value={editForm.first_name}
+                  onChange={(e) => setEditForm((p) => ({ ...p, first_name: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 text-xs bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Last Name</label>
+                <input
+                  type="text"
+                  value={editForm.last_name}
+                  onChange={(e) => setEditForm((p) => ({ ...p, last_name: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 text-xs bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Email Address</label>
+                <input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm((p) => ({ ...p, email: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 text-xs bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Phone Number</label>
+                <input
+                  type="tel"
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm((p) => ({ ...p, phone: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 text-xs bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Role</label>
+                <select
+                  value={editForm.role}
+                  onChange={(e) => setEditForm((p) => ({ ...p, role: e.target.value }))}
+                  className="w-full border rounded-lg px-2.5 py-2 text-xs bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {rolesList.map((r) => (
+                    <option key={r.value} value={r.value}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Department / Unit</label>
+                <select
+                  value={editForm.department_id}
+                  onChange={(e) => setEditForm((p) => ({ ...p, department_id: e.target.value }))}
+                  className="w-full border rounded-lg px-2.5 py-2 text-xs bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">None / General Campus Support & Operations</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Job Title</label>
+                <input
+                  type="text"
+                  value={editForm.job_title}
+                  onChange={(e) => setEditForm((p) => ({ ...p, job_title: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 text-xs bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Qualification</label>
+                <input
+                  type="text"
+                  value={editForm.qualification}
+                  onChange={(e) => setEditForm((p) => ({ ...p, qualification: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 text-xs bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t">
+              <button
+                type="button"
+                onClick={() => setEditingStaff(null)}
+                className="px-4 py-2 text-xs font-medium border rounded-lg hover:bg-slate-50 text-slate-700 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={savingEdit || !editForm.email}
+                onClick={handleSaveEdit}
+                className="bg-slate-900 hover:bg-slate-800 text-white font-medium px-4 py-2 rounded-lg text-xs disabled:opacity-50 transition inline-flex items-center gap-1.5"
+              >
+                {savingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                <span>Save Changes</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

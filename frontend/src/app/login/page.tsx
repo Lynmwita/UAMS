@@ -253,8 +253,15 @@ function LoginForm() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => handleFillDemoCredentials('librarian')}
+                  className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
+                >
+                  Librarian (Lyne Naz)
+                </button>
+                <button
+                  type="button"
                   onClick={() => handleFillDemoCredentials('student')}
-                  className="col-span-2 p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
+                  className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
                 >
                   Student (Faith Wanjiku)
                 </button>

@@ -39,8 +39,8 @@ export default function Sidebar({ role = 'student' }: SidebarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navigationItems = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student'] },
-    { name: 'AI Advisor', href: '/dashboard/ai', icon: Sparkles, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student'] },
+    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student', 'librarian'] },
+    { name: 'AI Advisor', href: '/dashboard/ai', icon: Sparkles, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student', 'librarian'] },
     { name: 'Schools & Depts', href: '/dashboard/structure', icon: Building2, roles: ['super_admin', 'admin', 'registrar'] },
     { name: 'Students', href: '/dashboard/students', icon: Users, roles: ['super_admin', 'admin', 'registrar', 'hod'] },
     { name: 'Courses & Catalog', href: '/dashboard/courses', icon: BookOpen, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student'] },
@@ -49,13 +49,13 @@ export default function Sidebar({ role = 'student' }: SidebarProps) {
     { name: 'Exam Clearance & Cards', href: '/dashboard/exams', icon: FileCheck2, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student'] },
     { name: 'Fees & Finance', href: '/dashboard/finance', icon: CreditCard, roles: ['super_admin', 'admin', 'finance_officer', 'student'] },
     { name: 'Hostel & Housing', href: '/dashboard/hostel', icon: Home, roles: ['super_admin', 'admin', 'registrar', 'student'] },
-    { name: 'Library & Books', href: '/dashboard/library', icon: Bookmark, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student'] },
+    { name: 'Library & Books', href: '/dashboard/library', icon: Bookmark, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student', 'librarian'] },
     { name: 'Timetable', href: '/dashboard/timetable', icon: Calendar, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student'] },
-    { name: 'Announcements', href: '/dashboard/announcements', icon: Bell, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student'] },
+    { name: 'Announcements', href: '/dashboard/announcements', icon: Bell, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student', 'librarian'] },
     { name: 'SMS & Dispatch', href: '/dashboard/notifications', icon: Send, roles: ['super_admin', 'admin', 'finance_officer', 'registrar'] },
     { name: 'Admissions', href: '/dashboard/admissions', icon: UserPlus, roles: ['super_admin', 'admin', 'registrar', 'hod'] },
     { name: 'Faculty & Staff', href: '/dashboard/staff', icon: IdCard, roles: ['super_admin', 'admin', 'registrar'] },
-    { name: 'Campus Events', href: '/dashboard/events', icon: CalendarPlus, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student'] },
+    { name: 'Campus Events', href: '/dashboard/events', icon: CalendarPlus, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student', 'librarian'] },
     { name: 'Reports & Analytics', href: '/dashboard/reports', icon: BarChart3, roles: ['super_admin', 'admin', 'registrar', 'finance_officer', 'hod'] },
     { name: 'Student Hub Inbox', href: '/dashboard/support', icon: Send, roles: ['super_admin','admin','registrar'] },
     { name: 'Audit Logs', href: '/dashboard/audit', icon: Activity, roles: ['super_admin'] },

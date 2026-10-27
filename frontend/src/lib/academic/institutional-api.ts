@@ -136,7 +136,7 @@ export async function institutionalApi(request:Request,user:TokenPayload,module:
  }catch(error:any){const code=error?.code;return fail(code==='42501'?'Operation outside your authorized scope.':code==='23505'?'Record already exists.':code==='P0002'?'Record not found.':code?'Institutional operation rejected. Check required fields and workflow prerequisites.':'Institutional database did not acknowledge the operation. Retry using the same reference where applicable.',code==='42501'?403:code==='23505'?409:code==='P0002'?404:code?400:503);}
 }
 async function baselineRead(module:string,user:TokenPayload,selectedCourse?:string|null) {
- const privileged=['admin','super_admin','registrar'].includes(user.role);
+ const privileged=['admin','super_admin','registrar','librarian'].includes(user.role);
  if(module==='notifications')return NextResponse.json({success:true,data:await institutionalRows('notification_logs')});
  if(module==='audit') {
   const rows=await institutionalRows('uams_operation_audit');

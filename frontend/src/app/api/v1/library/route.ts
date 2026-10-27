@@ -16,7 +16,7 @@ let libraryLoans: LibraryLoan[] = [
 ];
 
 export async function GET(req: NextRequest) {
-  const auth = await requireServerAuth(req, ['student','admin','super_admin','registrar','hod','lecturer']);
+  const auth = await requireServerAuth(req, ['student','admin','super_admin','registrar','hod','lecturer','librarian']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireServerAuth(req, ['student', 'admin', 'super_admin', 'registrar']);
+  const auth = await requireServerAuth(req, ['student', 'admin', 'super_admin', 'registrar', 'librarian']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }

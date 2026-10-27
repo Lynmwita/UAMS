@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { POST as createStaff, PATCH as updateStaff } from './route';
 import { POST as inviteStaff } from './invite/route';
+import { POST as managePassword } from './password/route';
 import { createSignedToken } from '@/lib/auth/server-auth';
+import { canAccessPage } from '@/lib/auth/roles';
 import type { UserRole } from '@/types';
 
 function makeRequest(role: UserRole, method: string, body?: unknown, url = 'http://localhost:3000/api/v1/staff') {
@@ -129,4 +131,69 @@ test('staff invitation: demo users are not rejected with "Invitations require an
   const data = await res.json();
   assert.notEqual(data.error, 'Invitations require an institutional administrator.');
   assert.match(data.error, /Valid academic record email required/i);
+});
+
+test('librarian role visibility: librarian can ONLY access library and general notices, strictly barred from registrar/admin modules', () => {
+  // Allowed
+  assert.equal(canAccessPage('librarian', 'library'), true);
+  assert.equal(canAccessPage('librarian', 'announcements'), true);
+  assert.equal(canAccessPage('librarian', 'events'), true);
+  assert.equal(canAccessPage('librarian', 'ai'), true);
+  assert.equal(canAccessPage('librarian', 'dashboard'), true);
+
+  // Strictly Forbidden
+  assert.equal(canAccessPage('librarian', 'students'), false);
+  assert.equal(canAccessPage('librarian', 'admissions'), false);
+  assert.equal(canAccessPage('librarian', 'staff'), false);
+  assert.equal(canAccessPage('librarian', 'finance'), false);
+  assert.equal(canAccessPage('librarian', 'grades'), false);
+  assert.equal(canAccessPage('librarian', 'exams'), false);
+  assert.equal(canAccessPage('librarian', 'structure'), false);
+  assert.equal(canAccessPage('librarian', 'reports'), false);
+  assert.equal(canAccessPage('librarian', 'audit'), false);
+});
+
+test('staff password management: registrar cannot change password for admin or super_admin', async () => {
+  const res = await managePassword(
+    makeRequest('registrar', 'POST', {
+      email: 'admin@university.ac.ke',
+      action: 'set',
+      password: 'NewPassword123!',
+      role: 'admin'
+    }, 'http://localhost:3000/api/v1/staff/password')
+  );
+  assert.equal(res.status, 403);
+  const data = await res.json();
+  assert.match(data.error, /Registrars cannot modify administrative accounts/i);
+});
+
+test('staff password management: admin/registrar can set password directly for staff/librarian', async () => {
+  const res = await managePassword(
+    makeRequest('registrar', 'POST', {
+      email: 'librarian.test@university.ac.ke',
+      action: 'set',
+      password: 'StrongPassword2026!',
+      role: 'librarian',
+      first_name: 'Test',
+      last_name: 'Librarian'
+    }, 'http://localhost:3000/api/v1/staff/password')
+  );
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.success, true);
+  assert.match(data.message, /Password set successfully/i);
+});
+
+test('staff password management: admin/registrar can dispatch recovery reset link', async () => {
+  const res = await managePassword(
+    makeRequest('registrar', 'POST', {
+      email: 'librarian.test@university.ac.ke',
+      action: 'reset_link',
+      role: 'librarian'
+    }, 'http://localhost:3000/api/v1/staff/password')
+  );
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.success, true);
+  assert.match(data.message, /Password reset link has been dispatched/i);
 });

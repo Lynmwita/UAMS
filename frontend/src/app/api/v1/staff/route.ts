@@ -199,9 +199,69 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (typeof body.is_active === 'boolean') staff.is_active = body.is_active;
+    if (body.first_name) staff.first_name = String(body.first_name).trim();
+    if (body.last_name) staff.last_name = String(body.last_name).trim();
     if (body.job_title) staff.job_title = String(body.job_title);
     if (body.qualification) staff.qualification = String(body.qualification);
     if (body.phone) staff.phone = String(body.phone);
+    if (body.role) {
+      const nextRole = String(body.role).toLowerCase();
+      if (auth.user.role === 'registrar' && (nextRole === 'admin' || nextRole === 'super_admin')) {
+        return NextResponse.json(
+          { success: false, error: 'Registrars cannot assign administrative roles.' },
+          { status: 403 }
+        );
+      }
+      staff.role = nextRole;
+    }
+    if (body.department_id) {
+      staff.department_id = String(body.department_id);
+      const d = departmentsStore.find((x) => x.id === staff.department_id);
+      if (d) staff.department_name = d.name;
+    }
+
+    const oldEmail = staff.email;
+    let nextEmail = oldEmail;
+    if (body.email && typeof body.email === 'string') {
+      const emailNorm = body.email.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm)) {
+        return NextResponse.json({ success: false, error: 'A valid email is required.' }, { status: 400 });
+      }
+      if (emailNorm !== oldEmail.toLowerCase() && staffStore.some((s) => s.id !== staff.id && s.email.toLowerCase() === emailNorm)) {
+        return NextResponse.json({ success: false, error: 'Another staff member already has this email.' }, { status: 409 });
+      }
+      staff.email = emailNorm;
+      nextEmail = emailNorm;
+    }
+
+    // Sync updates to Supabase users table and Auth
+    try {
+      const db = institutionalDatabase();
+      const { data: roleRow } = await db.from('roles').select('id').eq('code', staff.role).maybeSingle();
+      const { data: updatedUsers } = await db
+        .from('users')
+        .update({
+          email: nextEmail,
+          first_name: staff.first_name,
+          last_name: staff.last_name,
+          phone_number: staff.phone || null,
+          role_id: roleRow?.id || null,
+          is_active: staff.is_active,
+          updated_at: new Date().toISOString(),
+        })
+        .or(`email.eq.${oldEmail},email.eq.${nextEmail}`)
+        .select('id,auth_user_id');
+
+      const authId = updatedUsers?.[0]?.auth_user_id;
+      if (authId) {
+        await db.auth.admin.updateUserById(authId, {
+          email: nextEmail,
+          app_metadata: { role: staff.role },
+        });
+      }
+    } catch {
+      // Non-fatal if offline
+    }
 
     recordAuditEvent({
       actor_email: auth.user.email,

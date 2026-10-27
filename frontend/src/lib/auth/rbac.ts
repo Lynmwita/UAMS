@@ -26,6 +26,7 @@ export const ROLE_HIERARCHY: Record<UserRole, number> = {
   hod: 70,
   lecturer: 60,
   finance_officer: 60,
+  librarian: 50,
   student: 10,
 };
 
@@ -36,6 +37,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   hod: 'Head of Department',
   lecturer: 'Lecturer / Faculty',
   finance_officer: 'Finance Officer',
+  librarian: 'University Librarian',
   student: 'Student',
 };
 
@@ -115,6 +117,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "hostels:read",
     "library:read",
     "exams:read"
+  ],
+  "librarian": [
+    "library:read",
+    "library:loan"
   ]
 };
 

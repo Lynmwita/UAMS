@@ -1,6 +1,6 @@
 import type { UserRole } from '@/types';
 
-export const USER_ROLES: UserRole[] = ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student'];
+export const USER_ROLES: UserRole[] = ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student', 'librarian'];
 export function isUserRole(value: unknown): value is UserRole {
   return typeof value === 'string' && USER_ROLES.includes(value as UserRole);
 }
@@ -15,7 +15,7 @@ export const PAGE_ROLES: Record<string, UserRole[]> = {
   exams: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student'],
   finance: ['super_admin', 'admin', 'finance_officer', 'student'],
   hostel: ['super_admin', 'admin', 'registrar', 'student'],
-  library: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student'],
+  library: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student', 'librarian'],
   timetable: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student'],
   notifications: ['super_admin', 'admin', 'registrar', 'finance_officer'],
   audit: ['super_admin', 'admin'],
