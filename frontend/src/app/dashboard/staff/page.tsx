@@ -187,9 +187,14 @@ export default function StaffPage() {
   );
 
   const createStaff = async () => {
+    let fallbackDept = 'dep-general';
+    if (form.role === 'library') {
+      const libDept = departments.find((d: any) => d.id === 'dep-library' || d.code === 'LIB' || d.name?.toLowerCase().includes('library'));
+      fallbackDept = libDept?.id || 'dep-library';
+    }
     const payload = {
       ...form,
-      department_id: form.department_id || 'dep-general',
+      department_id: form.department_id || fallbackDept,
     };
     const r = await fetch('/api/v1/staff', {
       method: 'POST',
@@ -402,10 +407,17 @@ export default function StaffPage() {
                     setIsCustomRole(true);
                   } else {
                     const nonAcademicRoles = ['cleaner', 'catering_assistant', 'chef_cook', 'security_officer', 'maintenance_technician', 'driver', 'storekeeper', 'nurse', 'hostel_warden'];
+                    let targetDept = form.department_id;
+                    if (val === 'library') {
+                      const libDept = departments.find((d: any) => d.id === 'dep-library' || d.code === 'LIB' || d.name?.toLowerCase().includes('library'));
+                      targetDept = libDept?.id || 'dep-library';
+                    } else if (nonAcademicRoles.includes(val) && (!form.department_id || form.department_id.startsWith('dep-cs') || form.department_id.startsWith('dep-elec') || form.department_id.startsWith('dep-mech') || form.department_id.startsWith('dep-civil') || form.department_id.startsWith('dep-bit') || form.department_id.startsWith('dep-is') || form.department_id.startsWith('dep-bba') || form.department_id.startsWith('dep-econ') || form.department_id.startsWith('dep-edu') || form.department_id.startsWith('dep-huma'))) {
+                      targetDept = 'dep-general';
+                    }
                     setForm((prev) => ({
                       ...prev,
                       role: val,
-                      department_id: nonAcademicRoles.includes(val) && (!prev.department_id || prev.department_id.startsWith('dep-cs') || prev.department_id.startsWith('dep-elec') || prev.department_id.startsWith('dep-mech') || prev.department_id.startsWith('dep-civil')) ? 'dep-general' : prev.department_id,
+                      department_id: targetDept,
                     }));
                     setIsCustomRole(false);
                   }
@@ -429,7 +441,7 @@ export default function StaffPage() {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-xs font-semibold text-slate-700">
-                  Department / Unit <span className="font-normal text-slate-400">(Optional for general staff)</span>
+                  Department / Unit <span className="font-normal text-slate-400">(Optional for librarians & support staff)</span>
                 </label>
                 <button
                   type="button"

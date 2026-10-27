@@ -94,7 +94,8 @@ export async function institutionalApi(request:Request,user:TokenPayload,module:
   if(module==='finance/bank/reconcile')return fail('Use Record Bank Deposit to atomically verify and allocate the authoritative payment ledger.',409);
   if(module==='staff'&&(!body.department_id||body.department_id==='dep-general'||body.department_id==='none')){
    const depts=await institutionalRows('departments');
-   const central=depts.find(d=>d.school_id==='central'||d.category==='non_academic')||depts[0];
+   const targetDept=body.role==='library'?depts.find(d=>d.code==='LIB'||d.name?.toLowerCase().includes('library')):null;
+   const central=targetDept||depts.find(d=>d.school_id==='central'||d.category==='non_academic')||depts[0];
    if(central)body.department_id=central.id;
   }
   if(!operation)return fail('Unsupported operation.',405);

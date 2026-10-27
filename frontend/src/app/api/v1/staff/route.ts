@@ -53,7 +53,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'A staff member with this email already exists.' }, { status: 409 });
     }
 
-    const resolvedDeptId = (!department_id || department_id === 'none' || department_id === 'other' || department_id === 'dep-general') ? 'dep-general' : department_id;
+    const fallbackDeptId = role === 'library' ? 'dep-library' : 'dep-general';
+    const resolvedDeptId = (!department_id || department_id === 'none' || department_id === 'other' || department_id === 'dep-general') ? fallbackDeptId : department_id;
     let department = departmentsStore.find((d) => d.id === resolvedDeptId);
     if (!department) {
       department = departmentsStore.find((d) => d.id === 'dep-general') || {
