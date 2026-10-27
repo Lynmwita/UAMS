@@ -7,7 +7,7 @@ import { dispatchNotification } from '@/lib/messaging/dispatcher';
 const fail=(error:string,status=400)=>NextResponse.json({success:false,error},{status});
 const resources:Record<string,string>={staff:'uams_staff_records',admissions:'uams_admission_records',schools:'schools',departments:'departments',programs:'programs',courses:'uams_course_records',events:'campus_events','courses/register':'uams_registration_records','finance/bank/record':'uams_bank_records','finance/bank/reconcile':'uams_bank_records'};
 const operations:Record<string,string>={staff:'staff.create',admissions:'admission.create',schools:'school.create',departments:'department.create',programs:'program.create',courses:'course.create',events:'event.save','courses/register':'registration.create','grades/enter':'grade.submit','finance/bank/record':'bank.record','finance/invoices':'invoice.create'};
-const required:Record<string,string[]>={staff:['first_name','last_name','email','role','department_id'],admissions:['applicant_name','applicant_email','applicant_phone','program_code','date_of_birth','gender','kcse_grade'],schools:['code','name'],departments:['code','name','school_id'],programs:['code','name','department_id'],courses:['code','title','department_id'],events:['title','category','starts_at','ends_at','location'],'courses/register':['course_code'],'grades/enter':['course_code'],'finance/bank/record':['student_id','bank','bank_reference']};
+const required:Record<string,string[]>={staff:['first_name','last_name','email','role'],admissions:['applicant_name','applicant_email','applicant_phone','program_code','date_of_birth','gender','kcse_grade'],schools:['code','name'],departments:['code','name','school_id'],programs:['code','name','department_id'],courses:['code','title','department_id'],events:['title','category','starts_at','ends_at','location'],'courses/register':['course_code'],'grades/enter':['course_code'],'finance/bank/record':['student_id','bank','bank_reference']};
 function validate(module:string,body:Record<string,any>,method:string):string|null {
  if(method==='POST')for(const key of required[module]||[])if(typeof body[key]!=='string'||!body[key].trim()||body[key].length>1000)return `${key} is required (maximum 1000 characters).`;
  if(method==='PATCH'&&['staff','admissions','grades/enter'].includes(module)){const key={staff:'staff_id',admissions:'application_id','grades/enter':'grade_id'}[module]!;if(typeof body[key]!=='string'||!body[key])return `${key} is required.`;}
@@ -92,6 +92,11 @@ export async function institutionalApi(request:Request,user:TokenPayload,module:
    operation='student.create';
   }
   if(module==='finance/bank/reconcile')return fail('Use Record Bank Deposit to atomically verify and allocate the authoritative payment ledger.',409);
+  if(module==='staff'&&(!body.department_id||body.department_id==='dep-general'||body.department_id==='none')){
+   const depts=await institutionalRows('departments');
+   const central=depts.find(d=>d.school_id==='central'||d.category==='non_academic')||depts[0];
+   if(central)body.department_id=central.id;
+  }
   if(!operation)return fail('Unsupported operation.',405);
   const data:any=await callInstitutional(operation,body,user);
   if(module==='students'&&request.method==='POST') {

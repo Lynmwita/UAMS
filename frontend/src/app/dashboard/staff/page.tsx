@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { IdCard, Search, Plus, ShieldX, ShieldCheck } from 'lucide-react';
+import { IdCard, Search, Plus, ShieldX, ShieldCheck, Loader2, CheckCircle2, AlertCircle, GraduationCap } from 'lucide-react';
 import { useAuth } from '@/lib/auth/context';
 
 type StaffMember = {
@@ -75,6 +75,11 @@ export default function StaffPage() {
   const [rolesList, setRolesList] = useState(DEFAULT_ROLES);
   const [isCustomRole, setIsCustomRole] = useState(false);
   const [customRoleInput, setCustomRoleInput] = useState('');
+  const [isCustomDepartment, setIsCustomDepartment] = useState(false);
+  const [customDepartmentInput, setCustomDepartmentInput] = useState('');
+  const [invitingEmail, setInvitingEmail] = useState<string | null>(null);
+  const [rowStatus, setRowStatus] = useState<Record<string, { type: 'success' | 'error'; message: string }>>({});
+  const [showAllocations, setShowAllocations] = useState(false);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [error, setError] = useState('');
@@ -106,7 +111,61 @@ export default function StaffPage() {
     fetch('/api/v1/departments').then(r=>r.json()).then(d=>{if(d.success)setDepartments(d.data);});
   }, []);
 
-  const invite=async(email:string)=>{setError('');setNotice('');try{const r=await fetch('/api/v1/staff/invite',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});const d=await r.json();if(!r.ok)throw new Error(d.error);setNotice(d.message);}catch(e:any){setError(e.message);}};
+  const invite = async (email: string) => {
+    setError('');
+    setNotice('');
+    setInvitingEmail(email);
+    setRowStatus((prev) => ({ ...prev, [email]: undefined as any }));
+    try {
+      const r = await fetch('/api/v1/staff/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Failed to send invite.');
+      setNotice(d.message);
+      setRowStatus((prev) => ({ ...prev, [email]: { type: 'success', message: d.message } }));
+    } catch (e: any) {
+      setError(e.message);
+      setRowStatus((prev) => ({ ...prev, [email]: { type: 'error', message: e.message } }));
+    } finally {
+      setInvitingEmail(null);
+    }
+  };
+
+  const handleAddCustomDepartment = async () => {
+    const trimmed = customDepartmentInput.trim();
+    if (!trimmed) return;
+    const code = trimmed.replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase() || 'DEPT';
+    let newDepId = `dep-${Date.now()}`;
+    try {
+      const res = await fetch('/api/v1/departments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: trimmed,
+          code,
+          category: 'non_academic',
+          school_id: 'central',
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.data) {
+        newDepId = data.data.id;
+        setDepartments((prev) => [...prev, data.data]);
+      } else {
+        const fallback = { id: newDepId, name: trimmed, category: 'non_academic', school_id: 'central' };
+        setDepartments((prev) => [...prev, fallback]);
+      }
+    } catch {
+      const fallback = { id: newDepId, name: trimmed, category: 'non_academic', school_id: 'central' };
+      setDepartments((prev) => [...prev, fallback]);
+    }
+    setForm((prev) => ({ ...prev, department_id: newDepId }));
+    setIsCustomDepartment(false);
+    setCustomDepartmentInput('');
+  };
 
   const handleAddCustomRole = () => {
     const trimmed = customRoleInput.trim();
@@ -128,10 +187,14 @@ export default function StaffPage() {
   );
 
   const createStaff = async () => {
+    const payload = {
+      ...form,
+      department_id: form.department_id || 'dep-general',
+    };
     const r = await fetch('/api/v1/staff', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify(payload),
     });
     const d = await r.json();
     if (!r.ok) {
@@ -168,14 +231,107 @@ export default function StaffPage() {
             <p className="text-sm text-muted-foreground">Register staff, assign roles, and manage employment status.</p>
           </div>
         </div>
-        <button className="bg-sky-700 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-sky-800 flex items-center gap-2" onClick={() => setShowForm((v) => !v)}>
-          <Plus className="w-4 h-4" /> Add Staff
-        </button>
+        <div className="flex items-center gap-2">
+          {['admin', 'super_admin', 'registrar', 'hod'].includes(role) && (
+            <button
+              type="button"
+              className={`text-sm font-medium px-3.5 py-2 rounded-md border flex items-center gap-2 transition ${
+                showAllocations ? 'bg-slate-100 border-slate-300 text-slate-800' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+              onClick={() => setShowAllocations((v) => !v)}
+            >
+              <GraduationCap className="w-4 h-4 text-sky-600" />
+              <span>{showAllocations ? 'Hide Course Allocations' : 'Assign Courses (Teaching)'}</span>
+            </button>
+          )}
+          <button className="bg-sky-700 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-sky-800 flex items-center gap-2" onClick={() => setShowForm((v) => !v)}>
+            <Plus className="w-4 h-4" /> Add Staff
+          </button>
+        </div>
       </div>
 
       {error && <p className="text-sm text-rose-600 bg-rose-50 p-3 rounded-md">{error}</p>}
       {notice&&<p role="status" className="text-sm text-emerald-800">{notice}</p>}
-      {['admin','super_admin','registrar','hod'].includes(role)&&<form className="border rounded p-3 flex flex-wrap gap-3" onSubmit={async e=>{e.preventDefault();setError('');try{const r=await fetch('/api/v1/staff/allocations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(allocation)});const d=await r.json();if(!r.ok)throw new Error(d.error);setNotice('Teaching allocation saved for the current semester.');}catch(err:any){setError(err.message);}}}><label>Lecturer<select required aria-label="Allocate lecturer" className="block border p-2" value={allocation.lecturer_staff_id} onChange={e=>setAllocation({...allocation,lecturer_staff_id:e.target.value})}><option value="">Choose lecturer</option>{staff.filter(s=>s.role==='lecturer'&&s.is_active).map(s=><option key={s.id} value={s.id}>{s.first_name} {s.last_name}</option>)}</select></label><label>Course<select required aria-label="Allocated course" className="block border p-2" value={allocation.course_code} onChange={e=>setAllocation({...allocation,course_code:e.target.value})}><option value="">Choose course</option>{courses.map(c=><option key={c.code} value={c.code}>{c.code} — {c.title}</option>)}</select></label><button className="border rounded px-3">Save teaching allocation</button></form>}
+
+      {showAllocations && ['admin', 'super_admin', 'registrar', 'hod'].includes(role) && (
+        <div className="border border-sky-100 rounded-xl p-4 bg-sky-50/50 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <GraduationCap className="w-5 h-5 text-sky-700" />
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">Assign Courses to Teaching Faculty</h3>
+                <p className="text-xs text-slate-500">Allocate accredited academic courses to active lecturers for the current semester.</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="text-xs text-slate-500 hover:text-slate-700 underline"
+              onClick={() => setShowAllocations(false)}
+            >
+              Close
+            </button>
+          </div>
+          <form
+            className="flex flex-wrap items-end gap-3 pt-2"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setError('');
+              try {
+                const r = await fetch('/api/v1/staff/allocations', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(allocation),
+                });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.error);
+                setNotice('Teaching allocation saved for the current semester.');
+              } catch (err: any) {
+                setError(err.message);
+              }
+            }}
+          >
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Teaching Lecturer</label>
+              <select
+                required
+                aria-label="Allocate lecturer"
+                className="border rounded-lg px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-sky-500"
+                value={allocation.lecturer_staff_id}
+                onChange={(e) => setAllocation({ ...allocation, lecturer_staff_id: e.target.value })}
+              >
+                <option value="">Choose lecturer</option>
+                {staff
+                  .filter((s) => s.role === 'lecturer' && s.is_active)
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.first_name} {s.last_name} ({s.staff_number})
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Course</label>
+              <select
+                required
+                aria-label="Allocated course"
+                className="border rounded-lg px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-sky-500"
+                value={allocation.course_code}
+                onChange={(e) => setAllocation({ ...allocation, course_code: e.target.value })}
+              >
+                <option value="">Choose course</option>
+                {courses.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.code} — {c.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button className="bg-sky-700 hover:bg-sky-800 text-white text-xs font-bold px-4 py-2 rounded-lg transition">
+              Save Teaching Allocation
+            </button>
+          </form>
+        </div>
+      )}
 
       {showForm && (
         <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-sm space-y-4">
@@ -241,10 +397,16 @@ export default function StaffPage() {
                 className="w-full border rounded-lg px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-sky-500"
                 value={form.role}
                 onChange={(e) => {
-                  if (e.target.value === '__other__') {
+                  const val = e.target.value;
+                  if (val === '__other__') {
                     setIsCustomRole(true);
                   } else {
-                    setForm({ ...form, role: e.target.value });
+                    const nonAcademicRoles = ['cleaner', 'catering_assistant', 'chef_cook', 'security_officer', 'maintenance_technician', 'driver', 'storekeeper', 'nurse', 'hostel_warden'];
+                    setForm((prev) => ({
+                      ...prev,
+                      role: val,
+                      department_id: nonAcademicRoles.includes(val) && (!prev.department_id || prev.department_id.startsWith('dep-cs') || prev.department_id.startsWith('dep-elec') || prev.department_id.startsWith('dep-mech') || prev.department_id.startsWith('dep-civil')) ? 'dep-general' : prev.department_id,
+                    }));
                     setIsCustomRole(false);
                   }
                 }}
@@ -265,20 +427,56 @@ export default function StaffPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Department / Unit</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Department / Unit <span className="font-normal text-slate-400">(Optional for general staff)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsCustomDepartment((v) => !v)}
+                  className="text-[11px] text-sky-700 hover:text-sky-900 font-semibold underline"
+                >
+                  {isCustomDepartment ? 'Close' : '+ Other'}
+                </button>
+              </div>
               <select
                 aria-label="Department"
-                required
                 className="w-full border rounded-lg px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-sky-500"
                 value={form.department_id}
-                onChange={(e) => setForm({ ...form, department_id: e.target.value })}
+                onChange={(e) => {
+                  if (e.target.value === '__other__') {
+                    setIsCustomDepartment(true);
+                  } else {
+                    setForm({ ...form, department_id: e.target.value });
+                    setIsCustomDepartment(false);
+                  }
+                }}
               >
-                <option value="">Choose department / service</option>
-                {departments.map((d: any) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name} {d.category === 'non_academic' || d.school_id === 'central' ? '🌐 (Whole University)' : ''}
-                  </option>
-                ))}
+                <option value="dep-general">None / General Operations & Campus Support (Cleaners, Drivers, Security)</option>
+                <option value="">Choose specific department / service</option>
+                {departments.some((d: any) => d.category !== 'non_academic' && d.school_id !== 'central' && d.id !== 'dep-general') && (
+                  <optgroup label="Academic Faculties & Schools">
+                    {departments
+                      .filter((d: any) => d.category !== 'non_academic' && d.school_id !== 'central' && d.id !== 'dep-general')
+                      .map((d: any) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
+                {departments.some((d: any) => (d.category === 'non_academic' || d.school_id === 'central') && d.id !== 'dep-general') && (
+                  <optgroup label="Central Support & Institutional Services">
+                    {departments
+                      .filter((d: any) => (d.category === 'non_academic' || d.school_id === 'central') && d.id !== 'dep-general')
+                      .map((d: any) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name} 🌐
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
+                <option value="__other__">➕ Other (Define Custom Department / Unit...)</option>
               </select>
             </div>
 
@@ -337,6 +535,47 @@ export default function StaffPage() {
                 onClick={() => {
                   setIsCustomRole(false);
                   setForm({ ...form, role: 'lecturer' });
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {isCustomDepartment && (
+            <div className="p-3.5 bg-sky-50 border border-sky-200 rounded-lg flex flex-col sm:flex-row items-stretch sm:items-end gap-3 animate-in fade-in">
+              <div className="flex-1">
+                <label className="block text-xs font-bold text-sky-950 mb-1">
+                  Specify Custom Department / Unit (e.g. Library Services, Transport, Campus Security, Cafeteria):
+                </label>
+                <input
+                  className="w-full border border-sky-300 rounded-lg px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-sky-500"
+                  placeholder="Enter department or service name..."
+                  value={customDepartmentInput}
+                  onChange={(e) => setCustomDepartmentInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddCustomDepartment();
+                    }
+                  }}
+                  autoFocus
+                />
+              </div>
+              <button
+                type="button"
+                className="bg-sky-700 hover:bg-sky-800 text-white font-bold text-xs px-4 py-2.5 rounded-lg shadow-xs transition flex items-center justify-center gap-1.5"
+                onClick={handleAddCustomDepartment}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Department</span>
+              </button>
+              <button
+                type="button"
+                className="border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs px-3 py-2.5 rounded-lg transition"
+                onClick={() => {
+                  setIsCustomDepartment(false);
+                  setCustomDepartmentInput('');
                 }}
               >
                 Cancel
@@ -415,15 +654,48 @@ export default function StaffPage() {
                     </span>
                   </td>
                   <td className="p-3">
-                    {canManage&&<button className="text-xs border rounded px-2 py-1 hover:bg-slate-50" onClick={()=>invite(s.email)}>Invite / link account</button>}
-                    <button
-                      hidden={!canManage}
-                      className="text-xs border rounded px-2 py-1 ml-1 hover:bg-slate-50 inline-flex items-center gap-1"
-                      onClick={() => toggleActive(s.id, !s.is_active)}
-                    >
-                      {s.is_active ? <ShieldX className="w-3 h-3 text-rose-500" /> : <ShieldCheck className="w-3 h-3 text-emerald-600" />}
-                      {s.is_active ? 'Deactivate' : 'Reactivate'}
-                    </button>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {canManage && (
+                        <button
+                          disabled={invitingEmail === s.email}
+                          className="text-xs border rounded px-2.5 py-1 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5 font-medium transition"
+                          onClick={() => invite(s.email)}
+                        >
+                          {invitingEmail === s.email ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-600" />
+                              <span>Sending...</span>
+                            </>
+                          ) : (
+                            'Invite / link account'
+                          )}
+                        </button>
+                      )}
+                      <button
+                        hidden={!canManage}
+                        className="text-xs border rounded px-2 py-1 hover:bg-slate-50 inline-flex items-center gap-1 text-slate-700 transition"
+                        onClick={() => toggleActive(s.id, !s.is_active)}
+                      >
+                        {s.is_active ? <ShieldX className="w-3 h-3 text-rose-500" /> : <ShieldCheck className="w-3 h-3 text-emerald-600" />}
+                        {s.is_active ? 'Deactivate' : 'Reactivate'}
+                      </button>
+                    </div>
+                    {rowStatus[s.email] && (
+                      <div
+                        className={`text-[11px] mt-1.5 p-1.5 rounded-md font-medium flex items-start gap-1.5 leading-tight ${
+                          rowStatus[s.email].type === 'success'
+                            ? 'text-emerald-800 bg-emerald-50 border border-emerald-200'
+                            : 'text-rose-800 bg-rose-50 border border-rose-200'
+                        }`}
+                      >
+                        {rowStatus[s.email].type === 'success' ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-600 mt-0.5" />
+                        ) : (
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-600 mt-0.5" />
+                        )}
+                        <span>{rowStatus[s.email].message}</span>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}

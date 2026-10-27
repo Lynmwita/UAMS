@@ -39,9 +39,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { first_name, last_name, email, phone, role, department_id, job_title, qualification } = body;
 
-    if (!first_name || !last_name || !email || !role || !department_id) {
+    if (!first_name || !last_name || !email || !role) {
       return NextResponse.json(
-        { success: false, error: 'first_name, last_name, email, role, and department_id are required' },
+        { success: false, error: 'first_name, last_name, email, and role are required' },
         { status: 400 }
       );
     }
@@ -53,9 +53,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'A staff member with this email already exists.' }, { status: 409 });
     }
 
-    const department = departmentsStore.find((d) => d.id === department_id);
+    const resolvedDeptId = (!department_id || department_id === 'none' || department_id === 'other' || department_id === 'dep-general') ? 'dep-general' : department_id;
+    let department = departmentsStore.find((d) => d.id === resolvedDeptId);
     if (!department) {
-      return NextResponse.json({ success: false, error: 'Department not found.' }, { status: 400 });
+      department = departmentsStore.find((d) => d.id === 'dep-general') || {
+        id: 'dep-general',
+        school_id: 'central',
+        code: 'GEN',
+        name: 'General Campus Support & Operations',
+        hod: 'General Operations',
+        hod_email: 'operations@university.ac.ke',
+        programs_count: 0,
+        is_active: true,
+        category: 'non_academic',
+      };
     }
 
     const created: UamsStaffMember = {
@@ -66,7 +77,7 @@ export async function POST(request: NextRequest) {
       email: emailNorm,
       phone: String(phone || ''),
       role,
-      department_id,
+      department_id: department.id,
       department_name: department.name,
       school_id: department.school_id || 'central',
       job_title: job_title || role,
