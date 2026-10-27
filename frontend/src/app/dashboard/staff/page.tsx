@@ -66,6 +66,7 @@ const DEFAULT_ROLES = [
 export default function StaffPage() {
   const {role}=useAuth();
   const canManage=['admin','super_admin'].includes(role);
+  const canInvite=['admin','super_admin','registrar'].includes(role);
   const [departments,setDepartments]=useState<{id:string;name:string;category?:string;school_id?:string}[]>([]);
   const [notice,setNotice]=useState('');
   const [allocation,setAllocation]=useState({lecturer_staff_id:'',course_code:''});
@@ -426,7 +427,7 @@ export default function StaffPage() {
                 {Array.from(new Set(rolesList.map((r) => r.group))).map((group) => (
                   <optgroup key={group} label={group}>
                     {rolesList
-                      .filter((r) => r.group === group)
+                      .filter((r) => r.group === group && !(role === 'registrar' && (r.value === 'admin' || r.value === 'super_admin')))
                       .map((r) => (
                         <option key={r.value} value={r.value}>
                           {r.label}
@@ -667,7 +668,7 @@ export default function StaffPage() {
                   </td>
                   <td className="p-3">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      {canManage && (
+                      {canInvite && (
                         <button
                           disabled={invitingEmail === s.email}
                           className="text-xs border rounded px-2.5 py-1 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5 font-medium transition"

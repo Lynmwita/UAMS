@@ -31,8 +31,25 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireServerAuth(request, ['super_admin', 'admin']);
+  const auth = await requireServerAuth(request, ['super_admin', 'admin', 'registrar']);
   if ('errorResponse' in auth) return auth.errorResponse;
+  // Registrars may register staff, but never administrator accounts. Peek at the
+  // requested role before the institutional delegation consumes the body; the
+  // clone leaves the original request readable for the handlers below.
+  if (auth.user.role === 'registrar') {
+    try {
+      const peek = await request.clone().json();
+      const requestedRole = String(peek?.role || '').toLowerCase();
+      if (requestedRole === 'admin' || requestedRole === 'super_admin') {
+        return NextResponse.json(
+          { success: false, error: 'Registrars may not register administrator accounts.' },
+          { status: 403 }
+        );
+      }
+    } catch {
+      // Malformed body: downstream validation reports it.
+    }
+  }
   if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'staff');
 
   try {
