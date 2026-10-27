@@ -14,7 +14,7 @@ export async function POST(request:Request) {
   if(readError)throw new Error('Academic identity lookup failed.');
   if(!user||!user.is_active)return NextResponse.json({success:false,error:'Active academic identity not found.'},{status:404});
   const roles=user.roles as unknown as {code:string}|{code:string}[];const role=Array.isArray(roles)?roles[0]?.code:roles?.code;
-  if(auth.user.role==='registrar'&&['admin','super_admin'].includes(role))return NextResponse.json({success:false,error:'Registrars cannot invite administrator accounts.'},{status:403});
+  if(auth.user.role==='registrar'&&(role==='admin'||role==='super_admin'))return NextResponse.json({success:false,error:'Registrars may not invite administrator accounts.'},{status:403});
   // Resolve prior invitation after a transient database failure before issuing another.
   let identityId:string|null=user.auth_user_id;
   if(body.auth_user_id!==undefined) {

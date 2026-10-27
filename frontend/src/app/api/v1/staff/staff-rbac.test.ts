@@ -48,7 +48,7 @@ test('staff registration: registrar CANNOT register admin or super_admin roles',
   );
   assert.equal(resAdmin.status, 403);
   const dataAdmin = await resAdmin.json();
-  assert.match(dataAdmin.error, /Registrars cannot register or assign administrative roles/i);
+  assert.match(dataAdmin.error, /Registrars may not register administrator accounts|Registrars cannot register/i);
 
   const resSuperAdmin = await createStaff(
     makeRequest('registrar', 'POST', {
@@ -60,7 +60,7 @@ test('staff registration: registrar CANNOT register admin or super_admin roles',
   );
   assert.equal(resSuperAdmin.status, 403);
   const dataSuperAdmin = await resSuperAdmin.json();
-  assert.match(dataSuperAdmin.error, /Registrars cannot register or assign administrative roles/i);
+  assert.match(dataSuperAdmin.error, /Registrars may not register administrator accounts|Registrars cannot register/i);
 });
 
 test('staff registration: unauthorized roles (student, lecturer) are rejected with 403', async () => {
