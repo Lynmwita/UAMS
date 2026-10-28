@@ -6,7 +6,10 @@ import { recordAuditEvent } from '@/lib/audit/audit-logger';
 import { dispatchNotification } from '@/lib/messaging/dispatcher';
 
 export async function POST(request: Request) {
-  const auth = await requireServerAuth(request, ['super_admin', 'admin', 'registrar']);
+  // Super Admin only on both the demo path and the institutional path:
+  // setting or resetting another person's password must never be available
+  // to registrars or admins.
+  const auth = await requireServerAuth(request, ['super_admin']);
   if ('errorResponse' in auth) return auth.errorResponse;
 
   try {
@@ -19,17 +22,6 @@ export async function POST(request: Request) {
 
     const emailNorm = email.trim().toLowerCase();
     const staff = staffStore.find((s) => s.email.toLowerCase() === emailNorm);
-
-    // Registrars cannot manage administrator accounts
-    if (auth.user.role === 'registrar') {
-      const targetRole = String(staff?.role || body.role || '').toLowerCase();
-      if (targetRole === 'admin' || targetRole === 'super_admin') {
-        return NextResponse.json(
-          { success: false, error: 'Registrars cannot modify administrative accounts.' },
-          { status: 403 }
-        );
-      }
-    }
 
     let db: any = null;
     try {

@@ -256,7 +256,7 @@ function LoginForm() {
                   onClick={() => handleFillDemoCredentials('librarian')}
                   className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
                 >
-                  Librarian (Lyne Naz)
+                  Librarian
                 </button>
                 <button
                   type="button"

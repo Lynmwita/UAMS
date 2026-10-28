@@ -185,6 +185,22 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const auth = await requireServerAuth(request, ['super_admin', 'admin', 'registrar']);
   if ('errorResponse' in auth) return auth.errorResponse;
+  // Deactivate/Reactivate stays admin-only on BOTH paths: a registrar may
+  // edit staff details, but toggling is_active is an admin act. This check
+  // runs before the institutional delegation so it covers that path too.
+  if (auth.user.role === 'registrar') {
+    try {
+      const peek = await request.clone().json();
+      if (typeof peek?.is_active === 'boolean') {
+        return NextResponse.json(
+          { success: false, error: 'Registrars cannot deactivate or reactivate staff accounts.' },
+          { status: 403 }
+        );
+      }
+    } catch {
+      // Malformed body: downstream validation reports it.
+    }
+  }
   if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'staff');
   try {
     const body = await request.json();

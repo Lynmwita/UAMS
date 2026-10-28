@@ -113,7 +113,7 @@ test('public-status: verification is mandatory, wrong verify is 403, correct ver
   const wrong = await publicStatusGET(new Request('http://localhost:3000/api/v1/admissions/public-status?ref=UADM-2026-0001&verify=wrong@example.com') as any);
   assert.equal(wrong.status, 403);
 
-  const ok = await publicStatusGET(new Request('http://localhost:3000/api/v1/admissions/public-status?ref=UADM-2026-0001&verify=derrick.kimathi@gmail.com') as any);
+  const ok = await publicStatusGET(new Request('http://localhost:3000/api/v1/admissions/public-status?ref=UADM-2026-0001&verify=derrick.kimathi@university.ac.ke') as any);
   assert.equal(ok.status, 200);
   const okData = await ok.json();
   assert.equal(okData.data.reference_number, 'UADM-2026-0001');
