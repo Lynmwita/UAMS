@@ -10,8 +10,9 @@ export default function TimetablePage() {
   const [error,setError]=useState('');
   const [selectedDay, setSelectedDay] = useState('All');
 
-  const [schedule,setSchedule]=useState<{id:string;day:string;time:string;courseCode:string;courseTitle:string;room:string;lecturer:string}[]>([]);
-  useEffect(()=>{fetch('/api/v1/timetable').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);setSchedule(d.data);}).catch(e=>setError(e.message));},[]);
+  const [schedule, setSchedule] = useState<{ id: string; day: string; time: string; courseCode: string; courseTitle: string; room: string; lecturer: string }[]>([]);
+  const [scheduleLoaded, setScheduleLoaded] = useState(false);
+  useEffect(() => { fetch('/api/v1/timetable').then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error); setSchedule(d.data); }).catch(e => setError(e.message)).finally(() => setScheduleLoaded(true)); }, []);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newSlot, setNewSlot] = useState({
     day: 'Monday',
@@ -75,7 +76,7 @@ export default function TimetablePage() {
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
           <h2 className="font-bold text-slate-800 text-sm">Active Lecture Session Schedule</h2>
-          <span className="text-xs font-medium text-slate-500">{filteredSchedule.length} Scheduled Slots</span>
+          <span className="text-xs font-medium text-slate-500">{scheduleLoaded ? `${filteredSchedule.length} Scheduled Slots` : 'Loading timetable…'}</span>
         </div>
 
         <div className="overflow-x-auto">

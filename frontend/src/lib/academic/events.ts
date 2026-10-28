@@ -35,7 +35,7 @@ const seed: UamsCampusEvent[] = [
   {
     id: 'evt-2',
     title: 'ICT Career & Innovation Seminar',
-    description: 'Alumni and industry talks for ICT students. Attendance marks for BCS Year 3.',
+    description: 'Alumni and industry talks for ICT students. Attendance will be taken for BCS Year 3 students.',
     category: 'academic',
     starts_at: '2026-10-29T14:00:00Z',
     ends_at: '2026-10-29T16:00:00Z',

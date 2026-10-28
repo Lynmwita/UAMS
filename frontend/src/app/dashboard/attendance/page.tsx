@@ -10,7 +10,8 @@ export default function AttendancePage() {
   const [courses,setCourses]=useState<{code:string;title:string}[]>([]);
   const canWrite = role === 'lecturer' || role === 'super_admin';
   const [error,setError]=useState('');
-  const [sessions,setSessions]=useState<{id:string;date:string;course:string;courseTitle:string;topic:string;lecturer:string;present:number;total:number;percentage:string}[]>([]);
+  const [sessions, setSessions] = useState<{ id: string; date: string; course: string; courseTitle: string; topic: string; lecturer: string; present: number; total: number; percentage: string }[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [qrCountdown, setQrCountdown] = useState(600); // 10 minutes
@@ -25,7 +26,7 @@ export default function AttendancePage() {
   });
 
   const [studentRoll,setStudentRoll]=useState<{id:string;adm:string;name:string;status:'present'|'absent'|'late'|'excused'}[]>([]);
-  useEffect(()=>{fetch('/api/v1/attendance').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);setSessions(d.data.sessions);setStudentRoll(d.data.roster);}).catch(e=>setError(e.message));},[]);
+  useEffect(() => { fetch('/api/v1/attendance').then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error); setSessions(d.data.sessions); setStudentRoll(d.data.roster); }).catch(e => setError(e.message)).finally(() => setSessionsLoading(false)); }, []);
   useEffect(()=>{if(institutional)fetch('/api/v1/courses').then(r=>r.json()).then(d=>{if(d.success){setCourses(d.data);if(d.data[0])setSessionForm(p=>({...p,course:d.data[0].code,courseTitle:d.data[0].title}));}});},[institutional]);
   useEffect(()=>{if(institutional&&sessionForm.course)fetch('/api/v1/attendance?course_code='+encodeURIComponent(sessionForm.course)).then(r=>r.json()).then(d=>{if(d.success)setStudentRoll(d.data.roster);else setError(d.error);});},[institutional,sessionForm.course]);
   // Simulate QR Code countdown
@@ -52,8 +53,6 @@ export default function AttendancePage() {
       'Faith Wanjiku (BIT/2023/8849)',
       'Kevin Otieno (BCS/2023/1204)',
       'Brian Kiprono (BBA/2022/4412)',
-      'David Mutua (BSE/2024/0112)',
-      'Mercy Achieng (BDS/2023/0204)',
     ]);
   };
 
@@ -113,8 +112,8 @@ export default function AttendancePage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <p className="text-xs font-semibold text-slate-500 uppercase">Average Attendance Rate</p>
-          <p className="text-2xl font-black text-emerald-600 mt-1">94.4%</p>
-          <p className="text-xs text-slate-400 mt-1">Campus wide semester average</p>
+          <p className="text-2xl font-black text-emerald-600 mt-1">{sessionsLoading ? 'Loading…' : sessions.length === 0 ? 'No sessions yet' : (sessions.reduce((sum, s) => sum + s.present, 0) / sessions.reduce((sum, s) => sum + s.total, 0) * 100).toFixed(1) + '%'}</p>
+          <p className="text-xs text-slate-400 mt-1">{sessionsLoading ? 'Reading recorded sessions…' : sessions.length === 0 ? 'Derived from recorded sessions' : `Derived from ${sessions.length} recorded session${sessions.length === 1 ? '' : 's'}`}</p>
         </div>
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <p className="text-xs font-semibold text-slate-500 uppercase">Exam Sitting Threshold</p>
@@ -123,7 +122,7 @@ export default function AttendancePage() {
         </div>
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <p className="text-xs font-semibold text-slate-500 uppercase">Sessions Conducted</p>
-          <p className="text-2xl font-black text-academic-navy-900 mt-1">{sessions.length} Lectures</p>
+          <p className="text-2xl font-black text-academic-navy-900 mt-1">{sessionsLoading ? 'Loading…' : `${sessions.length} Lecture${sessions.length === 1 ? '' : 's'}`}</p>
           <p className="text-xs text-slate-400 mt-1">All units accounted for</p>
         </div>
       </div>
@@ -132,7 +131,7 @@ export default function AttendancePage() {
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
           <h2 className="font-bold text-slate-800 text-sm">Conducted Lecture Sessions & Registers</h2>
-          <span className="text-xs font-medium text-slate-500">{sessions.length} Recorded Sessions</span>
+          <span className="text-xs font-medium text-slate-500">{sessionsLoading ? 'Loading sessions…' : `${sessions.length} Recorded Session${sessions.length === 1 ? '' : 's'}`}</span>
         </div>
 
         <div className="overflow-x-auto">
@@ -331,6 +330,7 @@ export default function AttendancePage() {
                         'BIT 312': 'Distributed Systems & Cloud Computing',
                         'BCS 314': 'Software Engineering Architecture',
                         'BCS 316': 'Network & System Security',
+                        'BBA 201': 'Principles of Financial Accounting',
                       };
                       setSessionForm({ ...sessionForm, course: code, courseTitle: titles[code] || code });
                     }}
@@ -340,6 +340,7 @@ export default function AttendancePage() {
                     <option value="BIT 312">BIT 312 - Distributed Systems</option>
                     <option value="BCS 314">BCS 314 - Software Architecture</option>
                     <option value="BCS 316">BCS 316 - Network & System Security</option>
+                    <option value="BBA 201">BBA 201 - Principles of Financial Accounting</option>
                   </select>
                 </div>
 

@@ -169,6 +169,7 @@ export default function StudentsPage() {
   };
 
   const [students, setStudents] = useState<StudentRow[]>([]);
+  const [studentsLoaded, setStudentsLoaded] = useState(false);
 
   const mapStudent = (s: any): StudentRow => ({
     id: s.id,
@@ -198,6 +199,8 @@ export default function StudentsPage() {
       }
     } catch (e: any) {
       setError(e.message);
+    } finally {
+      setStudentsLoaded(true);
     }
   };
 
@@ -904,7 +907,7 @@ export default function StudentsPage() {
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
           <h2 className="font-bold text-slate-800 text-sm">Active Student Enrolment List</h2>
-          <span className="text-xs font-semibold text-slate-500">{filtered.length} Students Listed</span>
+          <span className="text-xs font-semibold text-slate-500">{studentsLoaded ? `${filtered.length} Students Listed` : 'Loading student records…'}</span>
         </div>
 
         <div className="overflow-x-auto">
@@ -923,6 +926,9 @@ export default function StudentsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
+              {!studentsLoaded && (
+                <tr><td colSpan={9} className="px-5 py-6 text-center text-sm text-slate-500">Loading student records…</td></tr>
+              )}
               {filtered.map((s) => (
                 <tr key={s.id} className="hover:bg-slate-50/60 transition">
                   <td className="px-5 py-3.5 font-mono font-semibold text-academic-navy-800">{s.admissionNo}</td>

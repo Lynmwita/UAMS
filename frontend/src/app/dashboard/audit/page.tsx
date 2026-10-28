@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/lib/auth/context';
 import { Activity, ShieldCheck, RefreshCw } from 'lucide-react';
 
 interface AuditItem {
@@ -10,14 +11,18 @@ interface AuditItem {
   actor_role: string;
   action: string;
   entity_type: string;
-  entity_id: string;
-  ip_address: string;
+  entity_id?: string;
+  target_label?: string;
+  ip_address?: string;
   status: string;
 }
 
 export default function AuditPage() {
+  const { role } = useAuth();
+  const isAdmin = ['super_admin', 'admin'].includes(role);
   const [logs, setLogs] = useState<AuditItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [openDetail, setOpenDetail] = useState<string | null>(null);
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -47,6 +52,7 @@ export default function AuditPage() {
           </h1>
           <p className="text-sm text-slate-500 mt-1">
             Append-only event ledger tracking logins, grade submissions, administrative overrides, and mutations.
+            Raw identifiers and IP addresses are shown only in the admin detail view, never in the list.
           </p>
         </div>
         <button
@@ -67,15 +73,15 @@ export default function AuditPage() {
                 <th className="px-5 py-3.5">Timestamp</th>
                 <th className="px-5 py-3.5">Actor</th>
                 <th className="px-5 py-3.5">Action Code</th>
-                <th className="px-5 py-3.5">Target Entity</th>
+                <th className="px-5 py-3.5">Target</th>
                 <th className="px-5 py-3.5">Status</th>
-                <th className="px-5 py-3.5">IP Address</th>
+                {isAdmin && <th className="px-5 py-3.5">Details</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {logs.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-6 text-center text-xs text-slate-400">
+                  <td colSpan={isAdmin ? 6 : 5} className="px-5 py-6 text-center text-xs text-slate-400">
                     {loading ? 'Streaming audit ledger records...' : 'No audit telemetry events found.'}
                   </td>
                 </tr>
@@ -83,7 +89,7 @@ export default function AuditPage() {
                 logs.map((l) => (
                   <tr key={l.id} className="hover:bg-slate-50/60">
                     <td className="px-5 py-3.5 font-mono text-xs text-slate-500 whitespace-nowrap">
-                      {new Date(l.timestamp).toLocaleString()}
+                      {new Date(l.timestamp).toLocaleString('en-KE')}
                     </td>
                     <td className="px-5 py-3.5 font-medium text-slate-900 whitespace-nowrap">
                       <div>{l.actor_email}</div>
@@ -94,8 +100,8 @@ export default function AuditPage() {
                         {l.action}
                       </span>
                     </td>
-                    <td className="px-5 py-3.5 font-mono text-xs text-slate-600 whitespace-nowrap">
-                      {l.entity_type} ({l.entity_id})
+                    <td className="px-5 py-3.5 text-xs text-slate-700 whitespace-nowrap">
+                      {l.target_label || `${l.entity_type} — see details`}
                     </td>
                     <td className="px-5 py-3.5 whitespace-nowrap">
                       <span
@@ -110,9 +116,19 @@ export default function AuditPage() {
                         {l.status}
                       </span>
                     </td>
-                    <td className="px-5 py-3.5 font-mono text-xs text-slate-400 whitespace-nowrap">
-                      {l.ip_address}
-                    </td>
+                    {isAdmin && (
+                      <td className="px-5 py-3.5 whitespace-nowrap">
+                        <button className="underline text-xs" onClick={() => setOpenDetail(openDetail === l.id ? null : l.id)}>
+                          {openDetail === l.id ? 'Hide details' : 'Show details'}
+                        </button>
+                        {openDetail === l.id && (
+                          <div className="mt-2 font-mono text-[11px] text-slate-500">
+                            <div>Entity: {l.entity_type} ({l.entity_id || 'not recorded'})</div>
+                            <div>IP: {l.ip_address || 'not recorded'}</div>
+                          </div>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))
               )}

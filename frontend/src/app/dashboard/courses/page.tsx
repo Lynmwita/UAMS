@@ -16,10 +16,11 @@ export default function CoursesPage() {
   const [search, setSearch] = useState('');
   const [levelFilter, setLevelFilter] = useState('all');
 
-  type CourseRow = {id:string;code:string;title:string;credits:number;level:number;dept:string;prereq:string;lecturer:string};
-  const [courses,setCourses]=useState<CourseRow[]>([]);
-  const mapCourse=(c:any):CourseRow=>({id:c.id,code:c.code,title:c.title,credits:c.credit_hours,level:c.level,dept:c.department,prereq:c.prerequisites.join(', ') || 'None',lecturer:c.lecturer});
-  useEffect(()=>{fetch('/api/v1/courses').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);setCourses(d.data.map(mapCourse));}).catch(e=>setError(e.message));},[]);
+  type CourseRow = { id: string; code: string; title: string; credits: number; level: number; dept: string; prereq: string; lecturer: string };
+  const [courses, setCourses] = useState<CourseRow[]>([]);
+  const [coursesLoaded, setCoursesLoaded] = useState(false);
+  const mapCourse = (c: any): CourseRow => ({ id: c.id, code: c.code, title: c.title, credits: c.credit_hours, level: c.level, dept: c.department, prereq: c.prerequisites.join(', ') || 'None', lecturer: c.lecturer });
+  useEffect(() => { fetch('/api/v1/courses').then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error); setCourses(d.data.map(mapCourse)); }).catch(e => setError(e.message)).finally(() => setCoursesLoaded(true)); }, []);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCourse, setNewCourse] = useState({
@@ -148,7 +149,7 @@ export default function CoursesPage() {
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
           <h2 className="font-bold text-slate-800 text-sm">Accredited Course Inventory</h2>
-          <span className="text-xs font-semibold text-slate-500">{filtered.length} Units Available</span>
+          <span className="text-xs font-semibold text-slate-500">{coursesLoaded ? `${filtered.length} Units Available` : 'Loading units…'}</span>
         </div>
 
         <div className="overflow-x-auto">
@@ -165,6 +166,9 @@ export default function CoursesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
+              {!coursesLoaded && (
+                <tr><td colSpan={7} className="px-5 py-6 text-center text-sm text-slate-500">Loading units…</td></tr>
+              )}
               {filtered.map((c) => (
                 <tr key={c.id || c.code} className="hover:bg-slate-50/60 transition">
                   <td className="px-5 py-3.5 font-mono font-bold text-academic-navy-800">{c.code}</td>

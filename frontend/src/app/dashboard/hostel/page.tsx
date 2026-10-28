@@ -12,7 +12,7 @@ export default function HostelPage() {
   const [activeTab, setActiveTab] = useState<'blocks' | 'allocations' | 'book'>('blocks');
 
   const [formData, setFormData] = useState({
-    student_name: 'Alex Kiptoo Kimutai',
+    student_name: 'Faith Wanjiku',
     admission_number: 'BIT/2023/8849',
     room_id: '',
     bed_number: 1,
@@ -115,6 +115,8 @@ export default function HostelPage() {
           {message.text}
         </div>
       )}
+
+      {loading && <p role="status" className="text-sm text-slate-500">Loading hostel records…</p>}
 
       {activeTab === 'blocks' && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
