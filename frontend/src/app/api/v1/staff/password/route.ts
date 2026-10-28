@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { requireServerAuth } from '@/lib/auth/server-auth';
 import { institutionalDatabase } from '@/lib/academic/institutional';
 import { staffStore } from '@/lib/hr/staff';
+import { studentsStore } from '@/lib/academic/student-records';
+import { linkInstitutionalIdentity, resolvePortalRole } from '@/lib/supabase/provisioning';
 import { recordAuditEvent } from '@/lib/audit/audit-logger';
 import { dispatchNotification } from '@/lib/messaging/dispatcher';
 
@@ -47,14 +49,29 @@ export async function POST(request: Request) {
       }
 
       if (db) {
+        // Resolve the portal login role BEFORE creating or updating the
+        // Auth identity. Staff records carry job titles (accountant,
+        // cleaner, ...) that are not portal roles; writing one verbatim
+        // into app_metadata.role used to create an account whose password
+        // worked but which could never pass the login gate, while this
+        // route still reported "now active and ready to log in". A record
+        // with no portal role (or a deactivated account) fails here,
+        // loudly, instead of producing another un-loggable account.
+        const student = studentsStore.find((s) => s.email.toLowerCase() === emailNorm);
+        const targetRole = resolvePortalRole(staff?.role, body.role, student ? 'student' : null);
+        if (!targetRole) {
+          return NextResponse.json(
+            { success: false, error: `No portal login role can be determined for ${emailNorm}. Assign a portal role (Student, Lecturer, Librarian, Registrar, Finance Officer, HOD, Administrator) before setting a password.` },
+            { status: 400 }
+          );
+        }
+
         // 1. Check if user exists in Supabase Auth
         let identityId: string | null = null;
         const { data: listData } = await db.auth.admin.listUsers({ perPage: 1000 });
         const existingAuthUser = listData?.users?.find(
           (u: any) => u.email?.toLowerCase() === emailNorm
         );
-
-        const targetRole = staff?.role || body.role || 'librarian';
 
         if (existingAuthUser) {
           identityId = existingAuthUser.id;
@@ -75,24 +92,19 @@ export async function POST(request: Request) {
           identityId = newUser.user?.id || null;
         }
 
-        // Link in users table
+        // Link in users table: this write is what login looks up, so it
+        // must carry the portal role_id and is_active=true, and a failure
+        // here must fail the request rather than claim the account is
+        // active. The old upsert wrote no role_id, leaving role-less rows
+        // that the login gate's inner join dropped as "inactive".
         if (identityId) {
-          try {
-            await db
-              .from('users')
-              .upsert(
-                {
-                  email: emailNorm,
-                  auth_user_id: identityId,
-                  first_name: staff?.first_name || body.first_name || 'Staff',
-                  last_name: staff?.last_name || body.last_name || 'Member',
-                  is_active: true,
-                },
-                { onConflict: 'email' }
-              );
-          } catch {
-            // Non-fatal
-          }
+          await linkInstitutionalIdentity(db, {
+            email: emailNorm,
+            authUserId: identityId,
+            role: targetRole,
+            firstName: staff?.first_name || student?.first_name || body.first_name || null,
+            lastName: staff?.last_name || student?.last_name || body.last_name || null,
+          });
         }
 
         const actorUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(auth.user.id)
@@ -167,6 +179,27 @@ export async function POST(request: Request) {
             );
           }
         }
+      }
+
+      // Best-effort repair of the login link: a reset link used as the
+      // first provisioning step used to leave the users row role-less, so
+      // the person still could not log in after resetting. Repair only
+      // when a portal role resolves and an Auth identity exists; the
+      // helper never reactivates a deactivated row, and a repair failure
+      // must not fail a reset email that already went out.
+      try {
+        const resetIdentityId = linkData?.user?.id || null;
+        const resetStudent = studentsStore.find((s) => s.email.toLowerCase() === emailNorm);
+        const resetRole = resolvePortalRole(staff?.role, body.role, resetStudent ? 'student' : null);
+        if (resetIdentityId && resetRole) {
+          await linkInstitutionalIdentity(db, {
+            email: emailNorm,
+            authUserId: resetIdentityId,
+            role: resetRole,
+          });
+        }
+      } catch {
+        // Secondary repair only; the reset email itself already succeeded.
       }
 
       const actorUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(auth.user.id)

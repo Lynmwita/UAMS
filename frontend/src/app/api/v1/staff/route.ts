@@ -1,5 +1,6 @@
 import { institutionalApi } from '@/lib/academic/institutional-api';
 import { institutionalDatabase } from '@/lib/academic/institutional';
+import { resolvePortalRole } from '@/lib/supabase/provisioning';
 import { staffStore, type UamsStaffMember } from '@/lib/hr/staff';
 import { departmentsStore } from '@/lib/academic/structure';
 import { requireServerAuth } from '@/lib/auth/server-auth';
@@ -149,7 +150,14 @@ export async function POST(request: NextRequest) {
 
     try {
       const db = institutionalDatabase();
-      const { data: roleRow } = await db.from('roles').select('id').eq('code', role).maybeSingle();
+      // Resolve the portal role for the role_id lookup: the staff form
+      // sends the legacy value 'library' for librarians, which has no
+      // roles row, so a plain lookup seeded role-less users rows that
+      // login then dropped as "inactive". Job titles with no portal
+      // role still resolve to null here, as before; the password and
+      // invite flows repair the link when a portal role is assigned.
+      const portalRole = resolvePortalRole(role);
+      const { data: roleRow } = await db.from('roles').select('id').eq('code', portalRole || role).maybeSingle();
       await db.from('users').upsert({
         email: emailNorm,
         first_name: created.first_name,
