@@ -24,8 +24,12 @@ export function resolveCanonicalRole(rawRole: unknown): UserRole {
   if (['librarian', 'library'].includes(norm)) return 'librarian';
   if (['student'].includes(norm)) return 'student';
   if (['lecturer', 'faculty', 'professor', 'tutorial_fellow', 'teaching_assistant', 'lab_technician'].includes(norm)) return 'lecturer';
-  // General campus support & operational staff map to general institutional staff view:
-  return 'librarian';
+  // General campus support & operational staff resolve to the scoped
+  // support_staff role — never to a generic placeholder role, and never
+  // to librarian (the old catch-all). Provisioning maps unmapped staff
+  // titles to support_staff; this canonical fallback only covers legacy
+  // login-side mappings.
+  return 'support_staff';
 }
 
 export const PAGE_ROLES: Record<string, UserRole[]> = {
