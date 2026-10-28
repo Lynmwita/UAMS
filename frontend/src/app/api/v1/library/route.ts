@@ -56,6 +56,33 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { action, book_id, loan_id } = body;
 
+    if (action === 'add_book') {
+      if (user.role !== 'super_admin' && user.role !== 'librarian') {
+        return NextResponse.json({ success: false, error: 'Only Super Admin and Librarian roles can add books to the catalogue.' }, { status: 403 });
+      }
+      const title = typeof body.title === 'string' ? body.title.trim() : '';
+      const author = typeof body.author === 'string' ? body.author.trim() : '';
+      const isbn = typeof body.isbn === 'string' ? body.isbn.trim() : '';
+      const totalCopies = Number(body.total_copies);
+      if (!title || !author || !isbn || !Number.isInteger(totalCopies) || totalCopies < 1) {
+        return NextResponse.json({ success: false, error: 'Title, author, ISBN and a total copy count of at least 1 are required.' }, { status: 400 });
+      }
+      const book: LibraryBook = {
+        id: `bk-${Date.now()}`,
+        isbn,
+        title,
+        author,
+        publisher: typeof body.publisher === 'string' ? body.publisher : '',
+        category: typeof body.category === 'string' && body.category ? body.category : 'General',
+        total_copies: totalCopies,
+        available_copies: totalCopies,
+        shelf_location: typeof body.shelf_location === 'string' ? body.shelf_location : '',
+        is_ebook_available: false,
+      };
+      libraryBooks.unshift(book);
+      return NextResponse.json({ success: true, message: `Book "${title}" added to the catalogue.`, data: book });
+    }
+
     if (action === 'borrow') {
       const book = libraryBooks.find((b) => b.id === book_id);
       if (!book || book.available_copies <= 0) {

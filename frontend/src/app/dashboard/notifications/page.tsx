@@ -13,9 +13,18 @@ export default function NotificationsPage() {
   const statusStyle = (status: string) =>
     status === 'delivered' || status === 'sent'
       ? 'bg-emerald-100 text-emerald-800'
-      : status === 'failed'
-        ? 'bg-rose-100 text-rose-800'
-        : 'bg-amber-100 text-amber-800';
+      : status === 'simulated'
+        ? 'bg-violet-100 text-violet-800'
+        : status === 'failed'
+          ? 'bg-rose-100 text-rose-800'
+          : 'bg-amber-100 text-amber-800';
+  // In MOCK mode nothing actually left UAMS, so a stored delivered/sent
+  // status must never be presented as real delivery.
+  const isMockMode = Boolean(providers && !providers.sms.configured);
+  const displayStatus = (l: NotificationLog) =>
+    (isMockMode || l.dispatch_mode === 'mock') && (l.status === 'delivered' || l.status === 'sent')
+      ? 'simulated'
+      : l.status;
 
   const handleRetry = async (id: string) => {
     setRetryingId(id);
@@ -43,7 +52,7 @@ export default function NotificationsPage() {
 
   const [form, setForm] = useState({
     recipient_type: 'student',
-    recipient_identifier: '+254712345678',
+    recipient_identifier: '+254700000000',
     recipient_name: 'Alex Kiptoo Kimutai',
     channel: 'sms',
     subject: 'Fee & Academic Clearance Alert',
@@ -151,6 +160,11 @@ export default function NotificationsPage() {
             </div>
             <span className="text-xs font-mono text-slate-500">Total Dispatched: {logs.length}</span>
           </div>
+          {isMockMode && (
+            <p className="px-4 py-2 text-[11px] text-violet-800 bg-violet-50 border-b border-violet-100">
+              MOCK mode: statuses below are shown as SIMULATED, not DELIVERED. No message left UAMS; sample entries are illustrative only.
+            </p>
+          )}
 
           <div className="divide-y divide-slate-100">
             {logs.map((l) => (
@@ -165,8 +179,8 @@ export default function NotificationsPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-mono text-slate-400">{l.created_at}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusStyle(l.status)}`}>
-                      {l.status}
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusStyle(displayStatus(l))}`}>
+                      {displayStatus(l)}
                     </span>
                     {(l.status === 'failed' || l.status === 'queued') && (
                       <button

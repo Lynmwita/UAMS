@@ -25,7 +25,7 @@ export default function Navbar({ userEmail, userName, userRole }: NavbarProps) {
               UAMS Portal
             </Link>
             <span className="hidden sm:inline-block ml-2.5 text-[11px] font-medium bg-academic-navy-800 text-academic-gold-300 px-2 py-0.5 rounded border border-academic-navy-700">
-              University Management Information System
+              University of Advanced Management Sciences
             </span>
           </div>
         </div>
