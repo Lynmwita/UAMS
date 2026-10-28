@@ -6,6 +6,7 @@ import { invoicesStore } from '@/lib/finance/invoices';
 import { computeLedgerTotals } from '@/lib/finance/ledger-summary';
 import { coursesStore } from '@/lib/academic/course-catalog';
 import { admissionsStore } from '@/lib/academic/admissions';
+import { staffStore, syncStaffStoreFromDatabase } from '@/lib/hr/staff';
 import { requireServerAuth } from '@/lib/auth/server-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -16,6 +17,11 @@ export async function GET(request: NextRequest) {
 
   const programNames = [...new Set(studentsStore.map((s) => s.program_name))];
 
+  await syncStaffStoreFromDatabase();
+  const staffTotals = {
+    total: staffStore.length,
+    active: staffStore.filter((s) => s.is_active).length,
+  };
   const studentsByProgram = programNames.map((program) => {
     const inProgram = studentsStore.filter((s) => s.program_name === program);
     return {
@@ -77,6 +83,7 @@ export async function GET(request: NextRequest) {
       studentsByProgram,
       registrationsByCourse,
       financeTotals,
+      staffTotals,
       gradeDistribution,
       catalogTotals,
       admissionsTotals,

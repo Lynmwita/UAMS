@@ -2,6 +2,7 @@ import { institutionalApi } from '@/lib/academic/institutional-api';
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePermission } from '@/lib/auth/server-auth';
 import { getAuditLogs } from '@/lib/audit/audit-logger';
+import { resolveAuditTarget } from '@/lib/audit/audit-labels';
 
 export async function GET(request: NextRequest) {
   // Only users with 'audit:read' permission (super_admin, admin, registrar, finance_officer)
@@ -17,10 +18,17 @@ export async function GET(request: NextRequest) {
   const limit = Number(searchParams.get('limit')) || 50;
 
   const logs = getAuditLogs({ action, actor_email: actor, limit });
+  const isAdmin = ['super_admin', 'admin'].includes(auth.user.role);
 
   return NextResponse.json({
     success: true,
     total: logs.length,
-    data: logs,
+    data: logs.map((log) => ({
+      ...log,
+      target_label: resolveAuditTarget(log),
+      // Raw UUIDs and IP addresses are admin-only: other audit readers get the
+      // human-readable target and must not see identifiers in the list.
+      ...(isAdmin ? {} : { entity_id: undefined, ip_address: undefined }),
+    })),
   });
 }

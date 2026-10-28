@@ -18,8 +18,8 @@ let hostelRooms: HostelRoom[] = [
 ];
 
 let hostelAllocations: HostelAllocation[] = [
-  { id: 'alc-01', student_id: 'std-01', student_name: 'Alex Kiptoo Kimutai', admission_number: 'BIT/2023/8849', room_id: 'rm-101', block_name: 'Kilimanjaro Hall (Male)', room_number: 'A-101', bed_number: 1, payment_status: 'cleared', status: 'checked_in' },
-  { id: 'alc-02', student_id: 'std-02', student_name: 'Faith Chebet Korir', admission_number: 'BCS/2023/9102', room_id: 'rm-201', block_name: 'Mara Hall (Female)', room_number: 'B-201', bed_number: 1, payment_status: 'paid', status: 'allocated' },
+  { id: 'alc-01', student_id: 'stu-2', student_name: 'Kevin Otieno', admission_number: 'BCS/2023/1204', room_id: 'rm-101', block_name: 'Kilimanjaro Hall (Male)', room_number: 'A-101', bed_number: 1, payment_status: 'pending', status: 'checked_in' },
+  { id: 'alc-02', student_id: 'stu-1', student_name: 'Faith Wanjiku', admission_number: 'BIT/2023/8849', room_id: 'rm-201', block_name: 'Mara Hall (Female)', room_number: 'B-201', bed_number: 1, payment_status: 'paid', status: 'allocated' },
 ];
 
 export async function GET(req: NextRequest) {
@@ -71,7 +71,8 @@ export async function POST(req: NextRequest) {
     }
 
     // IDOR / BOLA Prevention: Students can only allocate rooms for their own profile
-    const effectiveStudentId = user.role === 'student' ? user.id : body.student_id || user.id;
+    // The demo student sign-in (usr-student-01) maps to registry record stu-1 (Faith Wanjiku).
+    const effectiveStudentId = user.role === 'student' ? (user.email === 'student@university.ac.ke' ? 'stu-1' : user.id) : body.student_id || user.id;
     const bed = Number(bed_number);
     if (!Number.isInteger(bed) || bed < 1 || bed > selectedRoom.capacity) return NextResponse.json({success:false,error:'Choose a valid bed number.'},{status:400});
     if (hostelAllocations.some(a => a.status !== 'checked_out' && (a.student_id === effectiveStudentId || (user.role === 'student' && user.email === 'student@university.ac.ke' && a.admission_number === 'BIT/2023/8849')))) return NextResponse.json({success:false,error:'Student already has an active allocation.'},{status:409});

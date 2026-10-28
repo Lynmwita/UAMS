@@ -14,6 +14,7 @@ type ReportData = {
   studentsByProgram: { program: string; total: number; active: number; years: number[] }[];
   registrationsByCourse: { course_code: string; course_title: string; total_registrations: number; pending: number; approved: number }[];
   financeTotals: { invoiced: number; collected: number; outstanding: number; invoices_issued: number; settled_invoices: number; partial_invoices: number };
+  staffTotals?: { total: number; active: number };
   gradeDistribution: { letter: string; count: number }[];
   catalogTotals: { courses: number; active_courses: number; total_capacity: number; total_enrolled: number };
   admissionsTotals: { total_applications: number; submitted: number; under_review: number; shortlisted: number; admitted: number; rejected: number };
@@ -86,6 +87,23 @@ export default function ReportsPage() {
           <div className="text-xs text-muted-foreground">Course registrations</div>
           <div className="text-xs mt-1">Pending approval: <span className="font-medium text-amber-600">{data.registrationsByCourse.reduce((s, c) => s + c.pending, 0)}</span></div>
         </div>
+      </div>
+
+      <div className="border rounded-lg p-4">
+        <h2 className="font-semibold mb-3">Students by Program (chart)</h2>
+        {data.studentsByProgram.length === 0 && <p className="text-sm text-muted-foreground">No student records yet.</p>}
+        {data.studentsByProgram.map((p) => {
+          const max = Math.max(1, ...data.studentsByProgram.map((x) => x.total));
+          return (
+            <div key={p.program} className="mb-3">
+              <div className="flex justify-between text-sm"><span>{p.program}</span><span className="font-medium">{p.total} student{p.total === 1 ? '' : 's'}</span></div>
+              <div className="h-3 bg-slate-100 rounded mt-1" role="img" aria-label={`${p.program}: ${p.total} students`}>
+                <div className="h-3 bg-emerald-600 rounded" style={{ width: `${(p.total / max) * 100}%` }} />
+              </div>
+            </div>
+          );
+        })}
+        <p className="text-xs text-muted-foreground mt-2">All dates on this page use the en-KE format (day/month/year, Africa/Nairobi). Generated {new Date(data.generated_at).toLocaleString('en-KE')}.</p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

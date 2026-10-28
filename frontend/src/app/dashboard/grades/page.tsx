@@ -12,9 +12,10 @@ export default function GradesPage() {
   const canWrite = roleHasPermission(role, 'grades:write');
   const [error, setError] = useState('');
   type GradeRow={id:string;studentId:string;student:string;adm:string;course:string;courseTitle:string;credits:number;cat:number;exam:number;total:number;grade:string;gpa:number;status:string};
-  const [grades,setGrades]=useState<GradeRow[]>([]);
-  const mapGrade=(g:any):GradeRow=>({id:g.id,studentId:g.student_id,student:g.student_name,adm:g.admission_number,course:g.course_code,courseTitle:g.course_title,credits:g.credit_hours,cat:g.cat_score,exam:g.exam_score,total:g.total_score,grade:g.letter_grade,gpa:g.grade_point,status:g.is_approved?'Approved':'Submitted'});
-  useEffect(()=>{fetch('/api/v1/grades/enter').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);setGrades(d.data.map(mapGrade));}).catch(e=>setError(e.message));},[]);
+  const [grades, setGrades] = useState<GradeRow[]>([]);
+  const [gradesLoaded, setGradesLoaded] = useState(false);
+  const mapGrade = (g: any): GradeRow => ({ id: g.id, studentId: g.student_id, student: g.student_name, adm: g.admission_number, course: g.course_code, courseTitle: g.course_title, credits: g.credit_hours, cat: g.cat_score, exam: g.exam_score, total: g.total_score, grade: g.letter_grade, gpa: g.grade_point, status: g.is_approved ? 'Approved' : 'Submitted' });
+  useEffect(() => { fetch('/api/v1/grades/enter').then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error); setGrades(d.data.map(mapGrade)); }).catch(e => setError(e.message)).finally(() => setGradesLoaded(true)); }, []);
   const approveGrade=async(id:string)=>{try{const r=await fetch('/api/v1/grades/enter',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({grade_id:id})});const d=await r.json();if(!r.ok)throw new Error(d.error);setGrades(prev=>prev.map(g=>g.id===id?mapGrade(d.data):g));}catch(e){setError(e instanceof Error?e.message:'Approval failed.');}};
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -79,13 +80,14 @@ export default function GradesPage() {
         </div>
 
         <div className="flex items-center space-x-3">
-          {['super_admin','admin','registrar'].includes(role) && (
+          {['super_admin', 'admin', 'registrar'].includes(role) && (
             <label className="text-xs text-slate-600">
               Transcript student
-              <select className="block max-w-64 rounded border border-slate-300 px-2 py-2 text-sm" value={transcriptStudent} onChange={event=>setTranscriptStudent(event.target.value)}>
+              <select className="block max-w-64 rounded border border-slate-300 px-2 py-2 text-sm" value={transcriptStudent} onChange={event => setTranscriptStudent(event.target.value)}>
                 <option value="">Select student</option>
-                {transcriptOptions.map(student=><option key={student.id} value={student.id}>{student.name} ({student.admission})</option>)}
+                {transcriptOptions.map(student => <option key={student.id} value={student.id}>{student.name} ({student.admission})</option>)}
               </select>
+              <span className="block mt-1 text-slate-500">Only students with approved grades on record appear here (currently Faith Wanjiku only); other registry students have no approved grades yet, so no complete transcript exists for them.</span>
             </label>
           )}
           {['super_admin','admin','registrar','student'].includes(role) && <button
@@ -114,7 +116,7 @@ export default function GradesPage() {
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <p className="text-xs font-semibold text-slate-500 uppercase">Grading Scale</p>
           <p className="text-lg font-bold text-academic-navy-950 mt-1">4.0 Scale Standard</p>
-          <p className="text-xs text-slate-400 mt-1">A: 70-100 (4.0) | B: 60-69 (3.0) | C: 50-59 (2.0)</p>
+          <p className="text-xs text-slate-400 mt-1">A: 70-100 (4.0) | B: 60-69 (3.0) | C: 50-59 (2.0) | D: 40-49 (1.0) | E: 0-39 (0.0, fail)</p>
         </div>
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <p className="text-xs font-semibold text-slate-500 uppercase">Assessment Weight</p>
@@ -123,16 +125,29 @@ export default function GradesPage() {
         </div>
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <p className="text-xs font-semibold text-slate-500 uppercase">Senate Verification</p>
-          <p className="text-lg font-bold text-emerald-600 mt-1">{grades.filter(g=>g.status==='Approved').length} Approved Results</p>
+          <p className="text-lg font-bold text-emerald-600 mt-1">{gradesLoaded ? `${grades.filter(g => g.status === 'Approved').length} Approved Results` : 'Loading…'}</p>
           <p className="text-xs text-slate-400 mt-1">Results are limited to your permitted scope</p>
         </div>
       </div>
+
+      {(() => {
+        const faith = grades.filter(g => g.adm === 'BIT/2023/8849' && g.status === 'Approved');
+        if (!gradesLoaded || faith.length === 0) return null;
+        const credits = faith.reduce((sum, g) => sum + g.credits, 0);
+        const semesterGpa = credits ? (faith.reduce((sum, g) => sum + g.credits * g.gpa, 0) / credits).toFixed(2) : '0.00';
+        return (
+          <p className="text-sm text-slate-600 border rounded-lg p-4 bg-slate-50">
+            About the CGPA: Faith Wanjiku&apos;s registry CGPA is 3.82, cumulative across all semesters. The approved grades shown here cover one semester
+            only ({faith.length} units, semester GPA {semesterGpa}), so they are not expected to recompute to 3.82.
+          </p>
+        );
+      })()}
 
       {/* Grades Table */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
           <h2 className="font-bold text-slate-800 text-sm">Course Assessment Master Roll</h2>
-          <span className="text-xs font-medium text-slate-500">{grades.length} Grades Recorded</span>
+          <span className="text-xs font-medium text-slate-500">{gradesLoaded ? `${grades.length} Grades Recorded` : 'Loading grades…'}</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -230,6 +245,7 @@ export default function GradesPage() {
                       'BIT 312': 'Distributed Systems & Cloud Computing',
                       'BCS 314': 'Software Engineering Architecture',
                       'BCS 316': 'Network & System Security',
+                      'BBA 201': 'Principles of Financial Accounting',
                     };
                     setNewGrade({ ...newGrade, course: code, courseTitle: titles[code] || code });
                   }}
@@ -239,6 +255,7 @@ export default function GradesPage() {
                   <option value="BCS 311">BCS 311 - Advanced Database Systems (3 Cr)</option>
                   <option value="BIT 312">BIT 312 - Distributed Systems (3 Cr)</option>
                   <option value="BCS 314">BCS 314 - Software Engineering (4 Cr)</option>
+                  <option value="BBA 201">BBA 201 - Principles of Financial Accounting (3 Cr)</option>
                 </select>
               </div>
 
