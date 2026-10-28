@@ -153,23 +153,23 @@ test('librarian role visibility: librarian can ONLY access library and general n
   assert.equal(canAccessPage('librarian', 'audit'), false);
 });
 
-test('staff password management: registrar cannot change password for admin or super_admin', async () => {
+test('staff password management: registrar cannot manage passwords (admin/super_admin only)', async () => {
   const res = await managePassword(
     makeRequest('registrar', 'POST', {
-      email: 'admin@university.ac.ke',
+      email: 'librarian.test@university.ac.ke',
       action: 'set',
       password: 'NewPassword123!',
-      role: 'admin'
+      role: 'librarian'
     }, 'http://localhost:3000/api/v1/staff/password')
   );
   assert.equal(res.status, 403);
   const data = await res.json();
-  assert.match(data.error, /Registrars cannot modify administrative accounts/i);
+  assert.match(data.error, /lacks sufficient privileges/i);
 });
 
-test('staff password management: admin/registrar can set password directly for staff/librarian', async () => {
+test('staff password management: admin can set password directly for staff/librarian', async () => {
   const res = await managePassword(
-    makeRequest('registrar', 'POST', {
+    makeRequest('admin', 'POST', {
       email: 'librarian.test@university.ac.ke',
       action: 'set',
       password: 'StrongPassword2026!',
@@ -185,12 +185,8 @@ test('staff password management: admin/registrar can set password directly for s
 });
 
 test('staff password management: reset link fails closed without an institutional database', async () => {
-  // The old code returned success here even though no email could possibly be
-  // sent (no Supabase connection in this environment) — and it handed the
-  // live recovery link back to the caller instead of emailing it. Both are
-  // fixed: without a database connection the route now says so honestly.
   const res = await managePassword(
-    makeRequest('registrar', 'POST', {
+    makeRequest('admin', 'POST', {
       email: 'librarian.test@university.ac.ke',
       action: 'reset_link',
       role: 'librarian'

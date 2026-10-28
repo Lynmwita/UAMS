@@ -876,7 +876,7 @@ export default function StaffPage() {
                         </button>
                       )}
 
-                      {canInvite && !(role === 'registrar' && (s.role === 'admin' || s.role === 'super_admin')) && (
+                      {canManage && (
                         <button
                           className="text-xs border border-indigo-200 bg-indigo-50/50 hover:bg-indigo-50 text-indigo-700 rounded px-2 py-1 inline-flex items-center gap-1 font-medium transition"
                           onClick={() => {
@@ -902,34 +902,37 @@ export default function StaffPage() {
                         </button>
                       )}
 
-                      <button
-                        hidden={!canManage}
-                        className="text-xs border rounded px-2 py-1 hover:bg-slate-50 inline-flex items-center gap-1 text-slate-700 transition"
-                        onClick={() => toggleActive(s.id, !s.is_active)}
-                      >
-                        {s.is_active ? <ShieldX className="w-3 h-3 text-rose-500" /> : <ShieldCheck className="w-3 h-3 text-emerald-600" />}
-                        {s.is_active ? 'Deactivate' : 'Reactivate'}
-                      </button>
+                      {canManage && (
+                        <button
+                          className="text-xs border rounded px-2 py-1 hover:bg-slate-50 inline-flex items-center gap-1 text-slate-700 transition"
+                          onClick={() => toggleActive(s.id, !s.is_active)}
+                        >
+                          {s.is_active ? <ShieldX className="w-3 h-3 text-rose-500" /> : <ShieldCheck className="w-3 h-3 text-emerald-600" />}
+                          {s.is_active ? 'Deactivate' : 'Reactivate'}
+                        </button>
+                      )}
 
-                      <button
-                        hidden={!canManage}
-                        className="text-xs border border-amber-200 bg-amber-50/50 hover:bg-amber-50 text-amber-800 rounded px-2 py-1 inline-flex items-center gap-1 font-medium transition"
-                        onClick={() => handleUnlink(s)}
-                        title="Remove this person's login only; the staff record stays"
-                      >
-                        <UserX className="w-3 h-3" />
-                        <span>Remove login</span>
-                      </button>
+                      {canManage && (
+                        <button
+                          className="text-xs border border-amber-200 bg-amber-50/50 hover:bg-amber-50 text-amber-800 rounded px-2 py-1 inline-flex items-center gap-1 font-medium transition"
+                          onClick={() => handleUnlink(s)}
+                          title="Remove this person's login only; the staff record stays"
+                        >
+                          <UserX className="w-3 h-3" />
+                          <span>Remove login</span>
+                        </button>
+                      )}
 
-                      <button
-                        hidden={!canManage}
-                        className="text-xs border border-rose-200 bg-rose-50/50 hover:bg-rose-50 text-rose-700 rounded px-2 py-1 inline-flex items-center gap-1 font-medium transition"
-                        onClick={() => handleDelete(s)}
-                        title="Delete the entire staff record (cannot be undone)"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                        <span>Delete</span>
-                      </button>
+                      {canManage && (
+                        <button
+                          className="text-xs border border-rose-200 bg-rose-50/50 hover:bg-rose-50 text-rose-700 rounded px-2 py-1 inline-flex items-center gap-1 font-medium transition"
+                          onClick={() => handleDelete(s)}
+                          title="Delete the entire staff record (cannot be undone)"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Delete</span>
+                        </button>
+                      )}
                     </div>
                     {rowStatus[s.email] && (
                       <div
