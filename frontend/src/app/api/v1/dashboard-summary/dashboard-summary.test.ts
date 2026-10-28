@@ -7,7 +7,7 @@ import { createSignedToken } from '@/lib/auth/server-auth';
 import { studentsStore } from '@/lib/academic/student-records';
 import { coursesStore } from '@/lib/academic/course-catalog';
 import { buildExamClearanceCards } from '@/lib/academic/clearance';
-import { buildExamSchedules } from '../exams/route';
+import { buildExamSchedules } from '@/lib/academic/exam-schedules';
 import { derivedAttendanceAverage, attendanceSessions } from '@/lib/academic/attendance-store';
 import { resolveAuditTarget } from '@/lib/audit/audit-labels';
 import { GET as getSummary } from './route';
