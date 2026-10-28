@@ -8,10 +8,12 @@ import { recordAuditEvent } from '@/lib/audit/audit-logger';
 import { dispatchNotification } from '@/lib/messaging/dispatcher';
 
 export async function POST(request: Request) {
-  // Super Admin only on both the demo path and the institutional path:
-  // setting or resetting another person's password must never be available
-  // to registrars or admins.
-  const auth = await requireServerAuth(request, ['super_admin']);
+  // Admin tier on both the demo path and the institutional path:
+  // setting or resetting another person's password must never be
+  // available to registrars. (Admin tier, not super_admin-only: the
+  // owner's own rule is "admin can reset password", and main already
+  // gates this route to admin + super_admin.)
+  const auth = await requireServerAuth(request, ['super_admin', 'admin']);
   if ('errorResponse' in auth) return auth.errorResponse;
 
   try {
@@ -49,6 +51,8 @@ export async function POST(request: Request) {
         // route still reported "now active and ready to log in". A record
         // with no portal role (or a deactivated account) fails here,
         // loudly, instead of producing another un-loggable account.
+        // (Strict resolution, not the canonical map's catch-all: an
+        // unmapped title must get an explicit portal role first.)
         const student = studentsStore.find((s) => s.email.toLowerCase() === emailNorm);
         const targetRole = resolvePortalRole(staff?.role, body.role, student ? 'student' : null);
         if (!targetRole) {
@@ -57,6 +61,7 @@ export async function POST(request: Request) {
             { status: 400 }
           );
         }
+        const targetStaffRole = staff?.role || body.role || targetRole;
 
         // 1. Check if user exists in Supabase Auth
         let identityId: string | null = null;
@@ -70,7 +75,7 @@ export async function POST(request: Request) {
           const { error: updateError } = await db.auth.admin.updateUserById(identityId, {
             password,
             email_confirm: true,
-            app_metadata: { role: targetRole },
+            app_metadata: { role: targetRole, staff_role: targetStaffRole },
           });
           if (updateError) throw new Error(updateError.message);
         } else {
@@ -78,7 +83,7 @@ export async function POST(request: Request) {
             email: emailNorm,
             password,
             email_confirm: true,
-            app_metadata: { role: targetRole },
+            app_metadata: { role: targetRole, staff_role: targetStaffRole },
           });
           if (createError) throw new Error(createError.message);
           identityId = newUser.user?.id || null;

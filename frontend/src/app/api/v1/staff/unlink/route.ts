@@ -11,7 +11,7 @@ import { recordAuditEvent } from '@/lib/audit/audit-logger';
  * POST { email }
  */
 export async function POST(request: Request) {
-  const auth = await requireServerAuth(request, ['super_admin']);
+  const auth = await requireServerAuth(request, ['super_admin', 'admin']);
   if ('errorResponse' in auth) return auth.errorResponse;
 
   try {

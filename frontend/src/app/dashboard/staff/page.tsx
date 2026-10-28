@@ -67,11 +67,11 @@ const DEFAULT_ROLES = [
 export default function StaffPage() {
   const {role}=useAuth();
   const canManage=['admin','super_admin'].includes(role);
-  // Delete, Remove login and Password are Super Admin only. Note: this must
-  // be conditional rendering, never the `hidden` attribute: Tailwind's
-  // `inline-flex` class beats the UA stylesheet's [hidden] rule, so
-  // `hidden` buttons were still visible to registrars (audit Part 2A).
-  const canSensitive = role === 'super_admin';
+  // Delete, Remove login and Password are admin-tier only (admin and
+  // super_admin). Note: this must be conditional rendering, never the
+  // `hidden` attribute: Tailwind's `inline-flex` class beats the UA
+  // stylesheet's [hidden] rule, so `hidden` buttons were still visible
+  // to registrars (audit Part 2A).
   const canInvite=['admin','super_admin','registrar'].includes(role);
   const [departments,setDepartments]=useState<{id:string;name:string;category?:string;school_id?:string}[]>([]);
   const [notice,setNotice]=useState('');
@@ -894,7 +894,7 @@ export default function StaffPage() {
                         </button>
                       )}
 
-                      {canSensitive && (
+                      {canManage && (
                         <button
                           className="text-xs border border-indigo-200 bg-indigo-50/50 hover:bg-indigo-50 text-indigo-700 rounded px-2 py-1 inline-flex items-center gap-1 font-medium transition"
                           onClick={() => {
@@ -902,7 +902,7 @@ export default function StaffPage() {
                             setDirectPassword('');
                             setPasswordModalMessage(null);
                           }}
-                          title="Set password directly or send reset link (Super Admin only)"
+                          title="Set password directly or send reset link (Admin only)"
                         >
                           <KeyRound className="w-3.5 h-3.5 text-indigo-600" />
                           <span>Password</span>
@@ -930,25 +930,25 @@ export default function StaffPage() {
                         </button>
                       )}
 
-                      {canSensitive && (
+                      {canManage && (
                         <button
                           className="text-xs border border-amber-200 bg-amber-50/50 hover:bg-amber-50 text-amber-800 rounded px-2 py-1 inline-flex items-center gap-1 font-medium transition"
                           onClick={() => handleUnlink(s)}
-                          title="Remove this person's login only; the staff record stays (Super Admin only)"
+                          title="Remove this person's login only; the staff record stays (Admin only)"
                         >
                           <UserX className="w-3 h-3" />
                           <span>Remove login</span>
                         </button>
                       )}
 
-                      {canSensitive && (
+                      {canManage && (
                         <button
                           className="text-xs border border-rose-200 bg-rose-50/50 hover:bg-rose-50 text-rose-700 rounded px-2 py-1 inline-flex items-center gap-1 font-medium transition"
                           onClick={() => {
                             setDeleteStaff(s);
                             setDeleteConfirmInput('');
                           }}
-                          title="Delete the entire staff record (cannot be undone, Super Admin only)"
+                          title="Delete the entire staff record (cannot be undone, Admin only)"
                         >
                           <Trash2 className="w-3 h-3" />
                           <span>Delete</span>

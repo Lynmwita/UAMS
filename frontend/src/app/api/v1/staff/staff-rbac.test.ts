@@ -153,13 +153,13 @@ test('librarian role visibility: librarian can ONLY access library and general n
   assert.equal(canAccessPage('librarian', 'audit'), false);
 });
 
-test('staff password management: registrar cannot change passwords at all (Super Admin only, audit Part 2A)', async () => {
+test('staff password management: registrar cannot change passwords at all (admin tier only)', async () => {
   const res = await managePassword(
     makeRequest('registrar', 'POST', {
-      email: 'admin@university.ac.ke',
+      email: 'librarian.test@university.ac.ke',
       action: 'set',
       password: 'NewPassword123!',
-      role: 'admin'
+      role: 'librarian'
     }, 'http://localhost:3000/api/v1/staff/password')
   );
   assert.equal(res.status, 403);
@@ -167,7 +167,7 @@ test('staff password management: registrar cannot change passwords at all (Super
   assert.match(data.error, /lacks sufficient privileges/i);
 });
 
-test('staff password management: super_admin can set password directly for staff/librarian; registrar cannot', async () => {
+test('staff password management: admin tier can set password directly for staff/librarian; registrar cannot', async () => {
   const denied = await managePassword(
     makeRequest('registrar', 'POST', {
       email: 'librarian.test@university.ac.ke',
@@ -180,7 +180,7 @@ test('staff password management: super_admin can set password directly for staff
   );
   assert.equal(denied.status, 403);
   const res = await managePassword(
-    makeRequest('super_admin', 'POST', {
+    makeRequest('admin', 'POST', {
       email: 'librarian.test@university.ac.ke',
       action: 'set',
       password: 'StrongPassword2026!',
@@ -196,12 +196,8 @@ test('staff password management: super_admin can set password directly for staff
 });
 
 test('staff password management: reset link fails closed without an institutional database', async () => {
-  // The old code returned success here even though no email could possibly be
-  // sent (no Supabase connection in this environment) — and it handed the
-  // live recovery link back to the caller instead of emailing it. Both are
-  // fixed: without a database connection the route now says so honestly.
   const res = await managePassword(
-    makeRequest('super_admin', 'POST', {
+    makeRequest('admin', 'POST', {
       email: 'librarian.test@university.ac.ke',
       action: 'reset_link',
       role: 'librarian'

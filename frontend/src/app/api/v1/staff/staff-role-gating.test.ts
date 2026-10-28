@@ -45,8 +45,8 @@ const UNLINK_URL = 'http://localhost:3000/api/v1/staff/unlink';
 const PASSWORD_URL = 'http://localhost:3000/api/v1/staff/password';
 const STAFF_URL = 'http://localhost:3000/api/v1/staff';
 
-test('gating (demo path): registrar and admin are refused delete, unlink and password', async () => {
-  for (const role of ['registrar', 'admin'] as UserRole[]) {
+test('gating (demo path): registrar is refused delete, unlink and password; admin passes the gate', async () => {
+  for (const role of ['registrar'] as UserRole[]) {
     const del = await deleteStaff(makeRequest(role, 'POST', { staff_id: 'staff-1' }, DELETE_URL));
     assert.equal(del.status, 403, `${role} delete`);
     const unl = await unlinkStaff(makeRequest(role, 'POST', { email: 'jane.mwangi@university.ac.ke' }, UNLINK_URL));
@@ -56,10 +56,26 @@ test('gating (demo path): registrar and admin are refused delete, unlink and pas
     );
     assert.equal(pwd.status, 403, `${role} password`);
   }
+  // Admin tier passes the gate (exact downstream status depends on the
+  // demo store state, so assert gate passage, not a specific code).
+  // NOTE: use records that do not exist in the seed store: an admin demo
+  // delete of real 'staff-1' would actually remove Jane Mwangi from the
+  // shared store and break the department-count / name-linking tests
+  // below that read the seed.
+  for (const role of ['admin'] as UserRole[]) {
+    const del = await deleteStaff(makeRequest(role, 'POST', { staff_id: 'staff-does-not-exist' }, DELETE_URL));
+    assert.notEqual(del.status, 403, `${role} delete passes gate`);
+    const unl = await unlinkStaff(makeRequest(role, 'POST', { email: 'nobody@university.ac.ke' }, UNLINK_URL));
+    assert.notEqual(unl.status, 403, `${role} unlink passes gate`);
+    const pwd = await managePassword(
+      makeRequest(role, 'POST', { email: 'nobody@university.ac.ke', action: 'set', password: 'StrongPassword2026!' }, PASSWORD_URL)
+    );
+    assert.notEqual(pwd.status, 403, `${role} password passes gate`);
+  }
 });
 
-test('gating (institutional path): registrar and admin are refused before any database work', async () => {
-  for (const role of ['registrar', 'admin'] as UserRole[]) {
+test('gating (institutional path): registrar is refused before any database work; admin passes the gate', async () => {
+  for (const role of ['registrar'] as UserRole[]) {
     const del = await deleteStaff(makeRequest(role, 'POST', { staff_id: 'staff-1' }, DELETE_URL, false));
     assert.equal(del.status, 403, `${role} institutional delete`);
     const unl = await unlinkStaff(makeRequest(role, 'POST', { email: 'jane.mwangi@university.ac.ke' }, UNLINK_URL, false));
@@ -68,6 +84,18 @@ test('gating (institutional path): registrar and admin are refused before any da
       makeRequest(role, 'POST', { email: 'jane.mwangi@university.ac.ke', action: 'set', password: 'StrongPassword2026!' }, PASSWORD_URL, false)
     );
     assert.equal(pwd.status, 403, `${role} institutional password`);
+  }
+  // Admin passes the gate and then fails only on the missing database,
+  // exactly like super_admin in the next test.
+  for (const role of ['admin'] as UserRole[]) {
+    const del = await deleteStaff(makeRequest(role, 'POST', { staff_id: 'staff-1' }, DELETE_URL, false));
+    assert.equal(del.status, 503, `${role} institutional delete passes gate`);
+    const unl = await unlinkStaff(makeRequest(role, 'POST', { email: 'jane.mwangi@university.ac.ke' }, UNLINK_URL, false));
+    assert.equal(unl.status, 503, `${role} institutional unlink passes gate`);
+    const pwd = await managePassword(
+      makeRequest(role, 'POST', { email: 'jane.mwangi@university.ac.ke', action: 'reset_link' }, PASSWORD_URL, false)
+    );
+    assert.equal(pwd.status, 503, `${role} institutional password passes gate`);
   }
 });
 
