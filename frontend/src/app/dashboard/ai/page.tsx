@@ -208,6 +208,17 @@ export default function AIAssistantPage() {
         </div>
       </div>
 
+      {/* Accuracy disclaimer */}
+      <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs leading-relaxed text-amber-900">
+        <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+        <p>
+          <strong>Check before you act:</strong> AI answers are generated guidance, not verified official
+          rulings. Always check them against the official university regulations and your faculty&apos;s
+          published rules, and stay within your signed-in role&apos;s scope. No live AI answer shown here
+          has been verified against an official source.
+        </p>
+      </div>
+
       {/* Preset Suggestions */}
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Quick Academic Inquiries</p>
@@ -346,7 +357,7 @@ export default function AIAssistantPage() {
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
               <span>NVIDIA NIM Secure Institutional Gateway</span>
             </span>
-            <span>UAMS Enterprise v1.2</span>
+            <span>UAMS Enterprise v2.0</span>
           </div>
         </div>
       </div>

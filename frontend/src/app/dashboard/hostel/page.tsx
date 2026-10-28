@@ -1,10 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/lib/auth/context';
 import { Home, Plus, CheckCircle2, Bed, Building, UserCheck, Phone, ShieldCheck } from 'lucide-react';
 import { HostelBlock, HostelRoom, HostelAllocation } from '@/types';
 
 export default function HostelPage() {
+  const { role } = useAuth();
+  const canSeeWardenPhones = ['super_admin', 'admin', 'registrar'].includes(role);
+  const occupancyLabel = (status: string) =>
+    status === 'checked_in' ? 'Checked in' : status === 'checked_out' ? 'Checked out' : 'Allocated';
+  const paymentLabel = (payment: string) => (payment === 'paid' || payment === 'cleared' ? 'Paid' : 'Pending');
   const [blocks, setBlocks] = useState<HostelBlock[]>([]);
   const [rooms, setRooms] = useState<HostelRoom[]>([]);
   const [allocations, setAllocations] = useState<HostelAllocation[]>([]);
@@ -136,7 +142,11 @@ export default function HostelPage() {
               </div>
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
                 <span className="flex items-center gap-1"><UserCheck className="h-3.5 w-3.5 text-academic-navy-700" /> {b.warden_name}</span>
-                <span className="flex items-center gap-1 font-mono text-slate-500"><Phone className="h-3 w-3" /> {b.warden_phone}</span>
+                {canSeeWardenPhones ? (
+                  <span className="flex items-center gap-1 font-mono text-slate-500"><Phone className="h-3 w-3" /> {b.warden_phone} <span className="text-[10px] text-slate-400">(sample)</span></span>
+                ) : (
+                  <span className="text-slate-400">Contact via hostel office</span>
+                )}
               </div>
             </div>
           ))}
@@ -149,6 +159,7 @@ export default function HostelPage() {
             <h2 className="text-sm font-bold text-slate-800">Current Semester Student Allocations</h2>
             <span className="text-xs font-mono text-slate-500">Total: {allocations.length} records</span>
           </div>
+          <p className="px-4 pt-3 text-[11px] text-slate-500">Status uses one vocabulary: Allocated (bed reserved, not yet checked in), Checked in, Checked out. Payment is shown separately as Paid or Pending.</p>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-100 text-slate-700 font-semibold uppercase">
@@ -172,12 +183,12 @@ export default function HostelPage() {
                     <td className="p-3">Bed #{a.bed_number}</td>
                     <td className="p-3">
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">
-                        {a.payment_status}
+                        {paymentLabel(a.payment_status)}
                       </span>
                     </td>
                     <td className="p-3">
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-blue-100 text-blue-800">
-                        {a.status}
+                        {occupancyLabel(a.status)}
                       </span>
                     </td>
                   </tr>

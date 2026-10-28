@@ -43,7 +43,7 @@ export default function Sidebar({ role = 'student' }: SidebarProps) {
     { name: 'AI Advisor', href: '/dashboard/ai', icon: Sparkles, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student', 'librarian'] },
     { name: 'Schools & Depts', href: '/dashboard/structure', icon: Building2, roles: ['super_admin', 'admin', 'registrar'] },
     { name: 'Students', href: '/dashboard/students', icon: Users, roles: ['super_admin', 'admin', 'registrar', 'hod'] },
-    { name: 'Courses & Catalog', href: '/dashboard/courses', icon: BookOpen, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student'] },
+    { name: 'Courses & Catalogue', href: '/dashboard/courses', icon: BookOpen, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student'] },
     { name: 'Attendance', href: '/dashboard/attendance', icon: CalendarCheck, roles: ['super_admin', 'admin', 'hod', 'lecturer', 'student'] },
     { name: 'Examinations & Grades', href: '/dashboard/grades', icon: Award, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student'] },
     { name: 'Exam Clearance & Cards', href: '/dashboard/exams', icon: FileCheck2, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student'] },
@@ -57,7 +57,7 @@ export default function Sidebar({ role = 'student' }: SidebarProps) {
     { name: 'Faculty & Staff', href: '/dashboard/staff', icon: IdCard, roles: ['super_admin', 'admin', 'registrar'] },
     { name: 'Campus Events', href: '/dashboard/events', icon: CalendarPlus, roles: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student', 'librarian'] },
     { name: 'Reports & Analytics', href: '/dashboard/reports', icon: BarChart3, roles: ['super_admin', 'admin', 'registrar', 'finance_officer', 'hod'] },
-    { name: 'Student Hub Inbox', href: '/dashboard/support', icon: Send, roles: ['super_admin','admin','registrar'] },
+    { name: 'Student Support Inbox', href: '/dashboard/support', icon: Send, roles: ['super_admin','admin','registrar'] },
     { name: 'Audit Logs', href: '/dashboard/audit', icon: Activity, roles: ['super_admin'] },
   ];
 

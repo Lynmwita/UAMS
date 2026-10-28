@@ -15,7 +15,7 @@ export default function TimetablePage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newSlot, setNewSlot] = useState({
     day: 'Monday',
-    time: '08:00 - 11:00 AM',
+    time: '08:00 AM \u2013 11:00 AM',
     courseCode: 'BCS 311',
     courseTitle: 'Advanced Database Systems',
     room: 'Lecture Hall 04 (Main Campus)',
@@ -157,10 +157,10 @@ export default function TimetablePage() {
                     onChange={(e) => setNewSlot({ ...newSlot, time: e.target.value })}
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-academic-navy-900 outline-none"
                   >
-                    <option value="08:00 - 11:00 AM">08:00 - 11:00 AM</option>
-                    <option value="11:00 - 01:00 PM">11:00 - 01:00 PM</option>
-                    <option value="02:00 - 05:00 PM">02:00 - 05:00 PM</option>
-                    <option value="05:30 - 08:30 PM">05:30 - 08:30 PM (Evening)</option>
+                    <option value="08:00 AM \u2013 11:00 AM">08:00 AM \u2013 11:00 AM</option>
+                    <option value="11:00 AM \u2013 01:00 PM">11:00 AM \u2013 01:00 PM</option>
+                    <option value="02:00 PM \u2013 05:00 PM">02:00 PM \u2013 05:00 PM</option>
+                    <option value="05:30 PM \u2013 08:30 PM">05:30 PM \u2013 08:30 PM (Evening)</option>
                   </select>
                 </div>
               </div>

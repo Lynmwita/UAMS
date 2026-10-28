@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'University Administration Management System (UAMS)',
+  title: 'University of Advanced Management Sciences (UAMS)',
   description: 'Centralized enterprise platform for university academic, financial, and student management.',
 };
 

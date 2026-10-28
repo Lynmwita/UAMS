@@ -100,7 +100,7 @@ export default function CoursesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-200 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-academic-navy-950 tracking-tight">
-            Course Catalog & Units
+            Course Catalogue & Units
           </h1>
           <p className="text-sm text-slate-500 mt-1">
             Curriculum management, credit hours, prerequisites, and departmental course unit allocations.
@@ -192,7 +192,7 @@ export default function CoursesPage() {
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" disabled={approving} checked={pendingIds.slice(0, 200).every(id => selectedIds.includes(id))}
                 onChange={e => setSelectedIds(e.target.checked ? pendingIds.slice(0, 200) : [])} />
-              Select pending registrations (up to 200)
+              Select pending registrations ({pendingIds.length} pending{pendingIds.length > 200 ? ', sent in batches of 200' : ''})
             </label>
             <button disabled={approving || selectedIds.length === 0}
               onClick={() => void approveRegistrations(selectedIds)}

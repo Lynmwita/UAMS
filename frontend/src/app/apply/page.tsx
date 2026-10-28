@@ -39,8 +39,8 @@ export default function ApplyPage() {
     kcse_index: '',
     national_id: '',
     previous_institution: '',
-    intake: 'September',
-    intake_year: 2026,
+    intake: 'January',
+    intake_year: 2027,
   });
 
   const [uploadedFiles, setUploadedFiles] = useState<{
@@ -60,19 +60,23 @@ export default function ApplyPage() {
   const [captchaChallenge, setCaptchaChallenge] = useState<{ question: string; challenge_token: string } | null>(null);
   const [captchaAnswer, setCaptchaAnswer] = useState('');
   const [captchaLoading, setCaptchaLoading] = useState(false);
+  const [captchaFailed, setCaptchaFailed] = useState(false);
   const [honeypot, setHoneypot] = useState('');
 
   const loadCaptcha = async () => {
     try {
       setCaptchaLoading(true);
+      setCaptchaFailed(false);
       const res = await fetch('/api/v1/admissions/challenge');
       const json = await res.json();
       if (json.success && json.data) {
         setCaptchaChallenge(json.data);
         setCaptchaAnswer('');
+      } else {
+        setCaptchaFailed(true);
       }
     } catch {
-      // Fallback
+      setCaptchaFailed(true);
     } finally {
       setCaptchaLoading(false);
     }
@@ -183,13 +187,13 @@ export default function ApplyPage() {
               </div>
               <div>
                 <span className="text-xs uppercase tracking-widest font-semibold text-indigo-400">
-                  Admissions & Enrollment Directorate
+                  Admissions & Enrolment Directorate
                 </span>
                 <h1 className="text-2xl font-extrabold tracking-tight">
                   University of Advanced Management Sciences (UAMS)
                 </h1>
                 <p className="text-sm text-slate-400">
-                  Online Admissions Portal • September 2026 Intake (KUCCPS & Direct Entry)
+                  Online Admissions Portal • January 2027 Intake (KUCCPS & Direct Entry)
                 </p>
               </div>
             </div>
@@ -293,8 +297,8 @@ export default function ApplyPage() {
                         kcse_index: '',
                         national_id: '',
                         previous_institution: '',
-                        intake: 'September',
-                        intake_year: 2026,
+                        intake: 'January',
+                        intake_year: 2027,
                       });
                       setUploadedFiles({});
                     }}
@@ -311,7 +315,7 @@ export default function ApplyPage() {
                   <div className="border-b border-slate-200 pb-4 mb-6">
                     <h2 className="text-xl font-bold text-slate-900">Direct Entry Application (Self-Sponsored / PSSP)</h2>
                     <p className="text-sm text-slate-500 mt-0.5">
-                      Apply online for undergraduate and diploma degree programs for the September 2026 academic intake.
+                      Apply online for undergraduate and diploma degree programs for the January 2027 academic intake.
                     </p>
                   </div>
 
@@ -348,7 +352,7 @@ export default function ApplyPage() {
                           <input
                             required
                             type="email"
-                            placeholder="e.g. christine.mwangi@gmail.com"
+                            placeholder="e.g. christine.mwangi@example.com"
                             value={formData.applicant_email}
                             onChange={(e) => setFormData({ ...formData, applicant_email: e.target.value })}
                             className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-white"
@@ -568,7 +572,7 @@ export default function ApplyPage() {
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
                           <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                          {captchaChallenge ? captchaChallenge.question : 'Loading security verification...'}
+                          {captchaChallenge ? captchaChallenge.question : captchaFailed ? 'Security verification could not load. Press Refresh Question to try again.' : 'Loading security verification...'}
                         </span>
                         <button
                           type="button"
@@ -623,7 +627,7 @@ export default function ApplyPage() {
                     <ul className="text-xs space-y-2.5 text-indigo-200">
                       <li>• <strong>Undergraduate Degree:</strong> Minimum KCSE Mean Grade of C+ (plus) with program specific subject cluster requirements.</li>
                       <li>• <strong>Diploma Programmes:</strong> Minimum KCSE Mean Grade of C- (minus) or equivalent certificate.</li>
-                      <li>• <strong>Application Fee:</strong> Free online application for the 2026 academic intake.</li>
+                      <li>• <strong>Application Fee:</strong> Free online application for the January 2027 academic intake.</li>
                       <li>• <strong>Verification:</strong> Original academic slips and identification will be inspected during orientation.</li>
                     </ul>
                   </div>
@@ -874,7 +878,7 @@ export default function ApplyPage() {
                     <strong>Medical Examination:</strong> Download the medical examination form attached to your offer letter and have it completed at a registered medical facility.
                   </li>
                   <li>
-                    <strong>Reporting Day:</strong> Report to the Main Campus on Monday, 7th September 2026 with your original KCSE slip, National ID, and 4 passport photographs.
+                    <strong>Reporting Day:</strong> Report to the Main Campus on the reporting date shown on your admission letter with your original KCSE slip, National ID, and 4 passport photographs.
                   </li>
                 </ul>
               </div>
