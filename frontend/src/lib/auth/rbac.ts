@@ -28,6 +28,7 @@ export const ROLE_HIERARCHY: Record<UserRole, number> = {
   finance_officer: 60,
   librarian: 50,
   student: 10,
+  other: 20,
 };
 
 export const ROLE_LABELS: Record<UserRole, string> = {
@@ -39,6 +40,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   finance_officer: 'Finance Officer',
   librarian: 'University Librarian',
   student: 'Student',
+  other: 'Other',
 };
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -121,6 +123,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   "librarian": [
     "library:read",
     "library:loan"
+  ],
+  "other": [
+    "library:read"
   ]
 };
 

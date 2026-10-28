@@ -265,6 +265,13 @@ function LoginForm() {
                 >
                   Student (Faith Wanjiku)
                 </button>
+                <button
+                  type="button"
+                  onClick={() => handleFillDemoCredentials('other')}
+                  className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition col-span-2"
+                >
+                  Other (Support & Operations Staff)
+                </button>
               </div>
             </div>
           )}
