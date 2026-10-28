@@ -5,6 +5,7 @@ import { departmentsStore } from '@/lib/academic/structure';
 import { requireServerAuth } from '@/lib/auth/server-auth';
 import { recordAuditEvent } from '@/lib/audit/audit-logger';
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveCanonicalRole } from '@/lib/auth/roles';
 
 export async function GET(request: NextRequest) {
   const auth = await requireServerAuth(request, ['super_admin', 'admin', 'registrar', 'hod']);
@@ -149,7 +150,8 @@ export async function POST(request: NextRequest) {
 
     try {
       const db = institutionalDatabase();
-      const { data: roleRow } = await db.from('roles').select('id').eq('code', role).maybeSingle();
+      const canonicalCode = resolveCanonicalRole(role);
+      const { data: roleRow } = await db.from('roles').select('id').eq('code', canonicalCode).maybeSingle();
       await db.from('users').upsert({
         email: emailNorm,
         first_name: created.first_name,

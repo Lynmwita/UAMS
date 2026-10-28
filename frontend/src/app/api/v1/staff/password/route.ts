@@ -4,6 +4,7 @@ import { institutionalDatabase } from '@/lib/academic/institutional';
 import { staffStore } from '@/lib/hr/staff';
 import { recordAuditEvent } from '@/lib/audit/audit-logger';
 import { dispatchNotification } from '@/lib/messaging/dispatcher';
+import { resolveCanonicalRole } from '@/lib/auth/roles';
 
 export async function POST(request: Request) {
   const auth = await requireServerAuth(request, ['super_admin', 'admin']);
@@ -19,17 +20,6 @@ export async function POST(request: Request) {
 
     const emailNorm = email.trim().toLowerCase();
     const staff = staffStore.find((s) => s.email.toLowerCase() === emailNorm);
-
-    // Registrars cannot manage administrator accounts
-    if (auth.user.role === 'registrar') {
-      const targetRole = String(staff?.role || body.role || '').toLowerCase();
-      if (targetRole === 'admin' || targetRole === 'super_admin') {
-        return NextResponse.json(
-          { success: false, error: 'Registrars cannot modify administrative accounts.' },
-          { status: 403 }
-        );
-      }
-    }
 
     let db: any = null;
     try {
@@ -47,21 +37,28 @@ export async function POST(request: Request) {
       }
 
       if (db) {
-        // 1. Check if user exists in Supabase Auth
+        // 1. Resolve canonical portal role and role_id from database
+        const targetStaffRole = staff?.role || body.role || 'lecturer';
+        const canonicalRole = resolveCanonicalRole(targetStaffRole);
+        const { data: roleRow } = await db
+          .from('roles')
+          .select('id,code')
+          .eq('code', canonicalRole)
+          .maybeSingle();
+
+        // 2. Check if user exists in Supabase Auth
         let identityId: string | null = null;
         const { data: listData } = await db.auth.admin.listUsers({ perPage: 1000 });
         const existingAuthUser = listData?.users?.find(
           (u: any) => u.email?.toLowerCase() === emailNorm
         );
 
-        const targetRole = staff?.role || body.role || 'librarian';
-
         if (existingAuthUser) {
           identityId = existingAuthUser.id;
           const { error: updateError } = await db.auth.admin.updateUserById(identityId, {
             password,
             email_confirm: true,
-            app_metadata: { role: targetRole },
+            app_metadata: { role: canonicalRole, staff_role: targetStaffRole },
           });
           if (updateError) throw new Error(updateError.message);
         } else {
@@ -69,13 +66,13 @@ export async function POST(request: Request) {
             email: emailNorm,
             password,
             email_confirm: true,
-            app_metadata: { role: targetRole },
+            app_metadata: { role: canonicalRole, staff_role: targetStaffRole },
           });
           if (createError) throw new Error(createError.message);
           identityId = newUser.user?.id || null;
         }
 
-        // Link in users table
+        // Link in users table with role_id guaranteed
         if (identityId) {
           try {
             await db
@@ -86,6 +83,7 @@ export async function POST(request: Request) {
                   auth_user_id: identityId,
                   first_name: staff?.first_name || body.first_name || 'Staff',
                   last_name: staff?.last_name || body.last_name || 'Member',
+                  role_id: roleRow?.id || null,
                   is_active: true,
                 },
                 { onConflict: 'email' }

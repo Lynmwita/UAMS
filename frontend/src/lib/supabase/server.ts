@@ -21,8 +21,9 @@ export async function activeInstitutionalUser(user: User) {
   if(!url||!key)throw new Error('Institutional account verification is not configured.');
   const db=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id))return null;
-  const {data,error}=await db.from('users').select('id,email,is_active,roles!inner(code)').or(`id.eq.${user.id},auth_user_id.eq.${user.id}`).maybeSingle();
+  const {data,error}=await db.from('users').select('id,email,is_active,roles(code)').or(`id.eq.${user.id},auth_user_id.eq.${user.id}`).maybeSingle();
   if(error)throw new Error('Institutional account verification failed.');
-  const role=(data?.roles as unknown as {code?:string}|null)?.code;
-  return data?.is_active===true&&role===trusted.role&&typeof data.email==='string'?{...trusted,id:data.id,email:data.email.toLowerCase()}:null;
+  if(!data || data.is_active !== true) return null;
+  const role=(data?.roles as unknown as {code?:string}|null)?.code || trusted.role;
+  return role===trusted.role&&typeof data.email==='string'?{...trusted,id:data.id,email:data.email.toLowerCase()}:null;
 }
