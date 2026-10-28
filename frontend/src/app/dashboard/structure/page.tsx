@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Building2, Plus, School, BookOpen, Layers, X, Check } from 'lucide-react';
+import { staffStore, countStaffByDepartment, findStaffByDisplayName } from '@/lib/hr/staff';
 
 export default function StructurePage() {
   const [createKind, setCreateKind] = useState<'departments' | 'programs'>('departments');
@@ -82,6 +83,27 @@ export default function StructurePage() {
   const [programs, setPrograms] = useState<
     { id: string; code: string; name: string; level: string; duration: string; department: string; credits: number }[]
   >([]);
+
+  // Member counts come from real staff records only. When the staff list
+  // cannot be loaded for this role, counts stay null and the column shows
+  // a dash instead of a fabricated number (audit Part 2A).
+  const [memberCounts, setMemberCounts] = useState<Record<string, number> | null>(null);
+  const [staffForMatching, setStaffForMatching] = useState<{ first_name: string; last_name: string }[] | null>(null);
+  useEffect(() => {
+    fetch('/api/v1/staff')
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok || !Array.isArray(d.data)) throw new Error('staff list unavailable');
+        setMemberCounts(countStaffByDepartment(d.data));
+        setStaffForMatching(d.data);
+      })
+      .catch(() => {
+        // Staff API is role-gated; fall back to the demo seed for name
+        // matching only, and leave member counts hidden (null).
+        setStaffForMatching([...staffStore]);
+      });
+  }, []);
+  const staffNames = staffForMatching ?? [...staffStore];
 
   useEffect(() => {
     fetch('/api/v1/departments')
@@ -398,7 +420,11 @@ export default function StructurePage() {
                 </div>
                 <h2 className="text-lg font-bold text-academic-navy-950">{s.name}</h2>
                 <div className="mt-3 text-xs text-slate-500 space-y-0.5">
-                  <p>Dean: <strong className="text-slate-800">{s.dean}</strong></p>
+                  <p>Dean: <strong className="text-slate-800">{s.dean}</strong>{!findStaffByDisplayName(s.dean, staffNames) && (
+                    <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title="No matching staff record; sample name">
+                      Sample
+                    </span>
+                  )}</p>
                   {s.deanEmail && <p className="text-slate-400 font-mono">{s.deanEmail}</p>}
                 </div>
               </div>
@@ -457,8 +483,14 @@ export default function StructurePage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-5 py-3.5 text-slate-700 font-medium">{d.hod}</td>
-                    <td className="px-5 py-3.5 text-center font-mono text-slate-600">{d.lecturers} Members</td>
+                    <td className="px-5 py-3.5 text-slate-700 font-medium">{d.hod}{!isNonAcademic && !findStaffByDisplayName(d.hod, staffNames) && (
+                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title="No matching staff record; sample name">
+                        Sample
+                      </span>
+                    )}</td>
+                    <td className="px-5 py-3.5 text-center font-mono text-slate-600" title={memberCounts === null ? 'Member count unavailable for this role' : 'Staff records linked to this department'}>
+                      {memberCounts === null ? '—' : `${memberCounts[d.id] ?? 0} Members`}
+                    </td>
                     <td className="px-5 py-3.5 text-center">
                       {isNonAcademic ? (
                         <span className="text-xs text-slate-400 italic">Central Service (N/A)</span>

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/context';
 import { roleHasPermission } from '@/lib/auth/rbac';
 import { BookOpen, Plus, Search, X } from 'lucide-react';
+import { staffStore, findStaffByDisplayName } from '@/lib/hr/staff';
 
 export default function CoursesPage() {
   const { role } = useAuth();
@@ -20,6 +21,20 @@ export default function CoursesPage() {
   const [courses,setCourses]=useState<CourseRow[]>([]);
   const mapCourse=(c:any):CourseRow=>({id:c.id,code:c.code,title:c.title,credits:c.credit_hours,level:c.level,dept:c.department,prereq:c.prerequisites.join(', ') || 'None',lecturer:c.lecturer});
   useEffect(()=>{fetch('/api/v1/courses').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);setCourses(d.data.map(mapCourse));}).catch(e=>setError(e.message));},[]);
+  // Lecturer names are linked to staff records where one matches; otherwise
+  // they are labelled Sample. Staff API is role-gated, so fall back to the
+  // demo seed for matching when it cannot be loaded.
+  const [staffForMatching, setStaffForMatching] = useState<{ first_name: string; last_name: string }[] | null>(null);
+  useEffect(() => {
+    fetch('/api/v1/staff')
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok || !Array.isArray(d.data)) throw new Error('staff list unavailable');
+        setStaffForMatching(d.data);
+      })
+      .catch(() => setStaffForMatching([...staffStore]));
+  }, []);
+  const staffNames = staffForMatching ?? [...staffStore];
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCourse, setNewCourse] = useState({
@@ -177,7 +192,11 @@ export default function CoursesPage() {
                   </td>
                   <td className="px-5 py-3.5 font-mono font-bold text-academic-navy-950">{c.credits} Cr</td>
                   <td className="px-5 py-3.5 font-mono text-xs text-slate-500">{c.prereq}</td>
-                  <td className="px-5 py-3.5 text-xs text-slate-600">{c.lecturer}{role === 'student' && <button onClick={()=>registerCourse(c)} className="ml-3 underline text-academic-navy-800">Register</button>}</td>
+                  <td className="px-5 py-3.5 text-xs text-slate-600">{c.lecturer}{c.lecturer !== 'Staff Assigned' && !findStaffByDisplayName(c.lecturer, staffNames) && (
+                    <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title="No matching staff record; sample name">
+                      Sample
+                    </span>
+                  )}{role === 'student' && <button onClick={()=>registerCourse(c)} className="ml-3 underline text-academic-navy-800">Register</button>}</td>
                 </tr>
               ))}
             </tbody>

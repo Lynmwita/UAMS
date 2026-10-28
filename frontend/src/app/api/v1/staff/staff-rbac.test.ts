@@ -153,7 +153,7 @@ test('librarian role visibility: librarian can ONLY access library and general n
   assert.equal(canAccessPage('librarian', 'audit'), false);
 });
 
-test('staff password management: registrar cannot change password for admin or super_admin', async () => {
+test('staff password management: registrar cannot change passwords at all (Super Admin only, audit Part 2A)', async () => {
   const res = await managePassword(
     makeRequest('registrar', 'POST', {
       email: 'admin@university.ac.ke',
@@ -164,12 +164,23 @@ test('staff password management: registrar cannot change password for admin or s
   );
   assert.equal(res.status, 403);
   const data = await res.json();
-  assert.match(data.error, /Registrars cannot modify administrative accounts/i);
+  assert.match(data.error, /lacks sufficient privileges/i);
 });
 
-test('staff password management: admin/registrar can set password directly for staff/librarian', async () => {
-  const res = await managePassword(
+test('staff password management: super_admin can set password directly for staff/librarian; registrar cannot', async () => {
+  const denied = await managePassword(
     makeRequest('registrar', 'POST', {
+      email: 'librarian.test@university.ac.ke',
+      action: 'set',
+      password: 'StrongPassword2026!',
+      role: 'librarian',
+      first_name: 'Test',
+      last_name: 'Librarian'
+    }, 'http://localhost:3000/api/v1/staff/password')
+  );
+  assert.equal(denied.status, 403);
+  const res = await managePassword(
+    makeRequest('super_admin', 'POST', {
       email: 'librarian.test@university.ac.ke',
       action: 'set',
       password: 'StrongPassword2026!',
@@ -190,7 +201,7 @@ test('staff password management: reset link fails closed without an institutiona
   // live recovery link back to the caller instead of emailing it. Both are
   // fixed: without a database connection the route now says so honestly.
   const res = await managePassword(
-    makeRequest('registrar', 'POST', {
+    makeRequest('super_admin', 'POST', {
       email: 'librarian.test@university.ac.ke',
       action: 'reset_link',
       role: 'librarian'
@@ -201,7 +212,7 @@ test('staff password management: reset link fails closed without an institutiona
   assert.match(data.error, /institutional database connection/i);
 });
 
-test('staff account controls: admin can delete a staff record (demo store path)', async () => {
+test('staff account controls: super_admin can delete a staff record (demo store path)', async () => {
   const { POST: deleteStaff } = await import('./delete/route');
   const { GET: listStaff } = await import('./route');
   const email = `delete.me.${Date.now()}@university.ac.ke`;
@@ -217,7 +228,7 @@ test('staff account controls: admin can delete a staff record (demo store path)'
   const createdData = await created.json();
   const staffId = createdData.data.id;
   const deleted = await deleteStaff(
-    makeRequest('admin', 'POST', { staff_id: staffId }, 'http://localhost:3000/api/v1/staff/delete')
+    makeRequest('super_admin', 'POST', { staff_id: staffId }, 'http://localhost:3000/api/v1/staff/delete')
   );
   assert.equal(deleted.status, 200);
   const deletedData = await deleted.json();
@@ -230,7 +241,7 @@ test('staff account controls: admin can delete a staff record (demo store path)'
 test('staff account controls: unlink fails closed without an institutional database', async () => {
   const { POST: unlinkStaff } = await import('./unlink/route');
   const res = await unlinkStaff(
-    makeRequest('admin', 'POST', { email: 'librarian.test@university.ac.ke' }, 'http://localhost:3000/api/v1/staff/unlink')
+    makeRequest('super_admin', 'POST', { email: 'librarian.test@university.ac.ke' }, 'http://localhost:3000/api/v1/staff/unlink')
   );
   assert.equal(res.status, 503);
   const data = await res.json();

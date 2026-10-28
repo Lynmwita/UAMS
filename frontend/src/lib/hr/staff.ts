@@ -64,7 +64,73 @@ const seed: UamsStaffMember[] = [
     is_active: true,
     joined_date: '2018-02-01',
   },
+  {
+    // Demo librarian identity, kept identical to the demo sign-in account:
+    // button "Librarian", header name derived from this email, and this
+    // record all resolve to librarian@university.ac.ke, Active. The name
+    // below is the account's display name, not a separate person.
+    id: 'staff-4',
+    staff_number: 'EUC/STAFF/004',
+    first_name: 'Librarian',
+    last_name: '',
+    email: 'librarian@university.ac.ke',
+    phone: '+254700000104',
+    role: 'librarian',
+    department_id: 'dep-library',
+    department_name: 'Library & Information Services',
+    school_id: 'central',
+    job_title: 'University Librarian',
+    qualification: '',
+    is_active: true,
+    joined_date: '2020-01-01',
+  },
 ];
+
+/** Roles that teach: the only roles a course allocation may target. */
+export const TEACHING_ROLES = ['lecturer', 'tutorial_fellow', 'hod', 'dean'] as const;
+
+export function isTeachingRole(role: string): boolean {
+  return (TEACHING_ROLES as readonly string[]).includes(String(role || '').toLowerCase());
+}
+
+/** Count staff records per department id. Used for honest department sizes. */
+export function countStaffByDepartment(
+  members: { department_id: string }[]
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const m of members) {
+    if (!m.department_id) continue;
+    counts[m.department_id] = (counts[m.department_id] || 0) + 1;
+  }
+  return counts;
+}
+
+const NAME_TITLES = ['dr.', 'prof.', 'eng.', 'mr.', 'mrs.', 'ms.'];
+
+/** Strip an academic title prefix so "Dr. Grace Kimani" matches "Grace Kimani". */
+export function stripPersonTitle(displayName: string): string {
+  const parts = String(displayName || '').trim().split(/\s+/);
+  if (parts.length > 1 && NAME_TITLES.includes(parts[0].toLowerCase())) parts.shift();
+  return parts.join(' ');
+}
+
+/**
+ * Find the staff record whose full name matches a displayed name (titles
+ * ignored, case-insensitive). Returns null when no staff record matches,
+ * in which case the displayed name must be labelled as a sample name.
+ */
+export function findStaffByDisplayName(
+  displayName: string,
+  members: { first_name: string; last_name: string }[]
+): { first_name: string; last_name: string } | null {
+  const wanted = stripPersonTitle(displayName).toLowerCase();
+  if (!wanted) return null;
+  return (
+    members.find(
+      (m) => `${m.first_name} ${m.last_name}`.trim().toLowerCase() === wanted
+    ) || null
+  );
+}
 
 const runtime = globalThis as typeof globalThis & { __uams_staffStore?: UamsStaffMember[] };
 export const staffStore: UamsStaffMember[] = runtime.__uams_staffStore || (runtime.__uams_staffStore = seed);
