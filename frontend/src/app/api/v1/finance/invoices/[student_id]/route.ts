@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireServerAuth } from '@/lib/auth/server-auth';
 
 import { invoicesStore } from '@/lib/finance/invoices';
+import { resolveDemoStudent } from '@/lib/finance/ledger-summary';
 
 export async function GET(
   request: NextRequest,
@@ -22,10 +23,11 @@ export async function GET(
   }
 
   if (user.role === 'student') {
-    const isSelf =
-      user.email.toLowerCase() === student.email ||
-      (user.email === 'student@university.ac.ke' && student.admission_number === 'BIT/2023/8849');
-    if (!isSelf) {
+    // A student may only view their own statement: match by user_id,
+    // email, or the generic demo student account, never by picking
+    // another student's id or admission number from a list.
+    const self = resolveDemoStudent(user, studentsStore);
+    if (!self || self.id !== student.id) {
       return NextResponse.json({ success: false, error: 'Students may only view their own invoices.' }, { status: 403 });
     }
   }
