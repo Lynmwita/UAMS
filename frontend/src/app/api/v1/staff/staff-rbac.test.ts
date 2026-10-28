@@ -184,7 +184,11 @@ test('staff password management: admin/registrar can set password directly for s
   assert.match(data.message, /Password set successfully/i);
 });
 
-test('staff password management: admin/registrar can dispatch recovery reset link', async () => {
+test('staff password management: reset link fails closed without an institutional database', async () => {
+  // The old code returned success here even though no email could possibly be
+  // sent (no Supabase connection in this environment) — and it handed the
+  // live recovery link back to the caller instead of emailing it. Both are
+  // fixed: without a database connection the route now says so honestly.
   const res = await managePassword(
     makeRequest('registrar', 'POST', {
       email: 'librarian.test@university.ac.ke',
@@ -192,8 +196,43 @@ test('staff password management: admin/registrar can dispatch recovery reset lin
       role: 'librarian'
     }, 'http://localhost:3000/api/v1/staff/password')
   );
-  assert.equal(res.status, 200);
+  assert.equal(res.status, 503);
   const data = await res.json();
-  assert.equal(data.success, true);
-  assert.match(data.message, /Password reset link has been dispatched/i);
+  assert.match(data.error, /institutional database connection/i);
+});
+
+test('staff account controls: admin can delete a staff record (demo store path)', async () => {
+  const { POST: deleteStaff } = await import('./delete/route');
+  const { GET: listStaff } = await import('./route');
+  const email = `delete.me.${Date.now()}@university.ac.ke`;
+  const created = await createStaff(
+    makeRequest('admin', 'POST', {
+      first_name: 'Delete',
+      last_name: 'Me',
+      email,
+      role: 'library',
+    })
+  );
+  assert.equal(created.status, 201);
+  const createdData = await created.json();
+  const staffId = createdData.data.id;
+  const deleted = await deleteStaff(
+    makeRequest('admin', 'POST', { staff_id: staffId }, 'http://localhost:3000/api/v1/staff/delete')
+  );
+  assert.equal(deleted.status, 200);
+  const deletedData = await deleted.json();
+  assert.equal(deletedData.success, true);
+  const listed = await listStaff(makeRequest('admin', 'GET'));
+  const listedData = await listed.json();
+  assert.equal(listedData.data.some((s: any) => s.id === staffId), false);
+});
+
+test('staff account controls: unlink fails closed without an institutional database', async () => {
+  const { POST: unlinkStaff } = await import('./unlink/route');
+  const res = await unlinkStaff(
+    makeRequest('admin', 'POST', { email: 'librarian.test@university.ac.ke' }, 'http://localhost:3000/api/v1/staff/unlink')
+  );
+  assert.equal(res.status, 503);
+  const data = await res.json();
+  assert.match(data.error, /institutional database connection/i);
 });

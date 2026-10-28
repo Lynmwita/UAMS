@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { IdCard, Search, Plus, ShieldX, ShieldCheck, Loader2, CheckCircle2, AlertCircle, GraduationCap, KeyRound, Pencil, Mail, Lock, X } from 'lucide-react';
+import { IdCard, Search, Plus, ShieldX, ShieldCheck, Loader2, CheckCircle2, AlertCircle, GraduationCap, KeyRound, Pencil, Mail, Lock, X, UserX, Trash2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/context';
 
 type StaffMember = {
@@ -213,7 +213,7 @@ export default function StaffPage() {
       setPasswordModalMessage({ type: 'success', text: d.message });
       setRowStatus((prev) => ({
         ...prev,
-        [passwordStaff.email]: { type: 'success', message: 'Password reset link sent to email.' },
+        [passwordStaff.email]: { type: 'success', message: d.message },
       }));
     } catch (err: any) {
       setPasswordModalMessage({ type: 'error', text: err.message });
@@ -369,6 +369,39 @@ export default function StaffPage() {
       return;
     }
     setStaff((prev) => prev.map((s) => (s.id === staff_id ? d.data : s)));
+  };
+
+  const handleUnlink = async (s: StaffMember) => {
+    if (!window.confirm(`Remove login access for ${s.first_name} ${s.last_name}? Their staff record will stay and can be re-invited.`)) return;
+    try {
+      const r = await fetch('/api/v1/staff/unlink', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: s.email }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Failed to remove login.');
+      setRowStatus((prev) => ({ ...prev, [s.email]: { type: 'success', message: d.message } }));
+    } catch (e: any) {
+      setRowStatus((prev) => ({ ...prev, [s.email]: { type: 'error', message: e.message } }));
+    }
+  };
+
+  const handleDelete = async (s: StaffMember) => {
+    if (!window.confirm(`Delete the entire staff record for ${s.first_name} ${s.last_name}? This cannot be undone.`)) return;
+    try {
+      const r = await fetch('/api/v1/staff/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staff_id: s.id }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Failed to delete staff record.');
+      setStaff((prev) => prev.filter((x) => x.id !== s.id));
+      setNotice(d.message);
+    } catch (e: any) {
+      setRowStatus((prev) => ({ ...prev, [s.email]: { type: 'error', message: e.message } }));
+    }
   };
 
   return (
@@ -876,6 +909,26 @@ export default function StaffPage() {
                       >
                         {s.is_active ? <ShieldX className="w-3 h-3 text-rose-500" /> : <ShieldCheck className="w-3 h-3 text-emerald-600" />}
                         {s.is_active ? 'Deactivate' : 'Reactivate'}
+                      </button>
+
+                      <button
+                        hidden={!canManage}
+                        className="text-xs border border-amber-200 bg-amber-50/50 hover:bg-amber-50 text-amber-800 rounded px-2 py-1 inline-flex items-center gap-1 font-medium transition"
+                        onClick={() => handleUnlink(s)}
+                        title="Remove this person's login only; the staff record stays"
+                      >
+                        <UserX className="w-3 h-3" />
+                        <span>Remove login</span>
+                      </button>
+
+                      <button
+                        hidden={!canManage}
+                        className="text-xs border border-rose-200 bg-rose-50/50 hover:bg-rose-50 text-rose-700 rounded px-2 py-1 inline-flex items-center gap-1 font-medium transition"
+                        onClick={() => handleDelete(s)}
+                        title="Delete the entire staff record (cannot be undone)"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>Delete</span>
                       </button>
                     </div>
                     {rowStatus[s.email] && (
