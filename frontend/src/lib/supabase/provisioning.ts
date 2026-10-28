@@ -4,9 +4,9 @@ import type { UserRole } from '@/types';
 /**
  * Provisioning-time portal-role resolution.
  *
- * Login (activeInstitutionalUser) only accepts the eight portal roles, and
- * only when the institutional users row carries a roles row with the exact
- * same code. Staff records, however, carry job titles (accountant, cleaner,
+ * Login (activeInstitutionalUser) only accepts portal roles, and only when
+ * the institutional users row carries a roles row with the exact same code.
+ * Staff records, however, carry job titles (accountant, cleaner,
  * tutorial_fellow, ...) and one legacy alias (library), which are NOT portal
  * roles. Passing a job title verbatim into app_metadata.role or into a
  * roles-code lookup used to create accounts that could authenticate with
@@ -18,8 +18,16 @@ import type { UserRole } from '@/types';
  *
  * resolvePortalRole is the single place that translates a staff/student
  * record into a portal role. It returns null for job titles that have no
- * portal role instead of inventing one: callers must then fail loudly
- * rather than create an account that can never sign in.
+ * portal role instead of inventing one.
+ *
+ * resolveStaffPortalRole is what staff provisioning callers use: a staff
+ * record whose job title has no portal role maps to the scoped
+ * 'support_staff' role (own roster, announcements, events, profile — no
+ * student, finance, staff-admin or academic data), so cleaners, cooks,
+ * drivers, gardeners and security staff can log in with the email +
+ * password their administrator assigned them. It returns null only when
+ * there is no staff record at all to map from; callers must then fail
+ * loudly rather than create an account that can never sign in.
  */
 const PORTAL_ROLE_ALIASES: Record<string, UserRole> = {
   library: 'librarian',
@@ -34,6 +42,21 @@ export function resolvePortalRole(...candidates: Array<unknown>): UserRole | nul
     if (alias) return alias;
   }
   return null;
+}
+
+/**
+ * Staff provisioning role: a resolved portal role when one exists,
+ * 'support_staff' when the person is a staff record whose job title has no
+ * portal role, null only when there is no staff record to map from.
+ * Students are resolved by the caller passing 'student' as a candidate.
+ */
+export function resolveStaffPortalRole(
+  staffRecordPresent: boolean,
+  ...candidates: Array<unknown>
+): UserRole | null {
+  const resolved = resolvePortalRole(...candidates);
+  if (resolved) return resolved;
+  return staffRecordPresent ? 'support_staff' : null;
 }
 
 /** Minimal structural shape of the Supabase client surface this helper uses. */

@@ -23,7 +23,11 @@ function getDemoHash(): string {
   return _demoHash;
 }
 
-export const DEMO_USERS: Record<UserRole, { email: string; passwordHash: string }> = {
+// No demo account exists for support_staff by design: support staff sign
+// in only with the email + password their administrator assigned them.
+// (Partial, not Record: the missing key is what keeps demo login from
+// inventing a support account.)
+export const DEMO_USERS: Partial<Record<UserRole, { email: string; passwordHash: string }>> = {
   super_admin: { email: 'super_admin@university.ac.ke', get passwordHash() { return getDemoHash(); } },
   admin: { email: 'admin@university.ac.ke', get passwordHash() { return getDemoHash(); } },
   registrar: { email: 'registrar@university.ac.ke', get passwordHash() { return getDemoHash(); } },

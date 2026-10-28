@@ -4,7 +4,7 @@ import { requireServerAuth } from '@/lib/auth/server-auth';
 import { institutionalDatabase } from '@/lib/academic/institutional';
 import { staffStore } from '@/lib/hr/staff';
 import { studentsStore } from '@/lib/academic/student-records';
-import { linkInstitutionalIdentity, resolvePortalRole } from '@/lib/supabase/provisioning';
+import { linkInstitutionalIdentity, resolveStaffPortalRole } from '@/lib/supabase/provisioning';
 
 export async function POST(request: Request) {
   const auth = await requireServerAuth(request, ['admin', 'super_admin', 'registrar']);
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     const dbRoleCode = user
       ? (Array.isArray(user.roles) ? user.roles[0]?.code : (user.roles as any)?.code)
       : undefined;
-    const targetRole = resolvePortalRole(dbRoleCode, staffMember?.role, requestedRole, studentMember ? 'student' : null);
+    const targetRole = resolveStaffPortalRole(!!staffMember, dbRoleCode, staffMember?.role, requestedRole, studentMember ? 'student' : null);
 
     // Registrars can invite staff members, but never admin or super_admin accounts
     if (auth.user.role === 'registrar' && (targetRole === 'admin' || targetRole === 'super_admin')) {

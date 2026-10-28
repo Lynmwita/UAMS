@@ -27,6 +27,7 @@ import { canAccessPage } from '@/lib/auth/roles';
 import { ROLE_LABELS, roleHasPermission } from '@/lib/auth/rbac';
 import InstitutionalDashboard from './InstitutionalDashboard';
 import LibrarianDashboard from './LibrarianDashboard';
+import SupportStaffDashboard from './SupportStaffDashboard';
 
 type Summary = {
   generated_at: string;
@@ -58,7 +59,7 @@ export default function DashboardExperience() {
   const [error, setError] = useState('');
   const [now] = useState(() => new Date());
   useEffect(() => {
-    if (!id.startsWith('usr-') || role === 'librarian') return;
+    if (!id.startsWith('usr-') || role === 'librarian' || role === 'support_staff') return;
     let cancelled = false;
     fetch('/api/v1/dashboard-summary', { cache: 'no-store' })
       .then(async (r) => {
@@ -71,6 +72,7 @@ export default function DashboardExperience() {
   }, [id, role]);
   if (!id.startsWith('usr-')) return <InstitutionalDashboard />;
   if (role === 'librarian') return <LibrarianDashboard />;
+  if (role === 'support_staff') return <SupportStaffDashboard />;
 
   const metrics: { label: string; value: string; detail: string; icon: typeof Users; tone: string }[] = summary
     ? role === 'student' && summary.student

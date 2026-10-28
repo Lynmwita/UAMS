@@ -3,7 +3,7 @@ import { requireServerAuth } from '@/lib/auth/server-auth';
 import { institutionalDatabase } from '@/lib/academic/institutional';
 import { staffStore } from '@/lib/hr/staff';
 import { studentsStore } from '@/lib/academic/student-records';
-import { linkInstitutionalIdentity, resolvePortalRole } from '@/lib/supabase/provisioning';
+import { linkInstitutionalIdentity, resolveStaffPortalRole } from '@/lib/supabase/provisioning';
 import { recordAuditEvent } from '@/lib/audit/audit-logger';
 import { dispatchNotification } from '@/lib/messaging/dispatcher';
 
@@ -48,16 +48,18 @@ export async function POST(request: Request) {
         // cleaner, ...) that are not portal roles; writing one verbatim
         // into app_metadata.role used to create an account whose password
         // worked but which could never pass the login gate, while this
-        // route still reported "now active and ready to log in". A record
-        // with no portal role (or a deactivated account) fails here,
-        // loudly, instead of producing another un-loggable account.
-        // (Strict resolution, not the canonical map's catch-all: an
-        // unmapped title must get an explicit portal role first.)
+        // route still reported "now active and ready to log in". Staff
+        // records whose job title has no portal role (cleaner, cook,
+        // driver, ...) now map to the scoped 'support_staff' role, so
+        // they can log in with the email + password assigned here. Only
+        // an email with no staff/student record and no usable role
+        // fails here, loudly, instead of producing another un-loggable
+        // account.
         const student = studentsStore.find((s) => s.email.toLowerCase() === emailNorm);
-        const targetRole = resolvePortalRole(staff?.role, body.role, student ? 'student' : null);
+        const targetRole = resolveStaffPortalRole(!!staff, staff?.role, body.role, student ? 'student' : null);
         if (!targetRole) {
           return NextResponse.json(
-            { success: false, error: `No portal login role can be determined for ${emailNorm}. Assign a portal role (Student, Lecturer, Librarian, Registrar, Finance Officer, HOD, Administrator) before setting a password.` },
+            { success: false, error: `No portal login role can be determined for ${emailNorm}. Invite from the person's staff or student record, or pass a portal role (Student, Lecturer, Librarian, Registrar, Finance Officer, HOD, Administrator, Support Staff) before setting a password.` },
             { status: 400 }
           );
         }
@@ -187,7 +189,7 @@ export async function POST(request: Request) {
       try {
         const resetIdentityId = linkData?.user?.id || null;
         const resetStudent = studentsStore.find((s) => s.email.toLowerCase() === emailNorm);
-        const resetRole = resolvePortalRole(staff?.role, body.role, resetStudent ? 'student' : null);
+        const resetRole = resolveStaffPortalRole(!!staff, staff?.role, body.role, resetStudent ? 'student' : null);
         if (resetIdentityId && resetRole) {
           await linkInstitutionalIdentity(db, {
             email: emailNorm,

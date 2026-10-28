@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { DEMO_USERS, isValidDemoCredentials } from '@/lib/auth/session';
-import { isUserRole } from '@/lib/auth/roles';
+import { isUserRole, OTHER_ROLE_SELECTION } from '@/lib/auth/roles';
 import { ROLE_LABELS } from '@/lib/auth/rbac';
 import { UserRole } from '@/types';
 import { createSignedToken } from '@/lib/auth/server-auth';
@@ -34,6 +34,13 @@ export async function POST(request: Request) {
   const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
   const password = typeof body?.password === 'string' ? body.password : '';
   const requestedRole = body?.role;
+  // 'other' is the "Support staff / Other" dropdown entry: it is not a
+  // role and grants nothing. It only tells the checks below to resolve
+  // the role from the account record instead of comparing against a
+  // picked value. A picked or typed role that disagrees with the record
+  // is still rejected below — a user can never gain a role by picking
+  // or typing it.
+  const roleFromRecord = requestedRole === OTHER_ROLE_SELECTION;
 
   // Specific validation checks for missing inputs
   if (!email) {
@@ -42,14 +49,14 @@ export async function POST(request: Request) {
   if (!password) {
     return NextResponse.json({ success: false, error: 'Please enter your account password.' }, { status: 400 });
   }
-  if (!requestedRole || !isUserRole(requestedRole)) {
+  if (!requestedRole || (!roleFromRecord && !isUserRole(requestedRole))) {
     return NextResponse.json({ success: false, error: 'Please select a valid Portal Role (e.g. Student, Lecturer, Administrator).' }, { status: 400 });
   }
   if (email.length > 254 || password.length > 1024) {
     return NextResponse.json({ success: false, error: 'Email or password exceeds maximum allowable length.' }, { status: 400 });
   }
 
-  const demoRoleEntry = Object.entries(DEMO_USERS).find(([, account]) => account.email.toLowerCase() === email);
+  const demoRoleEntry = Object.entries(DEMO_USERS).find(([, account]) => account?.email.toLowerCase() === email);
   const demoRole = demoRoleEntry ? (demoRoleEntry[0] as UserRole) : null;
   const isDemoAuthEnabled = process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEMO_AUTH === 'true';
 
@@ -60,7 +67,8 @@ export async function POST(request: Request) {
 
   if (demoRole && isDemoAuthEnabled) {
     // Check 1: Did the user pick the wrong role for this demo email?
-    if (requestedRole && requestedRole !== demoRole) {
+    // Skipped for 'other': the role then comes from the demo record.
+    if (!roleFromRecord && requestedRole && requestedRole !== demoRole) {
       const expectedLabel = ROLE_LABELS[demoRole] || demoRole;
       const selectedLabel = ROLE_LABELS[requestedRole as UserRole] || requestedRole;
       return NextResponse.json({
@@ -108,7 +116,7 @@ export async function POST(request: Request) {
         }, { status: 403 });
       }
 
-      if (requestedRole && requestedRole !== user.role) {
+      if (!roleFromRecord && requestedRole && requestedRole !== user.role) {
         const expectedLabel = ROLE_LABELS[user.role as UserRole] || user.role;
         const selectedLabel = ROLE_LABELS[requestedRole as UserRole] || requestedRole;
         return NextResponse.json({

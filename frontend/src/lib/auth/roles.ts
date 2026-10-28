@@ -1,6 +1,14 @@
 import type { UserRole } from '@/types';
 
-export const USER_ROLES: UserRole[] = ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student', 'librarian'];
+export const USER_ROLES: UserRole[] = ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student', 'librarian', 'support_staff'];
+
+/**
+ * Login-form sentinel, NOT a role: "Support staff / Other" means "my role
+ * isn't listed — resolve it from my record". It must never be treated as a
+ * UserRole and never grants authorization; the login route resolves the
+ * real role from the demo account or the institutional record instead.
+ */
+export const OTHER_ROLE_SELECTION = 'other';
 export function isUserRole(value: unknown): value is UserRole {
   return typeof value === 'string' && USER_ROLES.includes(value as UserRole);
 }
