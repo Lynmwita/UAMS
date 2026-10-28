@@ -8,6 +8,7 @@ import { issueRefreshToken } from '@/lib/auth/refresh-token';
 import { checkRateLimit } from '@/lib/auth/rate-limiter';
 import { validateCsrf } from '@/lib/auth/csrf';
 import { authClient, activeInstitutionalUser } from '@/lib/supabase/server';
+import { recordAuditEvent } from '@/lib/audit/audit-logger';
 
 export async function POST(request: Request) {
   if (!validateCsrf(request).valid) {
@@ -125,6 +126,20 @@ export async function POST(request: Request) {
         error: 'Institutional authentication service is temporarily unavailable. If evaluating, please use one of the demonstration accounts below.'
       }, { status: 503 });
     }
+  }
+
+  try {
+    recordAuditEvent({
+      actor_email: user.email,
+      actor_role: user.role,
+      action: 'USER_SIGNED_IN',
+      entity_type: 'User',
+      entity_id: user.id,
+      ip_address: ip,
+      status: 'SUCCESS',
+    });
+  } catch {
+    // Audit must never break a successful sign-in.
   }
 
   const response = NextResponse.json({

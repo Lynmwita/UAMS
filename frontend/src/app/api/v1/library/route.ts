@@ -11,8 +11,8 @@ let libraryBooks: LibraryBook[] = [
 ];
 
 let libraryLoans: LibraryLoan[] = [
-  { id: 'ln-01', book_id: 'bk-01', book_title: 'The C Programming Language', student_id: 'std-01', student_name: 'Alex Kiptoo Kimutai', admission_number: 'BIT/2023/8849', borrow_date: '2026-09-15', due_date: '2026-09-29', return_date: '2026-09-28', status: 'returned', fine_amount: 0 },
-  { id: 'ln-02', book_id: 'bk-03', book_title: 'Introduction to Algorithms (CLRS)', student_id: 'std-02', student_name: 'Faith Chebet Korir', admission_number: 'BCS/2023/9102', borrow_date: '2026-09-20', due_date: '2026-10-04', status: 'overdue', fine_amount: 50 },
+  { id: 'ln-01', book_id: 'bk-01', book_title: 'The C Programming Language', student_id: 'std-01', student_name: 'Faith Wanjiku', admission_number: 'BIT/2023/8849', borrow_date: '2026-09-15', due_date: '2026-09-29', return_date: '2026-09-28', status: 'returned', fine_amount: 0 },
+  { id: 'ln-02', book_id: 'bk-03', book_title: 'Introduction to Algorithms (CLRS)', student_id: 'std-02', student_name: 'Kevin Otieno', admission_number: 'BCS/2023/1204', borrow_date: '2026-09-20', due_date: '2026-10-04', status: 'overdue', fine_amount: 50 },
 ];
 
 export async function GET(req: NextRequest) {

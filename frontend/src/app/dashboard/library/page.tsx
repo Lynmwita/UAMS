@@ -20,7 +20,7 @@ export default function LibraryPage() {
   const totalFines = fines.reduce((sum, l) => sum + (l.fine_amount || 0), 0);
   const [borrowModalBook, setBorrowModalBook] = useState<LibraryBook | null>(null);
   const [studentAdmission, setStudentAdmission] = useState('BIT/2023/8849');
-  const [studentName, setStudentName] = useState('Alex Kiptoo Kimutai');
+  const [studentName, setStudentName] = useState('Faith Wanjiku');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {

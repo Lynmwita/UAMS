@@ -53,7 +53,7 @@ export default function NotificationsPage() {
   const [form, setForm] = useState({
     recipient_type: 'student',
     recipient_identifier: '+254700000000',
-    recipient_name: 'Alex Kiptoo Kimutai',
+    recipient_name: 'Faith Wanjiku',
     channel: 'sms',
     subject: 'Fee & Academic Clearance Alert',
     message_content: 'UAMS NOTIFICATION: Your examination card for Semester 1 has been approved. Log in to your portal to download.',
