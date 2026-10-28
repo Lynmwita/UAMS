@@ -26,6 +26,7 @@ import { UserRole } from '@/types';
 import { canAccessPage } from '@/lib/auth/roles';
 import { ROLE_LABELS, roleHasPermission } from '@/lib/auth/rbac';
 import InstitutionalDashboard from './InstitutionalDashboard';
+import LibrarianDashboard from './LibrarianDashboard';
 
 const defaultCourses = [
   { code: 'CSC101', title: 'Introduction to Computer Science', department: 'Computing', enrolled: '124', status: 'Active' },
@@ -42,6 +43,7 @@ export default function DashboardExperience() {
   const session = useAuth();
   const { role, id, firstName } = session;
   if(!id.startsWith('usr-'))return <InstitutionalDashboard/>;
+  if (role === 'librarian') return <LibrarianDashboard />;
   const courses = role === 'student' ? studentRegisteredCourses : defaultCourses;
   const metrics = role === 'student'
     ? [

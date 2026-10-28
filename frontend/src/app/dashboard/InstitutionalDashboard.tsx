@@ -5,6 +5,7 @@ import {useEffect,useState} from 'react';
 import {useAuth} from '@/lib/auth/context';
 import {canAccessPage} from '@/lib/auth/roles';
 import {ROLE_LABELS} from '@/lib/auth/rbac';
+import LibrarianDashboard from './LibrarianDashboard';
 
 type Metric={label:string;value:string};
 type Course={id?:string;code:string;title:string;department:string;is_active:boolean};
@@ -19,7 +20,9 @@ export default function InstitutionalDashboard(){
  const [refreshed,setRefreshed]=useState<string|null>(null);
  const [revision,setRevision]=useState(0);
  useEffect(()=>{
-  const abort=new AbortController();setSummary(empty());setCatalogue(empty());setRefreshed(null);
+  const abort=new AbortController();
+  if (role === 'librarian') return () => abort.abort();
+  setSummary(empty());setCatalogue(empty());setRefreshed(null);
   async function read(path:string){const r=await fetch('/api/v1/'+path,{cache:'no-store',signal:abort.signal});const d=await r.json();if(!r.ok||!d.success)throw new Error(d.error||'Institutional records could not be loaded.');return d.data;}
   async function metrics():Promise<Metric[]>{
    if(role==='student'){
@@ -39,6 +42,7 @@ export default function InstitutionalDashboard(){
   if(canAccessPage(role,'courses'))read('courses').then(data=>{if(!abort.signal.aborted)setCatalogue({data,error:'',loading:false});}).catch(e=>{if(!abort.signal.aborted)setCatalogue({data:null,error:e.message,loading:false});});
   return()=>abort.abort();
  },[role,id,revision]);
+ if (role === 'librarian') return <LibrarianDashboard />;
  return <div className="space-y-7">
   <header className="flex flex-wrap justify-between items-start gap-4"><div><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{new Date().toLocaleDateString('en-KE',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p><h1 className="text-3xl font-bold text-academic-navy-950 mt-2">Welcome{firstName?', '+firstName:''}</h1><p className="text-slate-600 mt-2">{ROLE_LABELS[role]} workspace. Records are limited to your authorized institutional scope.</p></div><button className="border rounded-lg px-4 py-2" onClick={()=>setRevision(n=>n+1)} disabled={summary.loading}>Refresh records</button></header>
   <section aria-label="Institutional summary" aria-busy={summary.loading}>
