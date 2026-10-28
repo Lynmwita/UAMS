@@ -3,6 +3,7 @@ import { requireServerAuth } from '@/lib/auth/server-auth';
 import { institutionalDatabase } from '@/lib/academic/institutional';
 import { staffStore } from '@/lib/hr/staff';
 import { recordAuditEvent } from '@/lib/audit/audit-logger';
+import { dispatchNotification } from '@/lib/messaging/dispatcher';
 
 export async function POST(request: Request) {
   const auth = await requireServerAuth(request, ['super_admin', 'admin', 'registrar']);
@@ -128,35 +129,59 @@ export async function POST(request: Request) {
     }
 
     if (action === 'reset_link') {
-      let resetLink: string | null = null;
-      if (db) {
-        const { data: linkData, error: linkErr } = await db.auth.admin.generateLink({
-          type: 'recovery',
-          email: emailNorm,
+      // The old code generated a recovery link but never emailed it, while the
+      // screen claimed it was sent — and it handed the live link back to the
+      // caller's browser. A reset link must reach the staff member by email
+      // only, never through the admin's response.
+      if (!db) {
+        return NextResponse.json(
+          { success: false, error: 'Password reset requires an institutional database connection.' },
+          { status: 503 }
+        );
+      }
+      const { data: linkData, error: linkErr } = await db.auth.admin.generateLink({
+        type: 'recovery',
+        email: emailNorm,
+      });
+      if (linkErr) {
+        // Fallback: Supabase sends the reset email itself.
+        const { error: resetErr } = await db.auth.resetPasswordForEmail(emailNorm);
+        if (resetErr) throw new Error(linkErr.message || resetErr.message);
+      } else {
+        const actionLink = linkData?.properties?.action_link || null;
+        if (!actionLink) throw new Error('Reset link could not be generated.');
+        const { result } = await dispatchNotification({
+          channel: 'email',
+          recipientIdentifier: emailNorm,
+          subject: 'Set your UAMS password',
+          messageContent: `Hello,\n\nA password reset was requested for your UAMS account. Use the link below to choose a new password. The link expires in 15 minutes.\n\n${actionLink}\n\nIf you did not request this, ignore this email and your password stays unchanged.`,
         });
-
-        if (linkErr) {
-          // Fallback to resetPasswordForEmail
+        if (result.status !== 'sent' || result.mode === 'mock') {
+          // The dispatcher could not really deliver (mock mode or failure):
+          // fall back to Supabase's own reset email so the staff member still
+          // receives a link, instead of claiming delivery that never happened.
           const { error: resetErr } = await db.auth.resetPasswordForEmail(emailNorm);
-          if (resetErr) throw new Error(linkErr.message || resetErr.message);
-        } else {
-          resetLink = linkData?.properties?.action_link || null;
+          if (resetErr) {
+            throw new Error(
+              result.error || resetErr.message || 'Reset link could not be emailed. Check email delivery configuration.'
+            );
+          }
         }
+      }
 
-        const actorUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(auth.user.id)
-          ? auth.user.id
-          : '00000000-0000-4000-8000-000000000001';
+      const actorUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(auth.user.id)
+        ? auth.user.id
+        : '00000000-0000-4000-8000-000000000001';
 
-        try {
-          await db.from('uams_operation_audit').insert({
-            actor_id: actorUuid,
-            operation: 'identity.password_reset_dispatched',
-            entity_id: emailNorm,
-            details: { email: emailNorm, actor: auth.user.email },
-          });
-        } catch {
-          // Non-fatal
-        }
+      try {
+        await db.from('uams_operation_audit').insert({
+          actor_id: actorUuid,
+          operation: 'identity.password_reset_dispatched',
+          entity_id: emailNorm,
+          details: { email: emailNorm, actor: auth.user.email },
+        });
+      } catch {
+        // Non-fatal
       }
 
       recordAuditEvent({
@@ -172,8 +197,7 @@ export async function POST(request: Request) {
 
       return NextResponse.json({
         success: true,
-        message: `Password reset link has been dispatched to ${emailNorm}.`,
-        link: resetLink,
+        message: `Password reset link has been emailed to ${emailNorm}.`,
       });
     }
 
