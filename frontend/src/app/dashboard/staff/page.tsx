@@ -6,7 +6,6 @@ import { useAuth } from '@/lib/auth/context';
 import { isTeachingRole } from '@/lib/hr/staff';
 import { PhotoCaptureInput } from '@/components/PhotoCaptureInput';
 import { StaffAvatar, StaffIdCardModal } from '@/components/StaffIdCard';
-
 type StaffMember = {
   id: string;
   staff_number: string;
@@ -130,6 +129,7 @@ export default function StaffPage() {
     job_title: '',
     qualification: '',
   });
+  // Staff profile photo: one photo for the list avatar and the details view.
 
   const handleOpenEdit = (s: StaffMember) => {
     setEditingStaff(s);
@@ -164,8 +164,8 @@ export default function StaffPage() {
           department_id: editForm.department_id,
           job_title: editForm.job_title,
           qualification: editForm.qualification,
-          photo_url: editPhotoUrl || null,
-        }),
+          // Send the photo only when it changed ('' on purpose = remove it).
+          ...(editPhotoUrl !== (editingStaff.photo_url || '') ? { photo_url: editPhotoUrl } : {}),        }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Failed to update staff member.');
@@ -357,8 +357,7 @@ export default function StaffPage() {
     const payload = {
       ...form,
       department_id: form.department_id || fallbackDept,
-      photo_url: formPhotoUrl || undefined,
-    };
+      photo_url: formPhotoUrl || undefined,    };
     const r = await fetch('/api/v1/staff', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -372,6 +371,7 @@ export default function StaffPage() {
     setShowForm(false);
     setFormPhotoUrl('');
     setForm({ first_name: '', last_name: '', email: '', phone: '', role: 'lecturer', department_id: '', job_title: '', qualification: '' });
+    setPhotoError('');
     setError('');
     load();
   };
@@ -560,8 +560,7 @@ export default function StaffPage() {
               name={[form.first_name, form.last_name].filter(Boolean).join(' ') || 'Staff Member'}
               label="Staff Identification & Profile Photo (Live Camera or Upload)"
               helperText="Take a live photo with camera or choose an image file. This photo appears on the official Staff ID Card and staff directory."
-            />
-          </div>
+            />          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             <div>
@@ -876,8 +875,7 @@ export default function StaffPage() {
                   <td className="p-3 font-mono text-xs font-bold text-slate-700">{s.staff_number}</td>
                   <td className="p-3">
                     <div className="flex items-center gap-2.5">
-                      <StaffAvatar name={`${s.first_name} ${s.last_name}`} photoUrl={s.photo_url} size="sm" />
-                      <div>
+                      <StaffAvatar name={`${s.first_name} ${s.last_name}`} photoUrl={s.photo_url} size="sm" />                      <div>
                         <div className="font-medium text-slate-900">
                           {s.first_name} {s.last_name}
                         </div>
@@ -1216,8 +1214,7 @@ export default function StaffPage() {
                 name={[editForm.first_name, editForm.last_name].filter(Boolean).join(' ') || 'Staff Member'}
                 label="Staff Photo (Camera or Upload)"
                 helperText="Update the photo on this staff member's official ID card and institutional profile."
-              />
-            </div>
+              />            </div>
 
             <div className="grid grid-cols-2 gap-3 pt-2">
               <div>

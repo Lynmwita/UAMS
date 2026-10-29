@@ -11,8 +11,6 @@ export const USER_ROLES: UserRole[] = [
   'librarian',
   'support_staff',
   'audit_officer',
-  'hostel_manager',
-  'support_agent',
 ];
 
 /**
@@ -35,8 +33,6 @@ export function resolveCanonicalRole(rawRole: unknown): UserRole {
   if (['hod', 'dean', 'chair'].includes(norm)) return 'hod';
   if (['finance_officer', 'finance', 'accountant', 'bursar'].includes(norm)) return 'finance_officer';
   if (['librarian', 'library'].includes(norm)) return 'librarian';
-  if (['hostel_manager', 'hostel_warden', 'housing_manager', 'warden', 'residence_manager'].includes(norm)) return 'hostel_manager';
-  if (['support_agent', 'helpdesk', 'helpdesk_agent', 'student_support', 'customer_service'].includes(norm)) return 'support_agent';
   if (['audit_officer', 'compliance_officer', 'auditor', 'internal_auditor'].includes(norm)) return 'audit_officer';
   if (['student'].includes(norm)) return 'student';
   if (['lecturer', 'faculty', 'professor', 'tutorial_fellow', 'teaching_assistant', 'lab_technician'].includes(norm)) return 'lecturer';
@@ -57,10 +53,10 @@ export const PAGE_ROLES: Record<string, UserRole[]> = {
   grades: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student', 'audit_officer'],
   exams: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student', 'audit_officer'],
   finance: ['super_admin', 'admin', 'finance_officer', 'student', 'audit_officer'],
-  hostel: ['super_admin', 'admin', 'registrar', 'hostel_manager', 'student'],
+  hostel: ['super_admin', 'admin', 'registrar', 'student'],
   library: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student', 'librarian'],
   timetable: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student'],
-  notifications: ['super_admin', 'admin', 'registrar', 'finance_officer', 'support_agent'],
+  notifications: ['super_admin', 'admin', 'registrar', 'finance_officer'],
   audit: ['super_admin', 'admin', 'audit_officer'],
   ai: USER_ROLES,
   announcements: USER_ROLES,
@@ -68,7 +64,7 @@ export const PAGE_ROLES: Record<string, UserRole[]> = {
   staff: ['super_admin', 'admin', 'registrar'],
   events: USER_ROLES,
   reports: ['super_admin', 'admin', 'registrar', 'finance_officer', 'hod', 'audit_officer'],
-  support: ['super_admin', 'admin', 'registrar', 'support_agent'],
+  support: ['super_admin', 'admin', 'registrar'],
 };
 
 export function canAccessPage(role: UserRole, module: string): boolean {

@@ -13,6 +13,7 @@ export type UamsStaffMember = {
   qualification: string;
   is_active: boolean;
   joined_date: string;
+  /** One profile photo per staff member (UAMS-only; staff never sync to the Hub). */
   photo_url?: string;
 };
 

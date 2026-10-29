@@ -2,6 +2,7 @@ import { institutionalApi } from '@/lib/academic/institutional-api';
 import { institutionalDatabase } from '@/lib/academic/institutional';
 import { resolveStaffPortalRole } from '@/lib/supabase/provisioning';
 import { staffStore, syncStaffStoreFromDatabase, type UamsStaffMember } from '@/lib/hr/staff';
+import { extractStaffPhoto, isValidStaffPhoto } from '@/lib/staff/photo';
 import { departmentsStore } from '@/lib/academic/structure';
 import { requireServerAuth } from '@/lib/auth/server-auth';
 import { recordAuditEvent } from '@/lib/audit/audit-logger';
@@ -80,6 +81,10 @@ export async function POST(request: NextRequest) {
     if (staffStore.some((s) => s.email.toLowerCase() === emailNorm)) {
       return NextResponse.json({ success: false, error: 'A staff member with this email already exists.' }, { status: 409 });
     }
+    const photo = extractStaffPhoto(body);
+    if (photo !== undefined && photo !== null && !isValidStaffPhoto(photo)) {
+      return NextResponse.json({ success: false, error: 'Profile photo must be an image (JPG/PNG/WebP) or an https photo URL.' }, { status: 400 });
+    }
 
     let fallbackDeptId = 'dep-general';
     if (role === 'library') {
@@ -121,6 +126,7 @@ export async function POST(request: NextRequest) {
       photo_url: photo_url || undefined,
       is_active: true,
       joined_date: new Date().toISOString().slice(0, 10),
+      ...(photo ? { photo_url: photo } : {}),
     };
     staffStore.push(created);
 
@@ -202,6 +208,11 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (typeof body.is_active === 'boolean') staff.is_active = body.is_active;
+    const photo = extractStaffPhoto(body);
+    if (photo !== undefined && photo !== null && !isValidStaffPhoto(photo)) {
+      return NextResponse.json({ success: false, error: 'Profile photo must be an image (JPG/PNG/WebP) or an https photo URL.' }, { status: 400 });
+    }
+    if (photo !== undefined) staff.photo_url = photo || undefined;
     if (body.first_name) staff.first_name = String(body.first_name).trim();
     if (body.last_name) staff.last_name = String(body.last_name).trim();
     if (body.job_title) staff.job_title = String(body.job_title);

@@ -284,20 +284,6 @@ function LoginForm() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleFillDemoCredentials('hostel_manager')}
-                  className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
-                >
-                  Hostel Manager
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleFillDemoCredentials('support_agent')}
-                  className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
-                >
-                  Support Agent
-                </button>
-                <button
-                  type="button"
                   onClick={() => handleFillDemoCredentials('student')}
                   className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
                 >

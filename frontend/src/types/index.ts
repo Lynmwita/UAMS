@@ -8,9 +8,7 @@ export type UserRole =
   | 'student'
   | 'librarian'
   | 'support_staff'
-  | 'audit_officer'
-  | 'hostel_manager'
-  | 'support_agent';
+  | 'audit_officer';
 
 export interface User {
   id: string;

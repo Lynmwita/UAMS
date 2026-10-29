@@ -25,10 +25,8 @@ export const ROLE_HIERARCHY: Record<UserRole, number> = {
   audit_officer: 85,
   registrar: 80,
   hod: 70,
-  hostel_manager: 65,
   lecturer: 60,
   finance_officer: 60,
-  support_agent: 55,
   librarian: 50,
   student: 10,
   support_staff: 5,
@@ -42,8 +40,6 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   hod: 'Head of Department',
   lecturer: 'Lecturer / Faculty',
   finance_officer: 'Finance Officer',
-  hostel_manager: 'Hostel & Housing Manager',
-  support_agent: 'Student Support Agent',
   librarian: 'University Librarian',
   student: 'Student',
   support_staff: 'Support Staff',
@@ -138,13 +134,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "grades:read",
     "exams:read"
   ],
-  // Dedicated hostel & residential hall allocations and management.
-  "hostel_manager": [
-    "hostels:read",
-    "hostels:allocate"
-  ],
-  // Student support agent: resolves tickets, inquiries and notifications.
-  "support_agent": [],
   // Support staff hold no data permissions: their dashboard is their own
   // roster, general announcements and events, and their own profile.
   "support_staff": []

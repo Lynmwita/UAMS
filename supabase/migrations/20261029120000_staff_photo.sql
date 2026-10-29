@@ -7,7 +7,11 @@
 -- This migration updates public.uams_staff_records view to expose:
 -- u.avatar_url as photo_url, u.avatar_url as avatar_url
 --
--- Apply in the Supabase SQL Editor.
+-- Hub-sync ruling: staff records NEVER sync to the Student Hub, so staff
+-- photos are UAMS-only by design. No feed changes needed.
+--
+-- Apply manually in the Supabase SQL Editor at deploy time, like the other
+-- migrations.
 
 create or replace view public.uams_staff_records with(security_invoker=true) as
  select st.id,st.staff_number,u.first_name,u.last_name,u.email,u.phone_number phone,r.code role,st.department_id,

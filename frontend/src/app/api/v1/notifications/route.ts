@@ -30,7 +30,7 @@ function outcomeMessage(log: NotificationLog): string {
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requireServerAuth(req, ['super_admin', 'admin', 'registrar', 'finance_officer', 'support_agent']);
+  const auth = await requireServerAuth(req, ['super_admin', 'admin', 'registrar', 'finance_officer']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }

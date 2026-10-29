@@ -7,7 +7,7 @@ import { HostelBlock, HostelRoom, HostelAllocation } from '@/types';
 
 export default function HostelPage() {
   const { role } = useAuth();
-  const canSeeWardenPhones = ['super_admin', 'admin', 'registrar', 'hostel_manager'].includes(role);
+  const canSeeWardenPhones = ['super_admin', 'admin', 'registrar'].includes(role);
   const occupancyLabel = (status: string) =>
     status === 'checked_in' ? 'Checked in' : status === 'checked_out' ? 'Checked out' : 'Allocated';
   const paymentLabel = (payment: string) => (payment === 'paid' || payment === 'cleared' ? 'Paid' : 'Pending');

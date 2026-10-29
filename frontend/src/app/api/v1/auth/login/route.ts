@@ -93,7 +93,7 @@ export async function POST(request: Request) {
       const { data, error } = await authClient().auth.signInWithPassword({ email, password });
       if (error || !data.session || !data.user) {
         const isDemoDomain = email.includes('@university.ac.ke');
-        const looksLikeDemoRole = email.includes('student') || email.includes('lecturer') || email.includes('admin') || email.includes('hod') || email.includes('registrar') || email.includes('finance') || email.includes('librarian') || email.includes('auditor') || email.includes('hostel') || email.includes('support');
+        const looksLikeDemoRole = email.includes('student') || email.includes('lecturer') || email.includes('admin') || email.includes('hod') || email.includes('registrar') || email.includes('finance') || email.includes('librarian') || email.includes('auditor');
 
         if (looksLikeDemoRole || isDemoDomain) {
           return NextResponse.json({

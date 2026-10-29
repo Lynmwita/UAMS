@@ -37,8 +37,6 @@ export const DEMO_USERS: Partial<Record<UserRole, { email: string; passwordHash:
   student: { email: 'student@university.ac.ke', get passwordHash() { return getDemoHash(); } },
   librarian: { email: 'librarian@university.ac.ke', get passwordHash() { return getDemoHash(); } },
   audit_officer: { email: 'audit_officer@university.ac.ke', get passwordHash() { return getDemoHash(); } },
-  hostel_manager: { email: 'hostel_manager@university.ac.ke', get passwordHash() { return getDemoHash(); } },
-  support_agent: { email: 'support_agent@university.ac.ke', get passwordHash() { return getDemoHash(); } },
 };
 
 export function normalizeRole(role?: string): UserRole {
