@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { IdCard, Search, Plus, ShieldX, ShieldCheck, Loader2, CheckCircle2, AlertCircle, GraduationCap, KeyRound, Pencil, Mail, Lock, X, UserX, Trash2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/context';
 import { isTeachingRole } from '@/lib/hr/staff';
+import { StudentAvatar } from '@/components/StudentIdCard';
+import { fileToStaffPhotoDataUrl } from '@/lib/staff/photo';
 
 type StaffMember = {
   id: string;
@@ -18,6 +20,7 @@ type StaffMember = {
   qualification: string;
   is_active: boolean;
   joined_date: string;
+  photo_url?: string;
 };
 
 const DEFAULT_ROLES = [
@@ -124,9 +127,14 @@ export default function StaffPage() {
     job_title: '',
     qualification: '',
   });
+  // Staff profile photo: one photo for the list avatar and the details view.
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [photoError, setPhotoError] = useState('');
+  const [editPhotoUrl, setEditPhotoUrl] = useState('');
 
   const handleOpenEdit = (s: StaffMember) => {
     setEditingStaff(s);
+    setEditPhotoUrl(s.photo_url || '');
     setEditForm({
       first_name: s.first_name,
       last_name: s.last_name,
@@ -157,6 +165,8 @@ export default function StaffPage() {
           department_id: editForm.department_id,
           job_title: editForm.job_title,
           qualification: editForm.qualification,
+          // Send the photo only when it changed ('' on purpose = remove it).
+          ...(editPhotoUrl !== (editingStaff.photo_url || '') ? { photo_url: editPhotoUrl } : {}),
         }),
       });
       const d = await res.json();
@@ -349,6 +359,7 @@ export default function StaffPage() {
     const payload = {
       ...form,
       department_id: form.department_id || fallbackDept,
+      ...(photoUrl ? { photo_url: photoUrl } : {}),
     };
     const r = await fetch('/api/v1/staff', {
       method: 'POST',
@@ -362,6 +373,8 @@ export default function StaffPage() {
     }
     setShowForm(false);
     setForm({ first_name: '', last_name: '', email: '', phone: '', role: 'lecturer', department_id: '', job_title: '', qualification: '' });
+    setPhotoUrl('');
+    setPhotoError('');
     setError('');
     load();
   };
@@ -541,6 +554,40 @@ export default function StaffPage() {
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <h3 className="font-bold text-slate-900 text-sm">Register New University Staff Member</h3>
             <span className="text-xs text-slate-500">Academic, Technical, Administrative, and Support Roles</span>
+          </div>
+
+          {/* Profile photo: one photo for the list avatar and the details view. */}
+          <div className="flex items-center gap-4 pb-1">
+            <StudentAvatar name={`${form.first_name} ${form.last_name}`.trim() || 'New Staff'} photoUrl={photoUrl || undefined} size="lg" />
+            <div>
+              <label htmlFor="staff-photo-input" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-academic-navy-900 hover:bg-academic-navy-800 text-white rounded-lg text-xs font-semibold cursor-pointer transition">
+                <span>{photoUrl ? 'Change photo' : 'Upload photo'}</span>
+              </label>
+              <input
+                id="staff-photo-input"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setPhotoError('');
+                  try {
+                    setPhotoUrl(await fileToStaffPhotoDataUrl(file));
+                  } catch (err: any) {
+                    setPhotoError(err.message || 'That photo could not be used.');
+                  }
+                  e.target.value = '';
+                }}
+              />
+              {photoUrl && (
+                <button type="button" onClick={() => setPhotoUrl('')} className="ml-2 text-xs text-slate-500 hover:text-red-600 underline">
+                  Remove
+                </button>
+              )}
+              <p className="text-[11px] text-slate-500 mt-1">Optional. Square JPG/PNG, cropped automatically.</p>
+              {photoError && <p className="text-[11px] text-red-600 mt-1">{photoError}</p>}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
@@ -855,10 +902,15 @@ export default function StaffPage() {
                 <tr key={s.id} className="hover:bg-slate-50/60 transition">
                   <td className="p-3 font-mono text-xs font-bold text-slate-700">{s.staff_number}</td>
                   <td className="p-3">
-                    <div className="font-medium text-slate-900">
-                      {s.first_name} {s.last_name}
+                    <div className="flex items-center gap-2.5">
+                      <StudentAvatar name={`${s.first_name} ${s.last_name}`} photoUrl={s.photo_url} size="sm" />
+                      <div>
+                        <div className="font-medium text-slate-900">
+                          {s.first_name} {s.last_name}
+                        </div>
+                        <div className="text-xs text-muted-foreground">{s.email}</div>
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground">{s.email}</div>
                   </td>
                   <td className="p-3 font-medium text-slate-800">
                     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-800 border border-slate-200">
@@ -1172,6 +1224,38 @@ export default function StaffPage() {
               >
                 <X className="w-5 h-5" />
               </button>
+            </div>
+
+            {/* Profile photo: change or remove. */}
+            <div className="flex items-center gap-4 pt-1">
+              <StudentAvatar name={`${editForm.first_name} ${editForm.last_name}`.trim() || 'Staff'} photoUrl={editPhotoUrl || undefined} size="lg" />
+              <div>
+                <label htmlFor="staff-edit-photo-input" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-academic-navy-900 hover:bg-academic-navy-800 text-white rounded-lg text-xs font-semibold cursor-pointer transition">
+                  <span>{editPhotoUrl ? 'Change photo' : 'Upload photo'}</span>
+                </label>
+                <input
+                  id="staff-edit-photo-input"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      setEditPhotoUrl(await fileToStaffPhotoDataUrl(file));
+                    } catch (err: any) {
+                      setError(err.message || 'That photo could not be used.');
+                    }
+                    e.target.value = '';
+                  }}
+                />
+                {editPhotoUrl && (
+                  <button type="button" onClick={() => setEditPhotoUrl('')} className="ml-2 text-xs text-slate-500 hover:text-red-600 underline">
+                    Remove
+                  </button>
+                )}
+                <p className="text-[11px] text-slate-500 mt-1">Square JPG/PNG, cropped automatically.</p>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3 pt-2">
