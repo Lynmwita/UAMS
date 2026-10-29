@@ -207,7 +207,7 @@ export default function AdmissionsPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              Admissions & Enrollment Registry
+              Admissions & Enrolment Registry
             </h1>
             <p className="text-sm text-slate-500">
               Manage KUCCPS placement imports, review direct applications, and issue official admission letters.
@@ -247,6 +247,8 @@ export default function AdmissionsPage() {
           In-Memory Mode
         </span>
       </div>
+
+      <p className="text-xs text-slate-500">Sample demo records: applicant contacts shown in the table are fictional (demo.example addresses and 0700 000 00x numbers), and the KUCCPS applicant Dennis Kiprop is a different person from the enrolled student Brian Kiprono.</p>
 
       {error && (
         <div className="p-4 bg-rose-50 border border-rose-200 rounded-lg text-sm text-rose-800 flex items-center gap-3">

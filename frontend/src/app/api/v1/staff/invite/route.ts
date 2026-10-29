@@ -3,6 +3,8 @@ import crypto from 'crypto';
 import { requireServerAuth } from '@/lib/auth/server-auth';
 import { institutionalDatabase } from '@/lib/academic/institutional';
 import { staffStore } from '@/lib/hr/staff';
+import { studentsStore } from '@/lib/academic/student-records';
+import { linkInstitutionalIdentity, resolveStaffPortalRole } from '@/lib/supabase/provisioning';
 
 export async function POST(request: Request) {
   const auth = await requireServerAuth(request, ['admin', 'super_admin', 'registrar']);
@@ -45,13 +47,19 @@ export async function POST(request: Request) {
       }
     }
 
-    // 2. If not found in database, check staffStore or request payload
+    // 2. If not found in database, check staffStore or request payload.
+    // The portal login role is resolved, never defaulted: the old code
+    // defaulted an email-only invite (the students page sends only an
+    // email) to 'lecturer', provisioning students as lecturers, and
+    // passed staff job titles verbatim, which login then rejected. A
+    // student record match resolves to 'student'; anything with no
+    // portal role fails below instead of creating an un-loggable account.
     const staffMember = staffStore.find((s) => s.email.toLowerCase() === emailNorm);
-    const targetRole = String(
-      user
-        ? (Array.isArray(user.roles) ? user.roles[0]?.code : (user.roles as any)?.code)
-        : (staffMember?.role || requestedRole || 'lecturer')
-    ).toLowerCase();
+    const studentMember = studentsStore.find((s) => s.email.toLowerCase() === emailNorm);
+    const dbRoleCode = user
+      ? (Array.isArray(user.roles) ? user.roles[0]?.code : (user.roles as any)?.code)
+      : undefined;
+    const targetRole = resolveStaffPortalRole(!!staffMember, dbRoleCode, staffMember?.role, requestedRole, studentMember ? 'student' : null);
 
     // Registrars can invite staff members, but never admin or super_admin accounts
     if (auth.user.role === 'registrar' && (targetRole === 'admin' || targetRole === 'super_admin')) {
@@ -71,15 +79,27 @@ export async function POST(request: Request) {
 
     // 3. Provision into users table if not already present
     if (!user) {
+      if (!targetRole) {
+        return NextResponse.json(
+          { success: false, error: `No portal login role can be determined for ${emailNorm}. Invite from the person's staff or student record, or pass a portal role (Student, Lecturer, Librarian, Registrar, Finance Officer, HOD, Administrator).` },
+          { status: 400 }
+        );
+      }
       const { data: roleRow } = await db
         .from('roles')
         .select('id,code')
         .eq('code', targetRole)
         .maybeSingle();
 
+      if (!roleRow?.id) {
+        throw new Error(
+          `Portal role '${targetRole}' is not configured in the institutional database, so no login can be linked for ${emailNorm}.`
+        );
+      }
+
       const newUserId = crypto.randomUUID();
-      const firstName = staffMember?.first_name || body.first_name || 'Staff';
-      const lastName = staffMember?.last_name || body.last_name || 'Member';
+      const firstName = staffMember?.first_name || studentMember?.first_name || body.first_name || 'Staff';
+      const lastName = staffMember?.last_name || studentMember?.last_name || body.last_name || 'Member';
       const phone = staffMember?.phone || body.phone || null;
 
       const { data: createdUser } = await db
@@ -90,35 +110,37 @@ export async function POST(request: Request) {
           first_name: firstName,
           last_name: lastName,
           phone_number: phone,
-          role_id: roleRow?.id || null,
+          role_id: roleRow.id,
           is_active: true,
         })
         .select('id,email,is_active,auth_user_id')
         .maybeSingle();
 
-      if (createdUser) {
-        user = {
-          ...createdUser,
-          roles: roleRow ? { code: roleRow.code } : { code: targetRole },
-        };
-      } else {
-        // Fallback representation if direct table insert was blocked
-        user = {
-          id: newUserId,
-          email: emailNorm,
-          is_active: true,
-          auth_user_id: null,
-          roles: { code: targetRole },
-        };
+      if (!createdUser) {
+        throw new Error('Institutional identity could not be created. Check the database and retry.');
       }
+      user = {
+        ...createdUser,
+        roles: { code: roleRow.code },
+      };
     }
 
-    if (!user || !user.is_active) {
-      return NextResponse.json({ success: false, error: 'Active academic identity not found.' }, { status: 404 });
+    // Only a genuinely deactivated row is refused here. A row whose
+    // is_active was never set (NULL, as written by the workflow
+    // functions) is not a deactivation: it is repaired to active when
+    // the login is linked below. The old `!user.is_active` check treated
+    // NULL as deactivated and turned fresh workflow records away.
+    if (user?.is_active === false) {
+      return NextResponse.json({ success: false, error: 'This account is deactivated. Reactivate it through the staff status flow before inviting.' }, { status: 404 });
+    }
+    if (!targetRole) {
+      return NextResponse.json(
+        { success: false, error: `No portal login role can be determined for ${emailNorm}. Invite from the person's staff or student record, or pass a portal role (Student, Lecturer, Librarian, Registrar, Finance Officer, HOD, Administrator).` },
+        { status: 400 }
+      );
     }
 
-    const roles = user.roles as unknown as { code: string } | { code: string }[];
-    const role = Array.isArray(roles) ? roles[0]?.code : roles?.code || targetRole || 'lecturer';
+    const role = targetRole;
 
     if (auth.user.role === 'registrar' && (role === 'admin' || role === 'super_admin')) {
       return NextResponse.json(
@@ -189,11 +211,26 @@ export async function POST(request: Request) {
       app_metadata: { role },
     });
     if (roleError) throw new Error('Account role could not be assigned. Retry invitation to finish account linking.');
+    if (!identityId) throw new Error('Account identity could not be resolved. Retry invitation to finish account linking.');
 
     try {
-      await db.from('users').update({ auth_user_id: identityId, updated_at: new Date().toISOString() }).eq('id', user.id);
-    } catch {
-      // non-fatal
+      // Link the Auth identity AND repair the login row in one write:
+      // role_id for the resolved portal role and is_active=true. The old
+      // code only wrote auth_user_id, so a row created without a role
+      // (or with is_active never set) stayed un-loggable after the
+      // invite was accepted, with login reporting "currently inactive".
+      await linkInstitutionalIdentity(db, {
+        email: user.email,
+        authUserId: identityId,
+        role,
+      });
+    } catch (error: any) {
+      // A deactivated row must surface as deactivated, not as a generic
+      // invite failure; other link failures are fatal to the invite.
+      if (/deactivated/i.test(error?.message || '')) {
+        return NextResponse.json({ success: false, error: error.message }, { status: 404 });
+      }
+      throw error;
     }
 
     const actorUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(auth.user.id)

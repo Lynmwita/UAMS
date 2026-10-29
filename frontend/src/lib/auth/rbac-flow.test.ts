@@ -13,6 +13,7 @@ import * as attendance from '../../app/api/v1/attendance/route';
 import * as library from '../../app/api/v1/library/route';
 import { POST as stk } from '../../app/api/v1/finance/mpesa/stkpush/route';
 import { USER_ROLES, canAccessPage } from './roles';
+import { DEMO_USERS } from './session';
 import { createSignedToken, verifySignedToken } from './server-auth';
 import type { UserRole } from '@/types';
 
@@ -51,7 +52,13 @@ test('all seven roles obey the API authorization matrix',async()=>{
 });
 
 test('login derives the role from credentials, rejects mismatches, and keeps token in cookies',async()=>{
-  for(const [index,role] of USER_ROLES.entries()){
+  // Only roles with a demo account can log in this way. support_staff
+  // deliberately has no demo account: support staff sign in only with
+  // the email + password their administrator assigned them, so it is
+  // excluded here (its login path is covered by the support-staff
+  // tests, including 'other' resolving from the record).
+  const demoRoles = Object.keys(DEMO_USERS) as UserRole[];
+  for(const [index,role] of demoRoles.entries()){
     const req=new Request('http://localhost:3000/api/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json','x-forwarded-for':`test-role-${index}`},body:JSON.stringify({email:`${role}@university.ac.ke`,password:'DemoPassword2026!',role})});
     const res=await login(req);assert.equal(res.status,200);
     const body=await res.json();assert.equal(body.user.role,role);assert.equal(body.token,undefined);

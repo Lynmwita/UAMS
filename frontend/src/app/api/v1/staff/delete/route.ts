@@ -5,8 +5,9 @@ import { staffStore } from '@/lib/hr/staff';
 import { recordAuditEvent } from '@/lib/audit/audit-logger';
 
 /**
- * Delete a whole staff record. Admin-only, and always confirmed in the UI
- * before this route is called — deletion cannot be undone.
+ * Delete a whole staff record. Super Admin only, and always confirmed in
+ * the UI with a typed email before this route is called — deletion cannot
+ * be undone. Both the demo path and the institutional path pass this gate.
  *
  * The staff record row is deleted. The linked login is also deleted, while
  * the identity row in `users` is kept but deactivated so audit history

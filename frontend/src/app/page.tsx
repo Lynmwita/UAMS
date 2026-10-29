@@ -20,6 +20,7 @@ export default function Home() {
     { title: 'Head of Department', desc: 'Departmental curricula, lecturer unit allocation, and academic moderation.', href: '/login?role=hod' },
     { title: 'Academic Faculty', desc: 'Lecture attendance sessions, CAT continuous assessment, and exam mark submission.', href: '/login?role=lecturer' },
     { title: 'Finance & Bursar Desk', desc: 'Fee invoicing, M-Pesa STK reconciliation, bank slips, and fee clearances.', href: '/login?role=finance_officer' },
+    { title: 'University Librarian', desc: 'Library catalogue, book loans, circulation, and outstanding fines.', href: '/login?role=librarian' },
     { title: 'Student Portal', desc: 'Semester course registration, class schedules, exam slips, and fee payments.', href: '/login?role=student' },
   ];
 
@@ -29,7 +30,7 @@ export default function Home() {
     { icon: BookOpen, title: 'Curriculum & Prerequisites', desc: 'Strict validation of credit hour caps, prerequisite course checking, and add/drop windows.' },
     { icon: Award, title: '4.0 GPA & Examination Engine', desc: 'Weighted continuous assessment (CAT) + exam calculation with automated transcript generation.' },
     { icon: CreditCard, title: 'M-Pesa & Bank Reconciliation', desc: 'Direct Safaricom Daraja STK Push integration with automated ledger clearing and bank slip auditing.' },
-    { icon: ShieldCheck, title: 'Server-Enforced RBAC', desc: 'PostgreSQL Row Level Security policies ensuring zero-trust isolation across academic and financial records.' },
+    { icon: ShieldCheck, title: 'Server-Enforced RBAC', desc: 'Role checks enforced on every API route, with PostgreSQL row-level security policies on selected tables (announcements, admissions, support records).' },
   ];
 
   return (
@@ -46,7 +47,7 @@ export default function Home() {
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white max-w-4xl mx-auto leading-tight">
-              University Administration & Academic Management System
+              University of Advanced Management Sciences
             </h1>
 
             <p className="mt-6 text-base sm:text-lg text-slate-300 max-w-3xl mx-auto leading-relaxed">
@@ -62,10 +63,10 @@ export default function Home() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
-                href="/dashboard"
+                href="/login"
                 className="bg-academic-navy-800 hover:bg-academic-navy-700 text-slate-100 font-semibold px-6 py-3 rounded-lg border border-academic-navy-600 transition"
               >
-                Explore Live Dashboard
+                Sign in to dashboard
               </Link>
             </div>
           </div>
@@ -146,7 +147,7 @@ export default function Home() {
 
       <footer className="bg-academic-navy-950 text-slate-400 border-t border-academic-navy-800 py-8 text-center text-xs">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div>University Administration Management System (UAMS)</div>
+          <div>University of Advanced Management Sciences (UAMS)</div>
           <div className="text-academic-gold-400 font-medium">Standard Academic Governance Framework</div>
         </div>
       </footer>

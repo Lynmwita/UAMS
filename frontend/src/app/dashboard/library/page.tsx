@@ -9,13 +9,18 @@ import { LibraryBook, LibraryLoan } from '@/types';
 export default function LibraryPage() {
   const {role}=useAuth();
   const canLoan=role==='student'||roleHasPermission(role,'library:loan');
+  const canManageCatalog=role==='super_admin'||role==='librarian';
   const [books, setBooks] = useState<LibraryBook[]>([]);
   const [loans, setLoans] = useState<LibraryLoan[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'catalog' | 'loans'>('catalog');
+  const [activeTab, setActiveTab] = useState<'catalog' | 'loans' | 'fines'>('catalog');
+  const [addBookOpen, setAddBookOpen] = useState(false);
+  const [newBook, setNewBook] = useState({ title: '', author: '', isbn: '', category: 'Computer Science', publisher: '', shelf_location: '', total_copies: 5 });
+  const fines = loans.filter((l) => (l.fine_amount || 0) > 0);
+  const totalFines = fines.reduce((sum, l) => sum + (l.fine_amount || 0), 0);
   const [borrowModalBook, setBorrowModalBook] = useState<LibraryBook | null>(null);
   const [studentAdmission, setStudentAdmission] = useState('BIT/2023/8849');
-  const [studentName, setStudentName] = useState('Alex Kiptoo Kimutai');
+  const [studentName, setStudentName] = useState('Faith Wanjiku');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
@@ -121,7 +126,23 @@ export default function LibraryPage() {
           >
             Active Circulation ({loans.filter((l) => l.status === 'borrowed').length})
           </button>
+          <button
+            onClick={() => setActiveTab('fines')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${
+              activeTab === 'fines' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Fines ({fines.length})
+          </button>
         </div>
+        {canManageCatalog && (
+          <button
+            onClick={() => setAddBookOpen(true)}
+            className="bg-academic-navy-900 hover:bg-academic-navy-950 text-academic-gold-400 font-bold py-2 px-3 rounded-lg text-xs transition shadow"
+          >
+            + Add Book
+          </button>
+        )}
       </div>
 
       {message && (
@@ -237,6 +258,103 @@ export default function LibraryPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'fines' && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+            <h2 className="text-sm font-bold text-slate-800">Outstanding Library Fines</h2>
+            <span className="text-xs font-bold text-slate-600">Total outstanding: KES {totalFines.toLocaleString()}</span>
+          </div>
+          {fines.length === 0 ? (
+            <p className="p-5 text-sm text-slate-500">No outstanding fines. Fines accrue on overdue loans and are shown here per loan.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-100 text-slate-700 font-semibold uppercase">
+                  <tr>
+                    <th className="p-3">Book Title</th>
+                    <th className="p-3">Borrower</th>
+                    <th className="p-3">Due Date</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3 text-right">Fine (KES)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {fines.map((l) => (
+                    <tr key={l.id} className="hover:bg-slate-50">
+                      <td className="p-3 font-semibold text-slate-900">{l.book_title}</td>
+                      <td className="p-3">{l.student_name}<div className="text-[10px] font-mono text-slate-500">{l.admission_number}</div></td>
+                      <td className="p-3 font-mono text-slate-600">{l.due_date}</td>
+                      <td className="p-3"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-rose-100 text-rose-800">{l.status}</span></td>
+                      <td className="p-3 text-right font-bold text-slate-900">{(l.fine_amount || 0).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="p-4 text-[11px] text-slate-500 border-t border-slate-100">Fines are settled at the library desk; this view lists what each overdue loan owes. It does not change fee balances on the Fees &amp; Finance page.</p>
+        </div>
+      )}
+
+      {addBookOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 space-y-4 shadow-xl">
+            <h3 className="text-base font-bold text-slate-900">Add Book to Catalogue</h3>
+            <p className="text-xs text-slate-500">Catalogue management lives here, for Super Admin and Librarian roles.</p>
+            <form
+              className="space-y-3"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setMessage(null);
+                try {
+                  const res = await fetch('/api/v1/library', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'add_book', ...newBook }) });
+                  const data = await res.json();
+                  if (data.success) { setMessage({ type: 'success', text: data.message }); setAddBookOpen(false); fetchLibraryData(); }
+                  else setMessage({ type: 'error', text: data.error || 'Could not add book.' });
+                } catch { setMessage({ type: 'error', text: 'Network error occurred.' }); }
+              }}
+            >
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Title</label>
+                <input required value={newBook.title} onChange={(e) => setNewBook({ ...newBook, title: e.target.value })} className="w-full text-xs p-2 rounded-lg border border-slate-300" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Author</label>
+                <input required value={newBook.author} onChange={(e) => setNewBook({ ...newBook, author: e.target.value })} className="w-full text-xs p-2 rounded-lg border border-slate-300" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">ISBN</label>
+                  <input required value={newBook.isbn} onChange={(e) => setNewBook({ ...newBook, isbn: e.target.value })} className="w-full text-xs p-2 rounded-lg border border-slate-300 font-mono" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Category</label>
+                  <input value={newBook.category} onChange={(e) => setNewBook({ ...newBook, category: e.target.value })} className="w-full text-xs p-2 rounded-lg border border-slate-300" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Publisher</label>
+                  <input value={newBook.publisher} onChange={(e) => setNewBook({ ...newBook, publisher: e.target.value })} className="w-full text-xs p-2 rounded-lg border border-slate-300" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Shelf Location</label>
+                  <input value={newBook.shelf_location} onChange={(e) => setNewBook({ ...newBook, shelf_location: e.target.value })} className="w-full text-xs p-2 rounded-lg border border-slate-300 font-mono" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Total Copies</label>
+                <input type="number" min="1" value={newBook.total_copies} onChange={(e) => setNewBook({ ...newBook, total_copies: Number(e.target.value) })} className="w-full text-xs p-2 rounded-lg border border-slate-300" />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setAddBookOpen(false)} className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
+                <button type="submit" className="px-4 py-1.5 text-xs bg-academic-navy-900 text-academic-gold-400 font-bold rounded-lg shadow">Add Book</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

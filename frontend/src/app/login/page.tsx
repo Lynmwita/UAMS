@@ -7,7 +7,7 @@ import Navbar from '@/components/Navbar';
 import { GraduationCap, Lock, Mail, ArrowRight, ShieldCheck, Landmark, AlertCircle } from 'lucide-react';
 import { UserRole } from '@/types';
 import { ROLE_LABELS } from '@/lib/auth/rbac';
-import { isUserRole } from '@/lib/auth/roles';
+import { isUserRole, OTHER_ROLE_SELECTION } from '@/lib/auth/roles';
 
 const DEMO_PASSWORD = 'DemoPassword2026!';
 
@@ -15,12 +15,13 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const roleParam = searchParams.get('role');
-  const initialRole = isUserRole(roleParam) ? roleParam : 'student';
+  const initialRole: UserRole | typeof OTHER_ROLE_SELECTION =
+    roleParam === OTHER_ROLE_SELECTION ? OTHER_ROLE_SELECTION : isUserRole(roleParam) ? roleParam : 'student';
   const demoEnabled = (process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_ENABLE_DEMO_AUTH === 'true') && process.env.NEXT_PUBLIC_DISABLE_DEMO_CREDENTIALS !== 'true';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [selectedRole, setSelectedRole] = useState<UserRole>(initialRole);
+  const [selectedRole, setSelectedRole] = useState<UserRole | typeof OTHER_ROLE_SELECTION>(initialRole);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -35,7 +36,7 @@ function LoginForm() {
     void restoreSession();return()=>{active=false;};
   },[router,searchParams]);
 
-  const authenticate = async (nextRole: UserRole, nextEmail: string, nextPassword: string) => {
+  const authenticate = async (nextRole: UserRole | typeof OTHER_ROLE_SELECTION, nextEmail: string, nextPassword: string) => {
     try {
       const response = await fetch('/api/v1/auth/login', {
         method: 'POST',
@@ -133,7 +134,7 @@ function LoginForm() {
               </label>
               <select
                 value={selectedRole}
-                onChange={(e) => setSelectedRole(e.target.value as UserRole)}
+                onChange={(e) => setSelectedRole(e.target.value as UserRole | typeof OTHER_ROLE_SELECTION)}
                 className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-academic-navy-700 focus:bg-white"
               >
                 {Object.entries(ROLE_LABELS).map(([code, label]) => (
@@ -141,7 +142,21 @@ function LoginForm() {
                     {label}
                   </option>
                 ))}
+                {/* Not a role: tells the server to resolve the role from
+                    the admin's record for this email. It grants nothing
+                    on its own — sign-in still requires the administrator
+                    assigned email + password. */}
+                <option value={OTHER_ROLE_SELECTION}>
+                  Support staff / Other
+                </option>
               </select>
+              {selectedRole === OTHER_ROLE_SELECTION && (
+                <p className="text-[11px] text-slate-500 mt-1.5">
+                  For cleaners, cooks, drivers, gardeners, security staff and any other
+                  role not listed above: sign in with the email and password your
+                  administrator assigned you. Your role is taken from your staff record.
+                </p>
+              )}
             </div>
 
             <div>
@@ -153,7 +168,7 @@ function LoginForm() {
                 <input
                   type="email"
                   required
-                  placeholder={`${selectedRole}@university.ac.ke`}
+                  placeholder={selectedRole === OTHER_ROLE_SELECTION ? 'you@university.ac.ke' : `${selectedRole}@university.ac.ke`}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-lg pl-10 pr-3.5 py-2.5 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-academic-navy-700 focus:bg-white"
@@ -256,7 +271,7 @@ function LoginForm() {
                   onClick={() => handleFillDemoCredentials('librarian')}
                   className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
                 >
-                  Librarian (Lyne Naz)
+                  Librarian
                 </button>
                 <button
                   type="button"
@@ -264,13 +279,6 @@ function LoginForm() {
                   className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
                 >
                   Student (Faith Wanjiku)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleFillDemoCredentials('other')}
-                  className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition col-span-2"
-                >
-                  Other (Support & Operations Staff)
                 </button>
               </div>
             </div>

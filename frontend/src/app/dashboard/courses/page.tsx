@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/context';
 import { roleHasPermission } from '@/lib/auth/rbac';
 import { BookOpen, Plus, Search, X } from 'lucide-react';
+import { staffStore, findStaffByDisplayName } from '@/lib/hr/staff';
 
 export default function CoursesPage() {
   const { role } = useAuth();
@@ -16,10 +17,25 @@ export default function CoursesPage() {
   const [search, setSearch] = useState('');
   const [levelFilter, setLevelFilter] = useState('all');
 
-  type CourseRow = {id:string;code:string;title:string;credits:number;level:number;dept:string;prereq:string;lecturer:string};
-  const [courses,setCourses]=useState<CourseRow[]>([]);
-  const mapCourse=(c:any):CourseRow=>({id:c.id,code:c.code,title:c.title,credits:c.credit_hours,level:c.level,dept:c.department,prereq:c.prerequisites.join(', ') || 'None',lecturer:c.lecturer});
-  useEffect(()=>{fetch('/api/v1/courses').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);setCourses(d.data.map(mapCourse));}).catch(e=>setError(e.message));},[]);
+  type CourseRow = { id: string; code: string; title: string; credits: number; level: number; dept: string; prereq: string; lecturer: string };
+  const [courses, setCourses] = useState<CourseRow[]>([]);
+  const [coursesLoaded, setCoursesLoaded] = useState(false);
+  const mapCourse = (c: any): CourseRow => ({ id: c.id, code: c.code, title: c.title, credits: c.credit_hours, level: c.level, dept: c.department, prereq: c.prerequisites.join(', ') || 'None', lecturer: c.lecturer });
+  useEffect(() => { fetch('/api/v1/courses').then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error); setCourses(d.data.map(mapCourse)); }).catch(e => setError(e.message)).finally(() => setCoursesLoaded(true)); }, []);
+// Lecturer names are linked to staff records where one matches; otherwise
+  // they are labelled Sample. Staff API is role-gated, so fall back to the
+  // demo seed for matching when it cannot be loaded.
+  const [staffForMatching, setStaffForMatching] = useState<{ first_name: string; last_name: string }[] | null>(null);
+  useEffect(() => {
+    fetch('/api/v1/staff')
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok || !Array.isArray(d.data)) throw new Error('staff list unavailable');
+        setStaffForMatching(d.data);
+      })
+      .catch(() => setStaffForMatching([...staffStore]));
+  }, []);
+  const staffNames = staffForMatching ?? [...staffStore];
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCourse, setNewCourse] = useState({
@@ -100,7 +116,7 @@ export default function CoursesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-200 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-academic-navy-950 tracking-tight">
-            Course Catalog & Units
+            Course Catalogue & Units
           </h1>
           <p className="text-sm text-slate-500 mt-1">
             Curriculum management, credit hours, prerequisites, and departmental course unit allocations.
@@ -148,7 +164,7 @@ export default function CoursesPage() {
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
           <h2 className="font-bold text-slate-800 text-sm">Accredited Course Inventory</h2>
-          <span className="text-xs font-semibold text-slate-500">{filtered.length} Units Available</span>
+          <span className="text-xs font-semibold text-slate-500">{coursesLoaded ? `${filtered.length} Units Available` : 'Loading units…'}</span>
         </div>
 
         <div className="overflow-x-auto">
@@ -165,6 +181,9 @@ export default function CoursesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
+              {!coursesLoaded && (
+                <tr><td colSpan={7} className="px-5 py-6 text-center text-sm text-slate-500">Loading units…</td></tr>
+              )}
               {filtered.map((c) => (
                 <tr key={c.id || c.code} className="hover:bg-slate-50/60 transition">
                   <td className="px-5 py-3.5 font-mono font-bold text-academic-navy-800">{c.code}</td>
@@ -177,7 +196,11 @@ export default function CoursesPage() {
                   </td>
                   <td className="px-5 py-3.5 font-mono font-bold text-academic-navy-950">{c.credits} Cr</td>
                   <td className="px-5 py-3.5 font-mono text-xs text-slate-500">{c.prereq}</td>
-                  <td className="px-5 py-3.5 text-xs text-slate-600">{c.lecturer}{role === 'student' && <button onClick={()=>registerCourse(c)} className="ml-3 underline text-academic-navy-800">Register</button>}</td>
+                  <td className="px-5 py-3.5 text-xs text-slate-600">{c.lecturer}{c.lecturer !== 'Staff Assigned' && !findStaffByDisplayName(c.lecturer, staffNames) && (
+                    <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title="No matching staff record; sample name">
+                      Sample
+                    </span>
+                  )}{role === 'student' && <button onClick={()=>registerCourse(c)} className="ml-3 underline text-academic-navy-800">Register</button>}</td>
                 </tr>
               ))}
             </tbody>
@@ -192,7 +215,7 @@ export default function CoursesPage() {
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" disabled={approving} checked={pendingIds.slice(0, 200).every(id => selectedIds.includes(id))}
                 onChange={e => setSelectedIds(e.target.checked ? pendingIds.slice(0, 200) : [])} />
-              Select pending registrations (up to 200)
+              Select pending registrations ({pendingIds.length} pending{pendingIds.length > 200 ? ', sent in batches of 200' : ''})
             </label>
             <button disabled={approving || selectedIds.length === 0}
               onClick={() => void approveRegistrations(selectedIds)}

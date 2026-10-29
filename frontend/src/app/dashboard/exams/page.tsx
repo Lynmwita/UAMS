@@ -11,18 +11,20 @@ export default function ExamsPage() {
   const canSchedule=roleHasPermission(role,'exams:schedule');
   const [schedules, setSchedules] = useState<ExamSchedule[]>([]);
   const [cards, setCards] = useState<ExamClearanceCard[]>([]);
+  const [clearanceThreshold, setClearanceThreshold] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'cards' | 'schedules' | 'new_exam'>('cards');
   const [selectedCard, setSelectedCard] = useState<ExamClearanceCard | null>(null);
 
   const [newExam, setNewExam] = useState({
-    course_code: 'BCS 2201',
-    course_title: 'Software Engineering Principles',
-    exam_date: '2026-10-22',
+    course_code: 'BCS 311',
+    course_title: 'Advanced Database Systems',
+    exam_date: '2026-12-07',
     start_time: '09:00 AM',
     end_time: '12:00 PM',
-    venue: 'Computer Science Lab 1',
-    chief_invigilator: 'Dr. Evans Kiprop',
-    total_candidates: 80,
+    venue: 'Multi-Purpose Hall A',
+    chief_invigilator: 'Dr. Jane Mwangi',
+    total_candidates: 1,
   });
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -31,18 +33,22 @@ export default function ExamsPage() {
   }, []);
 
   const fetchExamsData = async () => {
+    setLoading(true);
     try {
       const res = await fetch('/api/v1/exams');
       const json = await res.json();
       if (json.success) {
         setSchedules(json.data.schedules);
         setCards(json.data.cards);
+        if (typeof json.data.clearance_threshold_percentage === 'number') setClearanceThreshold(json.data.clearance_threshold_percentage);
         if (json.data.cards.length > 0) {
           setSelectedCard(json.data.cards[0]);
         }
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -118,6 +124,13 @@ export default function ExamsPage() {
           {message.text}
         </div>
       )}
+
+      <p className="text-sm text-slate-600 border rounded-lg p-4 bg-slate-50">
+        Exam clearance rule: {clearanceThreshold === null ? '100%' : clearanceThreshold + '%'} of billed fees must be paid. A student with any outstanding
+        balance cannot print an Exam Pass. Clearance cards below are built from the student registry and the invoice ledger, so they always name the same
+        students as the registry.
+      </p>
+      {loading && <p role="status">Loading examinations…</p>}
 
       {activeTab === 'cards' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -203,21 +216,23 @@ export default function ExamsPage() {
                   </div>
                 </div>
 
-                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-900 flex items-center justify-between">
+                <div className={`border rounded-lg p-3 text-xs flex items-center justify-between ${selectedCard.is_cleared ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-rose-50 border-rose-200 text-rose-900'}`}>
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                    <span><strong>Financial Status:</strong> Cleared ({selectedCard.fee_paid_percentage}% Paid • Bal KES {selectedCard.fee_balance.toLocaleString()})</span>
+                    {selectedCard.is_cleared ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertTriangle className="h-4 w-4 text-rose-600" />}
+                    <span>{selectedCard.is_cleared ? <><strong>Financial Status:</strong> Cleared ({selectedCard.fee_paid_percentage}% Paid • Bal KES {selectedCard.fee_balance.toLocaleString()})</> : <><strong>Blocked: fee balance outstanding</strong> ({selectedCard.fee_paid_percentage}% Paid • Bal KES {selectedCard.fee_balance.toLocaleString()})</>}</span>
                   </div>
-                  <span className="font-bold uppercase text-[10px] bg-emerald-200 px-2 py-0.5 rounded">Eligible For Exams</span>
+                  <span className={`font-bold uppercase text-[10px] px-2 py-0.5 rounded ${selectedCard.is_cleared ? 'bg-emerald-200' : 'bg-rose-200'}`}>{selectedCard.is_cleared ? 'Eligible For Exams' : 'Exam Pass Disabled'}</span>
                 </div>
 
                 <div className="pt-2 flex justify-end gap-2">
                   <button
                     onClick={() => window.print()}
-                    className="bg-academic-navy-900 hover:bg-academic-navy-950 text-academic-gold-400 font-bold py-2 px-4 rounded-lg text-xs transition shadow flex items-center gap-2"
+                    disabled={!selectedCard.is_cleared}
+                    title={selectedCard.is_cleared ? 'Print Examination Pass' : 'Blocked: fee balance outstanding'}
+                    className="bg-academic-navy-900 hover:bg-academic-navy-950 text-academic-gold-400 font-bold py-2 px-4 rounded-lg text-xs transition shadow flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Printer className="h-4 w-4" />
-                    Print Examination Pass
+                    {selectedCard.is_cleared ? 'Print Examination Pass' : 'Blocked: fee balance outstanding'}
                   </button>
                 </div>
               </div>
@@ -232,6 +247,7 @@ export default function ExamsPage() {
 
       {activeTab === 'schedules' && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <p className="text-xs text-slate-500 p-4 border-b">Planned timetable for the 5-unit catalogue. Candidate counts are the registrations on record for each unit (0 where no student has registered yet).</p>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-100 text-slate-700 font-semibold uppercase">
@@ -252,7 +268,7 @@ export default function ExamsPage() {
                       <div className="font-mono font-bold text-academic-navy-900">{s.course_code}</div>
                       <div className="text-slate-600">{s.course_title}</div>
                     </td>
-                    <td className="p-3 font-semibold text-slate-900">{s.exam_date}</td>
+                    <td className="p-3 font-semibold text-slate-900">{new Date(s.exam_date).toLocaleDateString('en-KE', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</td>
                     <td className="p-3 font-mono text-slate-600">{s.start_time} - {s.end_time}</td>
                     <td className="p-3 font-medium text-slate-800">{s.venue}</td>
                     <td className="p-3 text-slate-600">{s.chief_invigilator}</td>
@@ -280,13 +296,27 @@ export default function ExamsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Course Code</label>
-                <input
-                  type="text"
+                <select
                   value={newExam.course_code}
-                  onChange={(e) => setNewExam({ ...newExam, course_code: e.target.value })}
+                  onChange={(e) => {
+                    const titles: Record<string, string> = {
+                      'BCS 311': 'Advanced Database Systems',
+                      'BIT 312': 'Distributed Systems & Cloud Computing',
+                      'BCS 314': 'Software Engineering Architecture',
+                      'BCS 316': 'Network & System Security',
+                      'BBA 201': 'Principles of Financial Accounting',
+                    };
+                    setNewExam({ ...newExam, course_code: e.target.value, course_title: titles[e.target.value] || e.target.value });
+                  }}
                   required
                   className="w-full text-xs p-2.5 rounded-lg border border-slate-300 font-mono"
-                />
+                >
+                  <option value="BCS 311">BCS 311</option>
+                  <option value="BIT 312">BIT 312</option>
+                  <option value="BCS 314">BCS 314</option>
+                  <option value="BCS 316">BCS 316</option>
+                  <option value="BBA 201">BBA 201</option>
+                </select>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Course Title</label>
@@ -354,6 +384,18 @@ export default function ExamsPage() {
                   className="w-full text-xs p-2.5 rounded-lg border border-slate-300"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Candidates</label>
+              <input
+                type="number"
+                min="0"
+                value={newExam.total_candidates}
+                onChange={(e) => setNewExam({ ...newExam, total_candidates: Number(e.target.value) })}
+                required
+                className="w-full text-xs p-2.5 rounded-lg border border-slate-300"
+              />
             </div>
 
             <button

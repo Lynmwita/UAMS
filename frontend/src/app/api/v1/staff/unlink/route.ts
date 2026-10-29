@@ -5,8 +5,8 @@ import { recordAuditEvent } from '@/lib/audit/audit-logger';
 
 /**
  * Remove a staff member's login only. The staff record stays and can be
- * re-invited later. Admin-only: removing logins is destructive and must
- * never be available to registrars or other staff roles.
+ * re-invited later. Super Admin only: removing logins is destructive and
+ * must never be available to registrars, admins, or other staff roles.
  *
  * POST { email }
  */

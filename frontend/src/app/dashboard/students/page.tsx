@@ -169,6 +169,7 @@ export default function StudentsPage() {
   };
 
   const [students, setStudents] = useState<StudentRow[]>([]);
+  const [studentsLoaded, setStudentsLoaded] = useState(false);
 
   const mapStudent = (s: any): StudentRow => ({
     id: s.id,
@@ -198,6 +199,8 @@ export default function StudentsPage() {
       }
     } catch (e: any) {
       setError(e.message);
+    } finally {
+      setStudentsLoaded(true);
     }
   };
 
@@ -801,7 +804,7 @@ export default function StudentsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-200 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-academic-navy-950 tracking-tight">
-            Student Management & Admissions
+            Student Registry
           </h1>
           <p className="text-sm text-slate-500 mt-1">
             Enrolled student registry, bio-profiles, fee clearance verification, and exam pass generation.
@@ -834,7 +837,7 @@ export default function StudentsPage() {
               <p className="text-sm font-bold text-emerald-950">
                 Student registered: {successBanner.fullName} ({successBanner.regNo}).
               </p>
-              {institutional?<p className="text-xs text-emerald-800 mt-1">Academic record saved. Invite the student to link their institutional login. Student Hub enrollment synchronization runs separately.</p>:<p className="text-xs text-emerald-800 mt-1">
+              {institutional?<p className="text-xs text-emerald-800 mt-1">Academic record saved. Invite the student to link their institutional login. Student Hub enrolment synchronization runs separately.</p>:<p className="text-xs text-emerald-800 mt-1">
                 They can sign in at the Student Hub with their email (
                 <span className="font-mono font-semibold">{successBanner.email}</span>) and the initial password.
               </p>}
@@ -904,11 +907,11 @@ export default function StudentsPage() {
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
           <h2 className="font-bold text-slate-800 text-sm">Active Student Enrolment List</h2>
-          <span className="text-xs font-semibold text-slate-500">{filtered.length} Students Listed</span>
+          <span className="text-xs font-semibold text-slate-500">{studentsLoaded ? `${filtered.length} Students Listed · Scroll sideways to see the Actions column →` : 'Loading student records…'}</span>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[1080px] text-left text-sm">
             <thead className="text-xs font-bold uppercase bg-slate-50 text-slate-600 border-b border-slate-200">
               <tr>
                 <th className="px-5 py-3.5">Admission No</th>
@@ -923,6 +926,9 @@ export default function StudentsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
+              {!studentsLoaded && (
+                <tr><td colSpan={9} className="px-5 py-6 text-center text-sm text-slate-500">Loading student records…</td></tr>
+              )}
               {filtered.map((s) => (
                 <tr key={s.id} className="hover:bg-slate-50/60 transition">
                   <td className="px-5 py-3.5 font-mono font-semibold text-academic-navy-800">{s.admissionNo}</td>
@@ -1017,7 +1023,7 @@ export default function StudentsPage() {
                               ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
                               : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200'
                           }`}
-                          title={s.status === 'suspended' ? 'Reactivate Student Record' : 'Deactivate / Suspend Student Record'}
+                          title={s.status === 'suspended' ? 'Reactivate Student Record' : 'Suspend Student Record'}
                         >
                           {s.status === 'suspended' ? (
                             <>
@@ -1769,7 +1775,7 @@ export default function StudentsPage() {
         </div>
       )}
 
-      {/* Deactivate / Suspend Confirmation Dialog */}
+      {/* Suspend Confirmation Dialog: one verb for this action */}
       {isStatusModalOpen && canWrite && statusTargetStudent && (
         <div
           onClick={(e) => {
@@ -1791,7 +1797,7 @@ export default function StudentsPage() {
                 )}
                 <h3 className="text-lg font-bold text-academic-navy-950">
                   {statusTargetStudent.status === 'active'
-                    ? 'Deactivate / Suspend Student'
+                    ? 'Suspend Student'
                     : 'Reactivate Student Record'}
                 </h3>
               </div>
@@ -1828,6 +1834,9 @@ export default function StudentsPage() {
                   </div>
                   <p className="leading-relaxed">
                     Student records are <strong>never permanently deleted</strong>. Suspending this student will deactivate their portal access and exam clearance privileges while preserving complete historical grades, financial ledgers, and registrar audit trails.
+                  </p>
+                  <p className="leading-relaxed">
+                    One verb is used for this action: <strong>Suspend</strong> (temporary, reversible with Reactivate). Nothing is deleted from this page.
                   </p>
                 </div>
               ) : (

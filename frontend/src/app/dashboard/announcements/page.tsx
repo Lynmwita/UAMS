@@ -112,10 +112,6 @@ export default function AnnouncementsPage() {
           <div key={n.id} className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm hover:border-slate-300 transition">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <div className="flex items-center space-x-2">
-                <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                  #{n.id.slice(0, 8)}
-                </span>
-
                 <span className="text-xs font-bold uppercase bg-academic-navy-50 text-academic-navy-900 border border-academic-navy-200 px-2.5 py-0.5 rounded">
                   {n.audience}
                 </span>

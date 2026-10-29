@@ -1,6 +1,14 @@
 import type { UserRole } from '@/types';
 
-export const USER_ROLES: UserRole[] = ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student', 'librarian', 'other'];
+export const USER_ROLES: UserRole[] = ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student', 'librarian', 'support_staff'];
+
+/**
+ * Login-form sentinel, NOT a role: "Support staff / Other" means "my role
+ * isn't listed — resolve it from my record". It must never be treated as a
+ * UserRole and never grants authorization; the login route resolves the
+ * real role from the demo account or the institutional record instead.
+ */
+export const OTHER_ROLE_SELECTION = 'other';
 export function isUserRole(value: unknown): value is UserRole {
   return typeof value === 'string' && USER_ROLES.includes(value as UserRole);
 }
@@ -16,8 +24,12 @@ export function resolveCanonicalRole(rawRole: unknown): UserRole {
   if (['librarian', 'library'].includes(norm)) return 'librarian';
   if (['student'].includes(norm)) return 'student';
   if (['lecturer', 'faculty', 'professor', 'tutorial_fellow', 'teaching_assistant', 'lab_technician'].includes(norm)) return 'lecturer';
-  // General campus support & operational staff:
-  return 'other';
+  // General campus support & operational staff resolve to the scoped
+  // support_staff role — never to a generic placeholder role, and never
+  // to librarian (the old catch-all). Provisioning maps unmapped staff
+  // titles to support_staff; this canonical fallback only covers legacy
+  // login-side mappings.
+  return 'support_staff';
 }
 
 export const PAGE_ROLES: Record<string, UserRole[]> = {
@@ -30,7 +42,7 @@ export const PAGE_ROLES: Record<string, UserRole[]> = {
   exams: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student'],
   finance: ['super_admin', 'admin', 'finance_officer', 'student'],
   hostel: ['super_admin', 'admin', 'registrar', 'student'],
-  library: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student', 'librarian', 'other'],
+  library: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student', 'librarian'],
   timetable: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student'],
   notifications: ['super_admin', 'admin', 'registrar', 'finance_officer'],
   audit: ['super_admin', 'admin'],

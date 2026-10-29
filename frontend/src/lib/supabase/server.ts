@@ -23,7 +23,16 @@ export async function activeInstitutionalUser(user: User) {
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id))return null;
   const {data,error}=await db.from('users').select('id,email,is_active,roles(code)').or(`id.eq.${user.id},auth_user_id.eq.${user.id}`).maybeSingle();
   if(error)throw new Error('Institutional account verification failed.');
-  if(!data || data.is_active !== true) return null;
-  const role=(data?.roles as unknown as {code?:string}|null)?.code || trusted.role;
-  return role===trusted.role&&typeof data.email==='string'?{...trusted,id:data.id,email:data.email.toLowerCase()}:null;
+  if (!data || data.is_active !== true) return null;
+  // PostgREST returns the many-to-one roles relation as an object, but
+  // tolerate the array form other routes already handle: reading .code off
+  // an array yields undefined, which used to turn a good account into a
+  // silent "currently inactive" login failure. When no roles row exists at
+  // all, fall back to the trusted Auth role so a provisioned account is
+  // not blocked by a missing link row; a row carrying a DIFFERENT role
+  // code still fails the match below.
+  const rolesRaw = data?.roles as unknown;
+  const role = Array.isArray(rolesRaw) ? (rolesRaw[0] as { code?: string } | undefined)?.code : (rolesRaw as { code?: string } | null)?.code;
+  const effectiveRole = role || trusted.role;
+  return effectiveRole === trusted.role && typeof data.email === 'string' ? { ...trusted, id: data.id, email: data.email.toLowerCase() } : null;
 }

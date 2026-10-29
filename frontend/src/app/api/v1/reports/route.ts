@@ -3,8 +3,10 @@ import { studentsStore } from '@/lib/academic/student-records';
 import { registrationsStore } from '@/lib/academic/registrations';
 import { gradesStore } from '@/lib/academic/grades';
 import { invoicesStore } from '@/lib/finance/invoices';
+import { computeLedgerTotals } from '@/lib/finance/ledger-summary';
 import { coursesStore } from '@/lib/academic/course-catalog';
 import { admissionsStore } from '@/lib/academic/admissions';
+import { staffStore, syncStaffStoreFromDatabase } from '@/lib/hr/staff';
 import { requireServerAuth } from '@/lib/auth/server-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -15,6 +17,11 @@ export async function GET(request: NextRequest) {
 
   const programNames = [...new Set(studentsStore.map((s) => s.program_name))];
 
+  await syncStaffStoreFromDatabase();
+  const staffTotals = {
+    total: staffStore.length,
+    active: staffStore.filter((s) => s.is_active).length,
+  };
   const studentsByProgram = programNames.map((program) => {
     const inProgram = studentsStore.filter((s) => s.program_name === program);
     return {
@@ -36,14 +43,8 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  const financeTotals = {
-    invoiced: invoicesStore.reduce((sum, i) => sum + i.total_amount, 0),
-    collected: invoicesStore.reduce((sum, i) => sum + i.amount_paid, 0),
-    outstanding: invoicesStore.reduce((sum, i) => sum + i.balance, 0),
-    invoices_issued: invoicesStore.length,
-    settled_invoices: invoicesStore.filter((i) => i.status === 'settled').length,
-    partial_invoices: invoicesStore.filter((i) => i.status === 'partial').length,
-  };
+  // Same ledger reduction as the Finance page summary: one ledger, one set of totals.
+  const financeTotals = computeLedgerTotals(invoicesStore);
 
   const gradeDistribution = (() => {
     const approved = gradesStore.filter((g) => g.is_approved);
@@ -82,6 +83,7 @@ export async function GET(request: NextRequest) {
       studentsByProgram,
       registrationsByCourse,
       financeTotals,
+      staffTotals,
       gradeDistribution,
       catalogTotals,
       admissionsTotals,

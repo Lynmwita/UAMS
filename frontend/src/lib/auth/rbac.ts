@@ -28,7 +28,7 @@ export const ROLE_HIERARCHY: Record<UserRole, number> = {
   finance_officer: 60,
   librarian: 50,
   student: 10,
-  other: 20,
+  support_staff: 5,
 };
 
 export const ROLE_LABELS: Record<UserRole, string> = {
@@ -40,7 +40,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   finance_officer: 'Finance Officer',
   librarian: 'University Librarian',
   student: 'Student',
-  other: 'Other',
+  support_staff: 'Support Staff',
 };
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -124,9 +124,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "library:read",
     "library:loan"
   ],
-  "other": [
-    "library:read"
-  ]
+  // Support staff hold no data permissions: their dashboard is their own
+  // roster, general announcements and events, and their own profile.
+  "support_staff": []
 };
 
 export function roleHasPermission(role: UserRole, permission: Permission): boolean {

@@ -1,6 +1,7 @@
 import { institutionalApi } from '@/lib/academic/institutional-api';
 import { institutionalDatabase } from '@/lib/academic/institutional';
-import { staffStore, type UamsStaffMember } from '@/lib/hr/staff';
+import { resolveStaffPortalRole } from '@/lib/supabase/provisioning';
+import { staffStore, syncStaffStoreFromDatabase, type UamsStaffMember } from '@/lib/hr/staff';
 import { departmentsStore } from '@/lib/academic/structure';
 import { requireServerAuth } from '@/lib/auth/server-auth';
 import { recordAuditEvent } from '@/lib/audit/audit-logger';
@@ -13,33 +14,7 @@ export async function GET(request: NextRequest) {
   if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'staff');
 
   try {
-    const db = institutionalDatabase();
-    const { data: dbUsers } = await db
-      .from('users')
-      .select('id,email,first_name,last_name,phone_number,is_active,roles(code)');
-    if (dbUsers && dbUsers.length > 0) {
-      for (const u of dbUsers) {
-        if (!staffStore.some((s) => s.email.toLowerCase() === u.email.toLowerCase())) {
-          const uRole = (Array.isArray(u.roles) ? u.roles[0]?.code : (u.roles as any)?.code) || 'lecturer';
-          staffStore.push({
-            id: u.id,
-            staff_number: `EUC/STAFF/${String(staffStore.length + 1).padStart(3, '0')}`,
-            first_name: u.first_name,
-            last_name: u.last_name,
-            email: u.email,
-            phone: u.phone_number || '',
-            role: uRole,
-            department_id: 'dep-general',
-            department_name: 'General Campus Support & Operations',
-            school_id: 'central',
-            job_title: uRole,
-            qualification: '',
-            is_active: u.is_active ?? true,
-            joined_date: new Date().toISOString().slice(0, 10),
-          });
-        }
-      }
-    }
+    await syncStaffStoreFromDatabase();
   } catch {
     // Non-fatal if database is offline or not configured
   }
@@ -150,8 +125,16 @@ export async function POST(request: NextRequest) {
 
     try {
       const db = institutionalDatabase();
-      const canonicalCode = resolveCanonicalRole(role);
-      const { data: roleRow } = await db.from('roles').select('id').eq('code', canonicalCode).maybeSingle();
+      // Resolve the portal role for the role_id lookup: the staff form
+      // sends job titles and legacy values (e.g. 'library' for
+      // librarians) that have no roles row under that name, so a plain
+      // lookup seeded role-less users rows that login then dropped as
+      // "inactive". resolveStaffPortalRole maps a staff record whose job
+      // title has no portal role (cleaner, cook, driver, ...) to the
+      // scoped 'support_staff' role, so the users row always carries a
+      // loggable role; it returns null only when no record exists.
+      const portalRole = resolveStaffPortalRole(true, role);
+      const { data: roleRow } = await db.from('roles').select('id').eq('code', portalRole || role).maybeSingle();
       await db.from('users').upsert({
         email: emailNorm,
         first_name: created.first_name,
@@ -187,6 +170,22 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const auth = await requireServerAuth(request, ['super_admin', 'admin', 'registrar']);
   if ('errorResponse' in auth) return auth.errorResponse;
+  // Deactivate/Reactivate stays admin-only on BOTH paths: a registrar may
+  // edit staff details, but toggling is_active is an admin act. This check
+  // runs before the institutional delegation so it covers that path too.
+  if (auth.user.role === 'registrar') {
+    try {
+      const peek = await request.clone().json();
+      if (typeof peek?.is_active === 'boolean') {
+        return NextResponse.json(
+          { success: false, error: 'Registrars cannot deactivate or reactivate staff accounts.' },
+          { status: 403 }
+        );
+      }
+    } catch {
+      // Malformed body: downstream validation reports it.
+    }
+  }
   if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'staff');
   try {
     const body = await request.json();

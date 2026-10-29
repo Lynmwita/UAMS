@@ -5,7 +5,7 @@ import { recordAuditEvent } from '@/lib/audit/audit-logger';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
-  const auth = await requireServerAuth(request, ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student']);
+  const auth = await requireServerAuth(request, ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student', 'support_staff']);
   if ('errorResponse' in auth) return auth.errorResponse;
   if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'events');
 

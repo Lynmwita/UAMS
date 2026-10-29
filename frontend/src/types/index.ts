@@ -7,7 +7,7 @@ export type UserRole =
   | 'finance_officer'
   | 'student'
   | 'librarian'
-  | 'other';
+  | 'support_staff';
 
 export interface User {
   id: string;

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Building2, Plus, School, BookOpen, Layers, X, Check } from 'lucide-react';
+import { staffStore, countStaffByDepartment, findStaffByDisplayName } from '@/lib/hr/staff';
 
 export default function StructurePage() {
   const [createKind, setCreateKind] = useState<'departments' | 'programs'>('departments');
@@ -42,6 +43,7 @@ export default function StructurePage() {
   };
 
   const [activeTab, setActiveTab] = useState<'schools' | 'departments' | 'programs'>('schools');
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   const [error, setError] = useState('');
   const [schools, setSchools] = useState<
@@ -82,6 +84,27 @@ export default function StructurePage() {
   const [programs, setPrograms] = useState<
     { id: string; code: string; name: string; level: string; duration: string; department: string; credits: number }[]
   >([]);
+
+  // Member counts come from real staff records only. When the staff list
+  // cannot be loaded for this role, counts stay null and the column shows
+  // a dash instead of a fabricated number (audit Part 2A).
+  const [memberCounts, setMemberCounts] = useState<Record<string, number> | null>(null);
+  const [staffForMatching, setStaffForMatching] = useState<{ first_name: string; last_name: string }[] | null>(null);
+  useEffect(() => {
+    fetch('/api/v1/staff')
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok || !Array.isArray(d.data)) throw new Error('staff list unavailable');
+        setMemberCounts(countStaffByDepartment(d.data));
+        setStaffForMatching(d.data);
+      })
+      .catch(() => {
+        // Staff API is role-gated; fall back to the demo seed for name
+        // matching only, and leave member counts hidden (null).
+        setStaffForMatching([...staffStore]);
+      });
+  }, []);
+  const staffNames = staffForMatching ?? [...staffStore];
 
   useEffect(() => {
     fetch('/api/v1/departments')
@@ -127,6 +150,10 @@ export default function StructurePage() {
   }, []);
 
   const schoolMap = Object.fromEntries(schools.map((s) => [s.id, s.name]));
+  const isServiceUnit = (d: { category: string; school: string | null }) =>
+    d.category === 'non_academic' || d.school === 'central' || !d.school;
+  const academicDepartments = departments.filter((d) => !isServiceUnit(d));
+  const serviceUnits = departments.filter((d) => isServiceUnit(d));
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newSchool, setNewSchool] = useState({
@@ -181,7 +208,19 @@ export default function StructurePage() {
         </button>
       </div>
 
-      {/* Creation Bar */}
+      {/* Creation Bar (collapsed until requested) */}
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setShowCreateForm((v) => !v)}
+          className="bg-academic-navy-900 hover:bg-academic-navy-800 text-white font-bold px-4 py-2.5 rounded-lg text-sm transition flex items-center space-x-2 shadow-sm"
+        >
+          <Plus className="h-4 w-4 text-academic-gold-400" />
+          <span>{showCreateForm ? 'Hide Create Form' : 'Add Department'}</span>
+        </button>
+        <p className="text-xs text-slate-500">Add an academic department, a central service unit, or a degree program.</p>
+      </div>
+      {showCreateForm && (
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
         <form onSubmit={createEntry} className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
@@ -344,6 +383,7 @@ export default function StructurePage() {
           )}
         </form>
       </div>
+      )}
       <div className="flex items-center space-x-2 border-b border-slate-200 pb-2">
         <button
           onClick={() => setActiveTab('schools')}
@@ -398,7 +438,11 @@ export default function StructurePage() {
                 </div>
                 <h2 className="text-lg font-bold text-academic-navy-950">{s.name}</h2>
                 <div className="mt-3 text-xs text-slate-500 space-y-0.5">
-                  <p>Dean: <strong className="text-slate-800">{s.dean}</strong></p>
+                  <p>Dean: <strong className="text-slate-800">{s.dean}</strong>{!findStaffByDisplayName(s.dean, staffNames) && (
+                    <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title="No matching staff record; sample name">
+                      Sample
+                    </span>
+                  )}</p>
                   {s.deanEmail && <p className="text-slate-400 font-mono">{s.deanEmail}</p>}
                 </div>
               </div>
@@ -412,8 +456,10 @@ export default function StructurePage() {
         </div>
       )}
 
-      {/* View 2: Departments */}
+      {/* View 2: Departments - academic departments and service units shown separately */}
       {activeTab === 'departments' && (
+        <div className="space-y-6">
+          <h2 className="text-sm font-bold text-slate-800">Academic departments ({academicDepartments.length})</h2>
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
           <table className="w-full text-left text-sm">
             <thead className="text-xs font-bold uppercase bg-slate-50 text-slate-600 border-b border-slate-200">
@@ -428,7 +474,7 @@ export default function StructurePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {departments.map((d) => {
+              {academicDepartments.map((d) => {
                 const isNonAcademic =
                   d.category === 'non_academic' || d.school === 'central' || !d.school;
                 return (
@@ -457,8 +503,14 @@ export default function StructurePage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-5 py-3.5 text-slate-700 font-medium">{d.hod}</td>
-                    <td className="px-5 py-3.5 text-center font-mono text-slate-600">{d.lecturers} Members</td>
+                    <td className="px-5 py-3.5 text-slate-700 font-medium">{d.hod}{!isNonAcademic && !findStaffByDisplayName(d.hod, staffNames) && (
+                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title="No matching staff record; sample name">
+                        Sample
+                      </span>
+                    )}</td>
+                    <td className="px-5 py-3.5 text-center font-mono text-slate-600" title={memberCounts === null ? 'Member count unavailable for this role' : 'Staff records linked to this department'}>
+                      {memberCounts === null ? '—' : `${memberCounts[d.id] ?? 0} Members`}
+                    </td>
                     <td className="px-5 py-3.5 text-center">
                       {isNonAcademic ? (
                         <span className="text-xs text-slate-400 italic">Central Service (N/A)</span>
@@ -473,6 +525,35 @@ export default function StructurePage() {
               })}
             </tbody>
           </table>
+        </div>
+        {serviceUnits.length > 0 && (
+          <div className="space-y-3">
+            <h2 className="text-sm font-bold text-slate-800">Service units - central, non-academic ({serviceUnits.length})</h2>
+            <p className="text-xs text-slate-500">Whole-university services (for example catering, transport, maintenance). These are not academic departments and run no degree programs.</p>
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <table className="w-full text-left text-sm">
+                <thead className="text-xs font-bold uppercase bg-slate-50 text-slate-600 border-b border-slate-200">
+                  <tr>
+                    <th className="px-5 py-3.5">Code</th>
+                    <th className="px-5 py-3.5">Service Unit Name</th>
+                    <th className="px-5 py-3.5">Service Scope</th>
+                    <th className="px-5 py-3.5">Unit Head</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {serviceUnits.map((d) => (
+                    <tr key={d.id} className="hover:bg-slate-50/60 transition">
+                      <td className="px-5 py-3.5 font-mono font-bold text-academic-navy-800">{d.code}</td>
+                      <td className="px-5 py-3.5 font-medium text-slate-900">{d.name}</td>
+                      <td className="px-5 py-3.5 text-xs font-bold"><span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">🌐 Whole University (All Faculties)</span></td>
+                      <td className="px-5 py-3.5 text-slate-700 font-medium">{d.hod}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
         </div>
       )}
 

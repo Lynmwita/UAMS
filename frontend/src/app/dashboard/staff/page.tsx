@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { IdCard, Search, Plus, ShieldX, ShieldCheck, Loader2, CheckCircle2, AlertCircle, GraduationCap, KeyRound, Pencil, Mail, Lock, X, UserX, Trash2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/context';
+import { isTeachingRole } from '@/lib/hr/staff';
 
 type StaffMember = {
   id: string;
@@ -66,6 +67,11 @@ const DEFAULT_ROLES = [
 export default function StaffPage() {
   const {role}=useAuth();
   const canManage=['admin','super_admin'].includes(role);
+  // Delete, Remove login and Password are admin-tier only (admin and
+  // super_admin). Note: this must be conditional rendering, never the
+  // `hidden` attribute: Tailwind's `inline-flex` class beats the UA
+  // stylesheet's [hidden] rule, so `hidden` buttons were still visible
+  // to registrars (audit Part 2A).
   const canInvite=['admin','super_admin','registrar'].includes(role);
   const [departments,setDepartments]=useState<{id:string;name:string;category?:string;school_id?:string}[]>([]);
   const [notice,setNotice]=useState('');
@@ -100,6 +106,9 @@ export default function StaffPage() {
   });
   const [savingEdit, setSavingEdit] = useState(false);
 
+  const [deleteStaff, setDeleteStaff] = useState<StaffMember | null>(null);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
+  const [deletingStaff, setDeletingStaff] = useState(false);
   const [passwordStaff, setPasswordStaff] = useState<StaffMember | null>(null);
   const [directPassword, setDirectPassword] = useState('');
   const [savingPassword, setSavingPassword] = useState(false);
@@ -387,8 +396,12 @@ export default function StaffPage() {
     }
   };
 
-  const handleDelete = async (s: StaffMember) => {
-    if (!window.confirm(`Delete the entire staff record for ${s.first_name} ${s.last_name}? This cannot be undone.`)) return;
+  // Delete requires a typed confirmation: the Super Admin must type the
+  // staff member's email exactly. The API route writes the audit entry.
+  const handleDelete = async () => {
+    const s = deleteStaff;
+    if (!s || deleteConfirmInput.trim().toLowerCase() !== s.email.toLowerCase()) return;
+    setDeletingStaff(true);
     try {
       const r = await fetch('/api/v1/staff/delete', {
         method: 'POST',
@@ -399,8 +412,12 @@ export default function StaffPage() {
       if (!r.ok) throw new Error(d.error || 'Failed to delete staff record.');
       setStaff((prev) => prev.filter((x) => x.id !== s.id));
       setNotice(d.message);
+      setDeleteStaff(null);
+      setDeleteConfirmInput('');
     } catch (e: any) {
       setRowStatus((prev) => ({ ...prev, [s.email]: { type: 'error', message: e.message } }));
+    } finally {
+      setDeletingStaff(false);
     }
   };
 
@@ -415,13 +432,14 @@ export default function StaffPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {['admin', 'super_admin', 'registrar', 'hod'].includes(role) && (
+          {['admin', 'super_admin', 'registrar', 'hod'].includes(role) && (roleFilter === '' || isTeachingRole(roleFilter)) && (
             <button
               type="button"
               className={`text-sm font-medium px-3.5 py-2 rounded-md border flex items-center gap-2 transition ${
                 showAllocations ? 'bg-slate-100 border-slate-300 text-slate-800' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
               }`}
               onClick={() => setShowAllocations((v) => !v)}
+              title="Teaching staff only: allocate courses to lecturers, tutorial fellows, HODs and deans"
             >
               <GraduationCap className="w-4 h-4 text-sky-600" />
               <span>{showAllocations ? 'Hide Course Allocations' : 'Assign Courses (Teaching)'}</span>
@@ -438,7 +456,7 @@ export default function StaffPage() {
       {error && <p className="text-sm text-rose-600 bg-rose-50 p-3 rounded-md">{error}</p>}
       {notice&&<p role="status" className="text-sm text-emerald-800">{notice}</p>}
 
-      {showAllocations && ['admin', 'super_admin', 'registrar', 'hod'].includes(role) && (
+      {showAllocations && ['admin', 'super_admin', 'registrar', 'hod'].includes(role) && (roleFilter === '' || isTeachingRole(roleFilter)) && (
         <div className="border border-sky-100 rounded-xl p-4 bg-sky-50/50 shadow-xs space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -484,9 +502,9 @@ export default function StaffPage() {
                 value={allocation.lecturer_staff_id}
                 onChange={(e) => setAllocation({ ...allocation, lecturer_staff_id: e.target.value })}
               >
-                <option value="">Choose lecturer</option>
+                <option value="">Choose teaching staff</option>
                 {staff
-                  .filter((s) => s.role === 'lecturer' && s.is_active)
+                  .filter((s) => isTeachingRole(s.role) && s.is_active)
                   .map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.first_name} {s.last_name} ({s.staff_number})
@@ -884,7 +902,7 @@ export default function StaffPage() {
                             setDirectPassword('');
                             setPasswordModalMessage(null);
                           }}
-                          title="Set password directly or send reset link"
+                          title="Set password directly or send reset link (Admin only)"
                         >
                           <KeyRound className="w-3.5 h-3.5 text-indigo-600" />
                           <span>Password</span>
@@ -916,7 +934,7 @@ export default function StaffPage() {
                         <button
                           className="text-xs border border-amber-200 bg-amber-50/50 hover:bg-amber-50 text-amber-800 rounded px-2 py-1 inline-flex items-center gap-1 font-medium transition"
                           onClick={() => handleUnlink(s)}
-                          title="Remove this person's login only; the staff record stays"
+                          title="Remove this person's login only; the staff record stays (Admin only)"
                         >
                           <UserX className="w-3 h-3" />
                           <span>Remove login</span>
@@ -926,8 +944,11 @@ export default function StaffPage() {
                       {canManage && (
                         <button
                           className="text-xs border border-rose-200 bg-rose-50/50 hover:bg-rose-50 text-rose-700 rounded px-2 py-1 inline-flex items-center gap-1 font-medium transition"
-                          onClick={() => handleDelete(s)}
-                          title="Delete the entire staff record (cannot be undone)"
+                          onClick={() => {
+                            setDeleteStaff(s);
+                            setDeleteConfirmInput('');
+                          }}
+                          title="Delete the entire staff record (cannot be undone, Admin only)"
                         >
                           <Trash2 className="w-3 h-3" />
                           <span>Delete</span>
@@ -1069,6 +1090,62 @@ export default function StaffPage() {
                 className="px-4 py-2 text-xs font-medium border rounded-lg hover:bg-slate-50 text-slate-700 transition"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation: typed email required, Super Admin only */}
+      {deleteStaff && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-start justify-between">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Trash2 className="w-5 h-5 text-rose-600" />
+                <span>Delete staff record?</span>
+              </h3>
+              <button
+                onClick={() => setDeleteStaff(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-slate-600">
+              This permanently deletes the entire staff record for{' '}
+              <strong className="text-slate-900">{deleteStaff.first_name} {deleteStaff.last_name}</strong>{' '}
+              (<span className="font-mono">{deleteStaff.email}</span>) and removes their login. This cannot be undone,
+              and the deletion is written to the audit log.
+            </p>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Type the staff member&apos;s email address to confirm
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmInput}
+                onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                placeholder={deleteStaff.email}
+                className="w-full border rounded-lg px-3 py-2 text-xs bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteStaff(null)}
+                className="px-4 py-2 text-xs font-medium border rounded-lg hover:bg-slate-50 text-slate-700 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingStaff || deleteConfirmInput.trim().toLowerCase() !== deleteStaff.email.toLowerCase()}
+                onClick={handleDelete}
+                className="bg-rose-700 hover:bg-rose-800 text-white font-medium px-4 py-2 rounded-lg text-xs disabled:opacity-50 transition inline-flex items-center gap-1.5"
+              >
+                {deletingStaff ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                <span>Delete permanently</span>
               </button>
             </div>
           </div>
