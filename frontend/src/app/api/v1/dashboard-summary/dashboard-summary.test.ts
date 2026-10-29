@@ -103,3 +103,26 @@ test('audit targets resolve to human-readable names', () => {
   assert.equal(resolveAuditTarget({ entity_type: 'student_grades', entity_id: 'grd-1', details: {} }), 'Faith Wanjiku — Grade (BCS 311)');
   assert.equal(resolveAuditTarget({ entity_type: 'transactions', entity_id: 'QHJ8917263', details: { student: 'BIT/2023/8849' } }), 'Faith Wanjiku — Payment');
 });
+
+test('command center: approval queue and activity are real, nothing is fabricated', async () => {
+  const body = await (await getSummary(adminReq() as never)).json();
+  const q = body.data.approvalQueue;
+  assert.ok(q, 'approvalQueue missing');
+  // Fee exceptions come from the real student ledger: Kevin Otieno owes 18,500.
+  assert.equal(q.feeExceptions.length, 1);
+  assert.equal(q.feeExceptions[0].name, 'Kevin Otieno');
+  assert.equal(q.feeExceptions[0].balance, 18500);
+  // Pending admissions/registrations are real store rows, capped at 5.
+  assert.ok(q.pendingAdmissions.length <= 5 && q.pendingRegistrations.length <= 5);
+  for (const a of q.pendingAdmissions) assert.ok(['submitted', 'under_review', 'shortlisted'].includes(a.status));
+  // Status breakdown sums to the student total.
+  const byStatus = body.data.students.byStatus;
+  assert.equal(Object.values(byStatus).reduce((s: number, n: unknown) => s + Number(n), 0), body.data.students.total);
+  // Activity stream is an array (possibly empty); never invented entries.
+  assert.ok(Array.isArray(body.data.recentActivity));
+  // The admin command center renders for admin roles without the catalogue table or quick-access strip.
+  const commandCenter = read('app/dashboard/AdminCommandCenter.tsx');
+  assert.ok(!commandCenter.includes('Course catalogue'));
+  const experience = read('app/dashboard/DashboardExperience.tsx');
+  assert.ok(experience.includes('AdminCommandCenter'));
+});
