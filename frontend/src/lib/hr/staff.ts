@@ -134,6 +134,22 @@ export function findStaffByDisplayName(
   );
 }
 
+export function generateNextStaffNumber(existing: UamsStaffMember[]): string {
+  let max = 0;
+  for (const s of existing) {
+    const match = s.staff_number?.match(/(\d+)$/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num) && num > max) max = num;
+    }
+  }
+  let next = max + 1;
+  while (existing.some((s) => s.staff_number === `EUC/STAFF/${String(next).padStart(3, '0')}`)) {
+    next++;
+  }
+  return `EUC/STAFF/${String(next).padStart(3, '0')}`;
+}
+
 const runtime = globalThis as typeof globalThis & { __uams_staffStore?: UamsStaffMember[] };
 export const staffStore: UamsStaffMember[] = runtime.__uams_staffStore || (runtime.__uams_staffStore = seed);
 

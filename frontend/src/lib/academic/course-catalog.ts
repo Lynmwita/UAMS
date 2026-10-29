@@ -67,3 +67,13 @@ const seed = [
 ];
 const runtime=globalThis as typeof globalThis & {__uams_coursesStore?: typeof seed};
 export const coursesStore=runtime.__uams_coursesStore || (runtime.__uams_coursesStore=seed);
+
+export function clearLecturerAllocations(lecturerName: string): void {
+  const norm = lecturerName.trim().toLowerCase();
+  if (!norm) return;
+  for (const c of coursesStore) {
+    if (c.lecturer && (c.lecturer.toLowerCase().includes(norm) || norm.includes(c.lecturer.toLowerCase()))) {
+      c.lecturer = 'Unassigned';
+    }
+  }
+}

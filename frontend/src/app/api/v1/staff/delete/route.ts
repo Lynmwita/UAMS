@@ -3,6 +3,8 @@ import { requireServerAuth } from '@/lib/auth/server-auth';
 import { institutionalDatabase } from '@/lib/academic/institutional';
 import { staffStore } from '@/lib/hr/staff';
 import { recordAuditEvent } from '@/lib/audit/audit-logger';
+import { clearLecturerAllocations } from '@/lib/academic/course-catalog';
+import { clearLecturerFromTimetable } from '@/lib/academic/timetable-store';
 
 /**
  * Delete a whole staff record. Super Admin only, and always confirmed in
@@ -33,6 +35,9 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: false, error: 'Staff member not found.' }, { status: 404 });
       }
       const [removed] = staffStore.splice(index, 1);
+      const fullName = `${removed.first_name} ${removed.last_name}`;
+      clearLecturerAllocations(fullName);
+      clearLecturerFromTimetable(fullName);
       recordAuditEvent({
         actor_email: auth.user.email,
         actor_role: auth.user.role,
@@ -85,6 +90,23 @@ export async function POST(request: Request) {
         .from('users')
         .update({ auth_user_id: null, is_active: false })
         .eq('id', identity.id);
+    }
+
+    // Clear lecturer allocations and timetable slots (Hub ghost fix)
+    try {
+      const { data: lecturerRow } = await db
+        .from('lecturers')
+        .select('id')
+        .eq('staff_id', staffId)
+        .maybeSingle();
+
+      if (lecturerRow?.id) {
+        await db.from('course_allocations').delete().eq('lecturer_id', lecturerRow.id);
+        await db.from('timetables').update({ lecturer_id: null }).eq('lecturer_id', lecturerRow.id);
+        await db.from('lecturers').delete().eq('id', lecturerRow.id);
+      }
+    } catch {
+      // Non-fatal if tables don't exist
     }
 
     const { error: deleteError } = await db.from('uams_staff_records').delete().eq('id', staffId);

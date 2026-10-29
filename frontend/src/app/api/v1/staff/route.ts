@@ -1,13 +1,15 @@
 import { institutionalApi } from '@/lib/academic/institutional-api';
 import { institutionalDatabase } from '@/lib/academic/institutional';
 import { resolveStaffPortalRole } from '@/lib/supabase/provisioning';
-import { staffStore, syncStaffStoreFromDatabase, type UamsStaffMember } from '@/lib/hr/staff';
+import { staffStore, syncStaffStoreFromDatabase, generateNextStaffNumber, type UamsStaffMember } from '@/lib/hr/staff';
 import { extractStaffPhoto, isValidStaffPhoto } from '@/lib/staff/photo';
 import { departmentsStore } from '@/lib/academic/structure';
 import { requireServerAuth } from '@/lib/auth/server-auth';
 import { recordAuditEvent } from '@/lib/audit/audit-logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveCanonicalRole } from '@/lib/auth/roles';
+import { clearLecturerAllocations } from '@/lib/academic/course-catalog';
+import { clearLecturerFromTimetable } from '@/lib/academic/timetable-store';
 
 export async function GET(request: NextRequest) {
   const auth = await requireServerAuth(request, ['super_admin', 'admin', 'registrar', 'hod']);
@@ -112,7 +114,7 @@ export async function POST(request: NextRequest) {
 
     const created: UamsStaffMember = {
       id: `staff-${Date.now()}`,
-      staff_number: `EUC/STAFF/${String(staffStore.length + 1).padStart(3, '0')}`,
+      staff_number: generateNextStaffNumber(staffStore),
       first_name: String(first_name).trim(),
       last_name: String(last_name).trim(),
       email: emailNorm,
@@ -207,7 +209,14 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    if (typeof body.is_active === 'boolean') staff.is_active = body.is_active;
+    if (typeof body.is_active === 'boolean') {
+      staff.is_active = body.is_active;
+      if (!body.is_active) {
+        const fullName = `${staff.first_name} ${staff.last_name}`;
+        clearLecturerAllocations(fullName);
+        clearLecturerFromTimetable(fullName);
+      }
+    }
     const photo = extractStaffPhoto(body);
     if (photo !== undefined && photo !== null && !isValidStaffPhoto(photo)) {
       return NextResponse.json({ success: false, error: 'Profile photo must be an image (JPG/PNG/WebP) or an https photo URL.' }, { status: 400 });
@@ -274,6 +283,19 @@ export async function PATCH(request: NextRequest) {
           email: nextEmail,
           app_metadata: { role: staff.role },
         });
+      }
+
+      if (staff.is_active === false) {
+        const { data: lecturerRow } = await db
+          .from('lecturers')
+          .select('id')
+          .eq('staff_id', staff.id)
+          .maybeSingle();
+
+        if (lecturerRow?.id) {
+          await db.from('course_allocations').delete().eq('lecturer_id', lecturerRow.id);
+          await db.from('timetables').update({ lecturer_id: null }).eq('lecturer_id', lecturerRow.id);
+        }
       }
     } catch {
       // Non-fatal if offline

@@ -41,7 +41,7 @@ test('all seven roles obey the API authorization matrix',async()=>{
       ['create student',students.POST,['super_admin','admin','registrar']],
       ['create course',courses.POST,['super_admin','admin','registrar']],
       ['enter marks',grades.POST,['super_admin','lecturer']],
-      ['approve marks',grades.PATCH,['super_admin','admin','registrar','hod']],
+      ['approve marks',grades.PATCH,['super_admin','registrar','hod']],
       ['reconcile bank',bank.POST,['super_admin','finance_officer']],
       ['take attendance',attendance.POST,['super_admin','lecturer']],
     ] as [string,(r:any)=>Promise<Response>,string[]][]){
