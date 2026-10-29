@@ -371,7 +371,6 @@ export default function StaffPage() {
     setShowForm(false);
     setFormPhotoUrl('');
     setForm({ first_name: '', last_name: '', email: '', phone: '', role: 'lecturer', department_id: '', job_title: '', qualification: '' });
-    setPhotoError('');
     setError('');
     load();
   };
