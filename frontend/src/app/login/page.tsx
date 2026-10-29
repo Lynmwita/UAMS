@@ -90,7 +90,7 @@ function LoginForm() {
   };
 
   const handleFillDemoCredentials = (role: UserRole) => {
-    const nextEmail = `${role}@university.ac.ke`;
+    const nextEmail = role === 'audit_officer' ? 'auditor@university.ac.ke' : `${role}@university.ac.ke`;
     const nextPassword = DEMO_PASSWORD;
 
     setSelectedRole(role);
@@ -137,11 +137,13 @@ function LoginForm() {
                 onChange={(e) => setSelectedRole(e.target.value as UserRole | typeof OTHER_ROLE_SELECTION)}
                 className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-academic-navy-700 focus:bg-white"
               >
-                {Object.entries(ROLE_LABELS).map(([code, label]) => (
-                  <option key={code} value={code}>
-                    {label}
-                  </option>
-                ))}
+                {Object.entries(ROLE_LABELS)
+                  .filter(([code]) => code !== 'support_staff')
+                  .map(([code, label]) => (
+                    <option key={code} value={code}>
+                      {label}
+                    </option>
+                  ))}
                 {/* Not a role: tells the server to resolve the role from
                     the admin's record for this email. It grants nothing
                     on its own — sign-in still requires the administrator
@@ -272,6 +274,13 @@ function LoginForm() {
                   className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
                 >
                   Librarian
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleFillDemoCredentials('audit_officer')}
+                  className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-academic-navy-950 font-medium text-left transition"
+                >
+                  Audit Officer
                 </button>
                 <button
                   type="button"

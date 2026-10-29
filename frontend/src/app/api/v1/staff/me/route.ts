@@ -27,9 +27,12 @@ export async function GET(request: Request) {
         first_name: record.first_name,
         last_name: record.last_name,
         email: record.email,
+        phone: record.phone,
         job_title: record.job_title,
         department_name: record.department_name,
         staff_number: record.staff_number,
+        photo_url: record.photo_url || null,
+        joined_date: record.joined_date,
       },
     });
   }
@@ -50,6 +53,9 @@ export async function GET(request: Request) {
         job_title: (data as any).job_title ?? (data as any).role ?? null,
         department_name: (data as any).department_name ?? (data as any).department ?? null,
         staff_number: (data as any).staff_number ?? null,
+        phone: (data as any).phone ?? null,
+        photo_url: (data as any).photo_url ?? null,
+        joined_date: (data as any).joined_date ?? null,
       },
     });
   } catch {

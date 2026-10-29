@@ -4,9 +4,8 @@ import { useEffect, useState } from 'react';
 import { IdCard, Search, Plus, ShieldX, ShieldCheck, Loader2, CheckCircle2, AlertCircle, GraduationCap, KeyRound, Pencil, Mail, Lock, X, UserX, Trash2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/context';
 import { isTeachingRole } from '@/lib/hr/staff';
-import { StudentAvatar } from '@/components/StudentIdCard';
-import { fileToStaffPhotoDataUrl } from '@/lib/staff/photo';
-
+import { PhotoCaptureInput } from '@/components/PhotoCaptureInput';
+import { StaffAvatar, StaffIdCardModal } from '@/components/StaffIdCard';
 type StaffMember = {
   id: string;
   staff_number: string;
@@ -18,9 +17,9 @@ type StaffMember = {
   department_name: string;
   job_title: string;
   qualification: string;
+  photo_url?: string;
   is_active: boolean;
   joined_date: string;
-  photo_url?: string;
 };
 
 const DEFAULT_ROLES = [
@@ -95,6 +94,9 @@ export default function StaffPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [formPhotoUrl, setFormPhotoUrl] = useState('');
+  const [editPhotoUrl, setEditPhotoUrl] = useState('');
+  const [idCardStaff, setIdCardStaff] = useState<StaffMember | null>(null);
 
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [editForm, setEditForm] = useState({
@@ -128,9 +130,6 @@ export default function StaffPage() {
     qualification: '',
   });
   // Staff profile photo: one photo for the list avatar and the details view.
-  const [photoUrl, setPhotoUrl] = useState('');
-  const [photoError, setPhotoError] = useState('');
-  const [editPhotoUrl, setEditPhotoUrl] = useState('');
 
   const handleOpenEdit = (s: StaffMember) => {
     setEditingStaff(s);
@@ -166,8 +165,7 @@ export default function StaffPage() {
           job_title: editForm.job_title,
           qualification: editForm.qualification,
           // Send the photo only when it changed ('' on purpose = remove it).
-          ...(editPhotoUrl !== (editingStaff.photo_url || '') ? { photo_url: editPhotoUrl } : {}),
-        }),
+          ...(editPhotoUrl !== (editingStaff.photo_url || '') ? { photo_url: editPhotoUrl } : {}),        }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Failed to update staff member.');
@@ -359,8 +357,7 @@ export default function StaffPage() {
     const payload = {
       ...form,
       department_id: form.department_id || fallbackDept,
-      ...(photoUrl ? { photo_url: photoUrl } : {}),
-    };
+      photo_url: formPhotoUrl || undefined,    };
     const r = await fetch('/api/v1/staff', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -372,9 +369,8 @@ export default function StaffPage() {
       return;
     }
     setShowForm(false);
+    setFormPhotoUrl('');
     setForm({ first_name: '', last_name: '', email: '', phone: '', role: 'lecturer', department_id: '', job_title: '', qualification: '' });
-    setPhotoUrl('');
-    setPhotoError('');
     setError('');
     load();
   };
@@ -556,39 +552,14 @@ export default function StaffPage() {
             <span className="text-xs text-slate-500">Academic, Technical, Administrative, and Support Roles</span>
           </div>
 
-          {/* Profile photo: one photo for the list avatar and the details view. */}
-          <div className="flex items-center gap-4 pb-1">
-            <StudentAvatar name={`${form.first_name} ${form.last_name}`.trim() || 'New Staff'} photoUrl={photoUrl || undefined} size="lg" />
-            <div>
-              <label htmlFor="staff-photo-input" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-academic-navy-900 hover:bg-academic-navy-800 text-white rounded-lg text-xs font-semibold cursor-pointer transition">
-                <span>{photoUrl ? 'Change photo' : 'Upload photo'}</span>
-              </label>
-              <input
-                id="staff-photo-input"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="hidden"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  setPhotoError('');
-                  try {
-                    setPhotoUrl(await fileToStaffPhotoDataUrl(file));
-                  } catch (err: any) {
-                    setPhotoError(err.message || 'That photo could not be used.');
-                  }
-                  e.target.value = '';
-                }}
-              />
-              {photoUrl && (
-                <button type="button" onClick={() => setPhotoUrl('')} className="ml-2 text-xs text-slate-500 hover:text-red-600 underline">
-                  Remove
-                </button>
-              )}
-              <p className="text-[11px] text-slate-500 mt-1">Optional. Square JPG/PNG, cropped automatically.</p>
-              {photoError && <p className="text-[11px] text-red-600 mt-1">{photoError}</p>}
-            </div>
-          </div>
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+            <PhotoCaptureInput
+              photoUrl={formPhotoUrl}
+              onChange={setFormPhotoUrl}
+              name={[form.first_name, form.last_name].filter(Boolean).join(' ') || 'Staff Member'}
+              label="Staff Identification & Profile Photo (Live Camera or Upload)"
+              helperText="Take a live photo with camera or choose an image file. This photo appears on the official Staff ID Card and staff directory."
+            />          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             <div>
@@ -903,8 +874,7 @@ export default function StaffPage() {
                   <td className="p-3 font-mono text-xs font-bold text-slate-700">{s.staff_number}</td>
                   <td className="p-3">
                     <div className="flex items-center gap-2.5">
-                      <StudentAvatar name={`${s.first_name} ${s.last_name}`} photoUrl={s.photo_url} size="sm" />
-                      <div>
+                      <StaffAvatar name={`${s.first_name} ${s.last_name}`} photoUrl={s.photo_url} size="sm" />                      <div>
                         <div className="font-medium text-slate-900">
                           {s.first_name} {s.last_name}
                         </div>
@@ -971,6 +941,16 @@ export default function StaffPage() {
                           <span>Edit</span>
                         </button>
                       )}
+
+                      <button
+                        type="button"
+                        className="text-xs border border-academic-gold-400/80 bg-academic-gold-50/70 hover:bg-academic-gold-100 text-academic-navy-950 rounded px-2.5 py-1 inline-flex items-center gap-1 font-semibold transition"
+                        onClick={() => setIdCardStaff(s)}
+                        title="View official University Staff ID Card (Front/Back) and download PDF"
+                      >
+                        <IdCard className="w-3.5 h-3.5 text-academic-navy-900" />
+                        <span>ID Card</span>
+                      </button>
 
                       {canManage && (
                         <button
@@ -1226,37 +1206,14 @@ export default function StaffPage() {
               </button>
             </div>
 
-            {/* Profile photo: change or remove. */}
-            <div className="flex items-center gap-4 pt-1">
-              <StudentAvatar name={`${editForm.first_name} ${editForm.last_name}`.trim() || 'Staff'} photoUrl={editPhotoUrl || undefined} size="lg" />
-              <div>
-                <label htmlFor="staff-edit-photo-input" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-academic-navy-900 hover:bg-academic-navy-800 text-white rounded-lg text-xs font-semibold cursor-pointer transition">
-                  <span>{editPhotoUrl ? 'Change photo' : 'Upload photo'}</span>
-                </label>
-                <input
-                  id="staff-edit-photo-input"
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    try {
-                      setEditPhotoUrl(await fileToStaffPhotoDataUrl(file));
-                    } catch (err: any) {
-                      setError(err.message || 'That photo could not be used.');
-                    }
-                    e.target.value = '';
-                  }}
-                />
-                {editPhotoUrl && (
-                  <button type="button" onClick={() => setEditPhotoUrl('')} className="ml-2 text-xs text-slate-500 hover:text-red-600 underline">
-                    Remove
-                  </button>
-                )}
-                <p className="text-[11px] text-slate-500 mt-1">Square JPG/PNG, cropped automatically.</p>
-              </div>
-            </div>
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+              <PhotoCaptureInput
+                photoUrl={editPhotoUrl}
+                onChange={setEditPhotoUrl}
+                name={[editForm.first_name, editForm.last_name].filter(Boolean).join(' ') || 'Staff Member'}
+                label="Staff Photo (Camera or Upload)"
+                helperText="Update the photo on this staff member's official ID card and institutional profile."
+              />            </div>
 
             <div className="grid grid-cols-2 gap-3 pt-2">
               <div>
@@ -1370,6 +1327,24 @@ export default function StaffPage() {
             </div>
           </div>
         </div>
+      )}
+      {/* Staff ID Card Modal */}
+      {idCardStaff && (
+        <StaffIdCardModal
+          staff={{
+            name: `${idCardStaff.first_name} ${idCardStaff.last_name}`,
+            staffNumber: idCardStaff.staff_number,
+            jobTitle: idCardStaff.job_title || idCardStaff.role,
+            department: idCardStaff.department_name,
+            role: idCardStaff.role,
+            email: idCardStaff.email,
+            phone: idCardStaff.phone,
+            photoUrl: idCardStaff.photo_url,
+            joinedDate: idCardStaff.joined_date,
+            isActive: idCardStaff.is_active,
+          }}
+          onClose={() => setIdCardStaff(null)}
+        />
       )}
     </div>
   );

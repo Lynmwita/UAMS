@@ -149,10 +149,15 @@ export async function syncStaffStoreFromDatabase(): Promise<void> {
     const db = institutionalDatabase();
     const { data: dbUsers } = await db
       .from('users')
-      .select('id,email,first_name,last_name,phone_number,is_active,roles(code)');
+      .select('id,email,first_name,last_name,phone_number,is_active,avatar_url,roles(code)');
     if (dbUsers && dbUsers.length > 0) {
       for (const u of dbUsers) {
-        if (!staffStore.some((s) => s.email.toLowerCase() === u.email.toLowerCase())) {
+        const existing = staffStore.find((s) => s.email.toLowerCase() === u.email.toLowerCase());
+        if (existing) {
+          if (u.avatar_url && !existing.photo_url) {
+            existing.photo_url = u.avatar_url;
+          }
+        } else {
           const uRole = (Array.isArray(u.roles) ? u.roles[0]?.code : (u.roles as unknown as { code?: string })?.code) || 'lecturer';
           staffStore.push({
             id: u.id,
@@ -169,6 +174,7 @@ export async function syncStaffStoreFromDatabase(): Promise<void> {
             qualification: '',
             is_active: u.is_active ?? true,
             joined_date: new Date().toISOString().slice(0, 10),
+            photo_url: u.avatar_url || undefined,
           });
         }
       }

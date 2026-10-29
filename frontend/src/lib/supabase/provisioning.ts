@@ -31,6 +31,8 @@ import type { UserRole } from '@/types';
  */
 const PORTAL_ROLE_ALIASES: Record<string, UserRole> = {
   library: 'librarian',
+  auditor: 'audit_officer',
+  compliance_officer: 'audit_officer',
 };
 
 export function resolvePortalRole(...candidates: Array<unknown>): UserRole | null {

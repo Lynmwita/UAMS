@@ -23,7 +23,7 @@ let hostelAllocations: HostelAllocation[] = [
 ];
 
 export async function GET(req: NextRequest) {
-  const auth = await requireServerAuth(req, ['student','admin','super_admin','registrar']);
+  const auth = await requireServerAuth(req, ['student', 'admin', 'super_admin', 'registrar']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireServerAuth(req, ['student','registrar','admin']);
+  const auth = await requireServerAuth(req, ['student', 'registrar', 'admin', 'super_admin']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }

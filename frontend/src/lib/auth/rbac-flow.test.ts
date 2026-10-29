@@ -27,9 +27,9 @@ test('all seven roles obey the API authorization matrix',async()=>{
     ['student records',students.GET,['super_admin','admin','registrar','hod','finance_officer','student']],
     ['course catalogue',courses.GET,['super_admin','admin','registrar','hod','lecturer','student']],
     ['structure',schools.GET,['super_admin','admin','registrar']],
-    ['grades',grades.GET,['super_admin','admin','registrar','hod','lecturer','student']],
-    ['bank records',bank.GET,['super_admin','admin','finance_officer']],
-    ['audit',audit.GET,['super_admin','admin']],
+    ['grades',grades.GET,['super_admin','admin','registrar','hod','lecturer','student','audit_officer']],
+    ['bank records',bank.GET,['super_admin','admin','finance_officer','audit_officer']],
+    ['audit',audit.GET,['super_admin','admin','audit_officer']],
     ['attendance',attendance.GET,['super_admin','admin','hod','lecturer','student']],
   ];
   for(const role of USER_ROLES) for(const [name,handler,allowed] of cases) {

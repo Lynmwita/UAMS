@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { first_name, last_name, email, phone, role, department_id, job_title, qualification } = body;
+    const { first_name, last_name, email, phone, role, department_id, job_title, qualification, photo_url } = body;
 
     if (!first_name || !last_name || !email || !role) {
       return NextResponse.json(
@@ -123,6 +123,7 @@ export async function POST(request: NextRequest) {
       school_id: department.school_id || 'central',
       job_title: job_title || role,
       qualification: qualification || '',
+      photo_url: photo_url || undefined,
       is_active: true,
       joined_date: new Date().toISOString().slice(0, 10),
       ...(photo ? { photo_url: photo } : {}),
@@ -146,6 +147,7 @@ export async function POST(request: NextRequest) {
         first_name: created.first_name,
         last_name: created.last_name,
         phone_number: created.phone || null,
+        avatar_url: created.photo_url || null,
         role_id: roleRow?.id || null,
         is_active: true,
       }, { onConflict: 'email' });
@@ -216,6 +218,7 @@ export async function PATCH(request: NextRequest) {
     if (body.job_title) staff.job_title = String(body.job_title);
     if (body.qualification) staff.qualification = String(body.qualification);
     if (body.phone) staff.phone = String(body.phone);
+    if (body.photo_url !== undefined) staff.photo_url = body.photo_url || undefined;
     if (body.role) {
       const nextRole = String(body.role).toLowerCase();
       if (auth.user.role === 'registrar' && (nextRole === 'admin' || nextRole === 'super_admin')) {
@@ -257,6 +260,7 @@ export async function PATCH(request: NextRequest) {
           first_name: staff.first_name,
           last_name: staff.last_name,
           phone_number: staff.phone || null,
+          avatar_url: staff.photo_url || null,
           role_id: roleRow?.id || null,
           is_active: staff.is_active,
           updated_at: new Date().toISOString(),

@@ -1,6 +1,17 @@
 import type { UserRole } from '@/types';
 
-export const USER_ROLES: UserRole[] = ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student', 'librarian', 'support_staff'];
+export const USER_ROLES: UserRole[] = [
+  'super_admin',
+  'admin',
+  'registrar',
+  'hod',
+  'lecturer',
+  'finance_officer',
+  'student',
+  'librarian',
+  'support_staff',
+  'audit_officer',
+];
 
 /**
  * Login-form sentinel, NOT a role: "Support staff / Other" means "my role
@@ -22,6 +33,7 @@ export function resolveCanonicalRole(rawRole: unknown): UserRole {
   if (['hod', 'dean', 'chair'].includes(norm)) return 'hod';
   if (['finance_officer', 'finance', 'accountant', 'bursar'].includes(norm)) return 'finance_officer';
   if (['librarian', 'library'].includes(norm)) return 'librarian';
+  if (['audit_officer', 'compliance_officer', 'auditor', 'internal_auditor'].includes(norm)) return 'audit_officer';
   if (['student'].includes(norm)) return 'student';
   if (['lecturer', 'faculty', 'professor', 'tutorial_fellow', 'teaching_assistant', 'lab_technician'].includes(norm)) return 'lecturer';
   // General campus support & operational staff resolve to the scoped
@@ -38,21 +50,21 @@ export const PAGE_ROLES: Record<string, UserRole[]> = {
   students: ['super_admin', 'admin', 'registrar', 'hod', 'finance_officer'],
   courses: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student'],
   attendance: ['super_admin', 'admin', 'hod', 'lecturer', 'student'],
-  grades: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student'],
-  exams: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student'],
-  finance: ['super_admin', 'admin', 'finance_officer', 'student'],
+  grades: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student', 'audit_officer'],
+  exams: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student', 'audit_officer'],
+  finance: ['super_admin', 'admin', 'finance_officer', 'student', 'audit_officer'],
   hostel: ['super_admin', 'admin', 'registrar', 'student'],
   library: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student', 'librarian'],
   timetable: ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'student'],
   notifications: ['super_admin', 'admin', 'registrar', 'finance_officer'],
-  audit: ['super_admin', 'admin'],
+  audit: ['super_admin', 'admin', 'audit_officer'],
   ai: USER_ROLES,
   announcements: USER_ROLES,
   admissions: ['super_admin', 'admin', 'registrar', 'hod'],
   staff: ['super_admin', 'admin', 'registrar'],
   events: USER_ROLES,
-  reports: ['super_admin', 'admin', 'registrar', 'finance_officer', 'hod'],
-  support: ['super_admin','admin','registrar'],
+  reports: ['super_admin', 'admin', 'registrar', 'finance_officer', 'hod', 'audit_officer'],
+  support: ['super_admin', 'admin', 'registrar'],
 };
 
 export function canAccessPage(role: UserRole, module: string): boolean {

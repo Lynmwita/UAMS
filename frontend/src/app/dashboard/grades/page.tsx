@@ -69,6 +69,16 @@ export default function GradesPage() {
   return (
     <div className="space-y-6">
       {error && <p role="alert" className="text-rose-700">{error}</p>}
+      {role === 'audit_officer' && (
+        <div className="bg-academic-navy-900 border border-academic-navy-800 rounded-xl p-3.5 text-white flex items-center justify-between shadow-sm">
+          <div className="text-xs text-slate-200">
+            <span className="font-bold text-academic-gold-400">🛡️ Audit & Compliance Inspector:</span> Read-only grade inspection mode active. Grade modifications and approval gates are restricted.
+          </div>
+          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 bg-academic-navy-800 text-academic-gold-400 rounded border border-academic-gold-500/30">
+            Read-Only
+          </span>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-200 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-academic-navy-950 tracking-tight">

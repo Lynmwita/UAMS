@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
     'finance_officer',
     'hod',
     'student',
+    'audit_officer',
   ]);
   if ('errorResponse' in auth) return auth.errorResponse;
   const { user } = auth;

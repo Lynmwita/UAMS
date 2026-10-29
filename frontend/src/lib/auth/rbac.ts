@@ -22,6 +22,7 @@ export type Permission =
 export const ROLE_HIERARCHY: Record<UserRole, number> = {
   super_admin: 100,
   admin: 90,
+  audit_officer: 85,
   registrar: 80,
   hod: 70,
   lecturer: 60,
@@ -34,6 +35,7 @@ export const ROLE_HIERARCHY: Record<UserRole, number> = {
 export const ROLE_LABELS: Record<UserRole, string> = {
   super_admin: 'Super Administrator',
   admin: 'University Administrator',
+  audit_officer: 'Audit & Compliance Officer',
   registrar: 'Registrar',
   hod: 'Head of Department',
   lecturer: 'Lecturer / Faculty',
@@ -123,6 +125,14 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   "librarian": [
     "library:read",
     "library:loan"
+  ],
+  // Independent read-only oversight across audit logs, finance ledgers,
+  // examination results, courses, and student records without write access.
+  "audit_officer": [
+    "audit:read",
+    "finance:read",
+    "grades:read",
+    "exams:read"
   ],
   // Support staff hold no data permissions: their dashboard is their own
   // roster, general announcements and events, and their own profile.
