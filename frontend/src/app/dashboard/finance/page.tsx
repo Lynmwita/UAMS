@@ -260,6 +260,16 @@ export default function FinancePage() {
       <p className="text-sm text-amber-800">Historical invoices and balances on this screen are demonstration data. New M-Pesa receipts require provider confirmation; invoice allocation must be completed by Finance.</p>
       {summaryError && <p role="alert" className="text-sm text-rose-700">{summaryError}</p>}
       {paymentStatus && <p role="status">Payment status: {paymentStatus}</p>}
+      {role === 'audit_officer' && (
+        <div className="bg-academic-navy-900 border border-academic-navy-800 rounded-xl p-4 text-white flex items-center justify-between shadow-sm">
+          <div className="text-xs text-slate-200">
+            <span className="font-bold text-academic-gold-400">🛡️ Audit & Compliance Inspector:</span> Read-only ledger inspection mode active. Financial modifications and payment triggers are restricted.
+          </div>
+          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 bg-academic-navy-800 text-academic-gold-400 rounded border border-academic-gold-500/30">
+            Read-Only
+          </span>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-slate-200 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-academic-navy-950 tracking-tight">

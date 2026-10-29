@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { IdCard, Search, Plus, ShieldX, ShieldCheck, Loader2, CheckCircle2, AlertCircle, GraduationCap, KeyRound, Pencil, Mail, Lock, X, UserX, Trash2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/context';
 import { isTeachingRole } from '@/lib/hr/staff';
+import { PhotoCaptureInput } from '@/components/PhotoCaptureInput';
+import { StaffAvatar, StaffIdCardModal } from '@/components/StaffIdCard';
 
 type StaffMember = {
   id: string;
@@ -16,6 +18,7 @@ type StaffMember = {
   department_name: string;
   job_title: string;
   qualification: string;
+  photo_url?: string;
   is_active: boolean;
   joined_date: string;
 };
@@ -92,6 +95,9 @@ export default function StaffPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [formPhotoUrl, setFormPhotoUrl] = useState('');
+  const [editPhotoUrl, setEditPhotoUrl] = useState('');
+  const [idCardStaff, setIdCardStaff] = useState<StaffMember | null>(null);
 
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [editForm, setEditForm] = useState({
@@ -127,6 +133,7 @@ export default function StaffPage() {
 
   const handleOpenEdit = (s: StaffMember) => {
     setEditingStaff(s);
+    setEditPhotoUrl(s.photo_url || '');
     setEditForm({
       first_name: s.first_name,
       last_name: s.last_name,
@@ -157,6 +164,7 @@ export default function StaffPage() {
           department_id: editForm.department_id,
           job_title: editForm.job_title,
           qualification: editForm.qualification,
+          photo_url: editPhotoUrl || null,
         }),
       });
       const d = await res.json();
@@ -349,6 +357,7 @@ export default function StaffPage() {
     const payload = {
       ...form,
       department_id: form.department_id || fallbackDept,
+      photo_url: formPhotoUrl || undefined,
     };
     const r = await fetch('/api/v1/staff', {
       method: 'POST',
@@ -361,6 +370,7 @@ export default function StaffPage() {
       return;
     }
     setShowForm(false);
+    setFormPhotoUrl('');
     setForm({ first_name: '', last_name: '', email: '', phone: '', role: 'lecturer', department_id: '', job_title: '', qualification: '' });
     setError('');
     load();
@@ -541,6 +551,16 @@ export default function StaffPage() {
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <h3 className="font-bold text-slate-900 text-sm">Register New University Staff Member</h3>
             <span className="text-xs text-slate-500">Academic, Technical, Administrative, and Support Roles</span>
+          </div>
+
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+            <PhotoCaptureInput
+              photoUrl={formPhotoUrl}
+              onChange={setFormPhotoUrl}
+              name={[form.first_name, form.last_name].filter(Boolean).join(' ') || 'Staff Member'}
+              label="Staff Identification & Profile Photo (Live Camera or Upload)"
+              helperText="Take a live photo with camera or choose an image file. This photo appears on the official Staff ID Card and staff directory."
+            />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
@@ -855,10 +875,15 @@ export default function StaffPage() {
                 <tr key={s.id} className="hover:bg-slate-50/60 transition">
                   <td className="p-3 font-mono text-xs font-bold text-slate-700">{s.staff_number}</td>
                   <td className="p-3">
-                    <div className="font-medium text-slate-900">
-                      {s.first_name} {s.last_name}
+                    <div className="flex items-center gap-2.5">
+                      <StaffAvatar name={`${s.first_name} ${s.last_name}`} photoUrl={s.photo_url} size="sm" />
+                      <div>
+                        <div className="font-medium text-slate-900">
+                          {s.first_name} {s.last_name}
+                        </div>
+                        <div className="text-xs text-muted-foreground">{s.email}</div>
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground">{s.email}</div>
                   </td>
                   <td className="p-3 font-medium text-slate-800">
                     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-800 border border-slate-200">
@@ -919,6 +944,16 @@ export default function StaffPage() {
                           <span>Edit</span>
                         </button>
                       )}
+
+                      <button
+                        type="button"
+                        className="text-xs border border-academic-gold-400/80 bg-academic-gold-50/70 hover:bg-academic-gold-100 text-academic-navy-950 rounded px-2.5 py-1 inline-flex items-center gap-1 font-semibold transition"
+                        onClick={() => setIdCardStaff(s)}
+                        title="View official University Staff ID Card (Front/Back) and download PDF"
+                      >
+                        <IdCard className="w-3.5 h-3.5 text-academic-navy-900" />
+                        <span>ID Card</span>
+                      </button>
 
                       {canManage && (
                         <button
@@ -1174,6 +1209,16 @@ export default function StaffPage() {
               </button>
             </div>
 
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+              <PhotoCaptureInput
+                photoUrl={editPhotoUrl}
+                onChange={setEditPhotoUrl}
+                name={[editForm.first_name, editForm.last_name].filter(Boolean).join(' ') || 'Staff Member'}
+                label="Staff Photo (Camera or Upload)"
+                helperText="Update the photo on this staff member's official ID card and institutional profile."
+              />
+            </div>
+
             <div className="grid grid-cols-2 gap-3 pt-2">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">First Name</label>
@@ -1286,6 +1331,24 @@ export default function StaffPage() {
             </div>
           </div>
         </div>
+      )}
+      {/* Staff ID Card Modal */}
+      {idCardStaff && (
+        <StaffIdCardModal
+          staff={{
+            name: `${idCardStaff.first_name} ${idCardStaff.last_name}`,
+            staffNumber: idCardStaff.staff_number,
+            jobTitle: idCardStaff.job_title || idCardStaff.role,
+            department: idCardStaff.department_name,
+            role: idCardStaff.role,
+            email: idCardStaff.email,
+            phone: idCardStaff.phone,
+            photoUrl: idCardStaff.photo_url,
+            joinedDate: idCardStaff.joined_date,
+            isActive: idCardStaff.is_active,
+          }}
+          onClose={() => setIdCardStaff(null)}
+        />
       )}
     </div>
   );

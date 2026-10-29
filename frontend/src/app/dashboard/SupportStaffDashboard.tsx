@@ -4,10 +4,12 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/context';
 import { describeSupportAssignment } from '@/lib/hr/support-assignment';
+import { StaffAvatar, StaffIdCardModal } from '@/components/StaffIdCard';
 import {
   ArrowRight,
   CalendarDays,
   ClipboardList,
+  IdCard,
   Megaphone,
   User,
 } from 'lucide-react';
@@ -46,7 +48,15 @@ export default function SupportStaffDashboard() {
   const { firstName, lastName, email } = useAuth();
   const [notices, setNotices] = useState<Notice[]>([]);
   const [events, setEvents] = useState<CampusEvent[]>([]);
-  const [assignment, setAssignment] = useState<{ job_title?: string | null; department_name?: string | null } | null>(null);
+  const [assignment, setAssignment] = useState<{
+    job_title?: string | null;
+    department_name?: string | null;
+    staff_number?: string | null;
+    photo_url?: string | null;
+    phone?: string | null;
+    joined_date?: string | null;
+  } | null>(null);
+  const [showIdCard, setShowIdCard] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -98,21 +108,59 @@ export default function SupportStaffDashboard() {
         </p>
       </header>
 
-      <section aria-label="My profile" className="border rounded-xl p-5 bg-white">
-        <div className="flex items-center gap-2 mb-3">
-          <User className="w-4 h-4 text-slate-500" />
-          <h2 className="font-semibold">My profile</h2>
+      <section aria-label="My profile" className="border rounded-xl p-5 bg-white shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <StaffAvatar name={displayName} photoUrl={assignment?.photo_url || undefined} size="lg" />
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <User className="w-4 h-4 text-slate-500" />
+                <h2 className="font-semibold text-slate-900">{displayName}</h2>
+              </div>
+              <p className="text-sm text-slate-500">{email}</p>
+              <p className="text-sm text-slate-600 font-medium">Role: Support Staff</p>
+              {roster.assignmentLine && (
+                <p className="text-sm text-slate-600">Assignment: {roster.assignmentLine}</p>
+              )}
+              {assignment?.staff_number && (
+                <p className="text-xs font-mono font-bold text-academic-navy-900 mt-1">
+                  Staff ID: {assignment.staff_number}
+                </p>
+              )}
+            </div>
+          </div>
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowIdCard(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-academic-navy-950 hover:bg-academic-navy-900 text-white rounded-xl text-xs font-bold shadow-sm transition border border-academic-gold-500/40"
+            >
+              <IdCard className="w-4 h-4 text-academic-gold-400" />
+              <span>View My Staff ID Card</span>
+            </button>
+          </div>
         </div>
-        <p className="text-sm text-slate-700">{displayName}</p>
-        <p className="text-sm text-slate-500">{email}</p>
-        <p className="text-sm text-slate-500">Role: Support Staff</p>
-        {roster.assignmentLine && (
-          <p className="text-sm text-slate-500">Assignment: {roster.assignmentLine}</p>
-        )}
-        <p className="text-xs text-slate-500 mt-2">
-          Profile details are managed by the registrar or an administrator. Ask them if anything here is wrong.
+        <p className="text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100">
+          Profile details and photo are managed by the registrar or an administrator. Ask them if anything here needs updating.
         </p>
       </section>
+
+      {showIdCard && (
+        <StaffIdCardModal
+          staff={{
+            name: displayName,
+            staffNumber: assignment?.staff_number || 'EUC/STAFF/000',
+            jobTitle: assignment?.job_title || 'Support Staff',
+            department: assignment?.department_name || 'General Campus Support & Operations',
+            email: email || '',
+            phone: assignment?.phone || '',
+            photoUrl: assignment?.photo_url || undefined,
+            joinedDate: assignment?.joined_date || undefined,
+            isActive: true,
+          }}
+          onClose={() => setShowIdCard(false)}
+        />
+      )}
 
       <section aria-label="My duty roster" className="border rounded-xl p-5 bg-white">
         <div className="flex items-center gap-2 mb-3">

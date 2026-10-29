@@ -19,7 +19,7 @@ import { attendanceSessions, derivedAttendanceAverage } from '@/lib/academic/att
  * dashboard, not this endpoint.
  */
 export async function GET(request: Request) {
-  const auth = await requireServerAuth(request, ['student', 'admin', 'super_admin', 'registrar', 'hod', 'lecturer', 'finance_officer']);
+  const auth = await requireServerAuth(request, ['student', 'admin', 'super_admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'audit_officer']);
   if ('errorResponse' in auth) return auth.errorResponse;
   if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'reports');
 

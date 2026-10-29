@@ -56,7 +56,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, error: 'Email or password exceeds maximum allowable length.' }, { status: 400 });
   }
 
-  const demoRoleEntry = Object.entries(DEMO_USERS).find(([, account]) => account?.email.toLowerCase() === email);
+  const demoRoleEntry = Object.entries(DEMO_USERS).find(([, account]) => account?.email.toLowerCase() === email || (account?.email === 'audit_officer@university.ac.ke' && email === 'auditor@university.ac.ke'));
   const demoRole = demoRoleEntry ? (demoRoleEntry[0] as UserRole) : null;
   const isDemoAuthEnabled = process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEMO_AUTH === 'true';
 
@@ -93,7 +93,7 @@ export async function POST(request: Request) {
       const { data, error } = await authClient().auth.signInWithPassword({ email, password });
       if (error || !data.session || !data.user) {
         const isDemoDomain = email.includes('@university.ac.ke');
-        const looksLikeDemoRole = email.includes('student') || email.includes('lecturer') || email.includes('admin') || email.includes('hod') || email.includes('registrar') || email.includes('finance') || email.includes('librarian');
+        const looksLikeDemoRole = email.includes('student') || email.includes('lecturer') || email.includes('admin') || email.includes('hod') || email.includes('registrar') || email.includes('finance') || email.includes('librarian') || email.includes('auditor') || email.includes('hostel') || email.includes('support');
 
         if (looksLikeDemoRole || isDemoDomain) {
           return NextResponse.json({

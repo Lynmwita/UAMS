@@ -32,6 +32,7 @@ import {
 import { generateExamCardPDF, generateStudentIDCardPDF } from '@/lib/pdf/generator';
 import { StudentAvatar, StudentIdCard, StudentIdCardBack } from '@/components/StudentIdCard';
 import { fileToStudentPhotoDataUrl } from '@/lib/students/photo';
+import { PhotoCaptureInput } from '@/components/PhotoCaptureInput';
 
 const FACULTY_DEPARTMENTS: Record<string, string[]> = {
   'School of Computing & Informatics': [
@@ -1093,36 +1094,14 @@ export default function StudentsPage() {
               {/* Profile photo + live ID card preview: ONE photo for both */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 bg-slate-50 border border-slate-200 rounded-xl p-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                    Profile Photo
-                  </label>
-                  <p className="text-[11px] text-slate-500 mb-3">
-                    This one photo becomes the student&apos;s profile photo <strong>and</strong> the photo on their Student ID Card.
-                  </p>
-                  <div className="flex items-center gap-3">
-                    <StudentAvatar name={fullName || 'New Student'} photoUrl={photoUrl || undefined} size="lg" />
-                    <div className="flex flex-col gap-1.5">
-                      <label htmlFor="student-photo-input" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-academic-navy-900 hover:bg-academic-navy-800 text-white rounded-lg text-xs font-semibold cursor-pointer transition">
-                        <Camera className="h-3.5 w-3.5 text-academic-gold-400" />
-                        <span>{photoUrl ? 'Change photo' : 'Upload photo'}</span>
-                      </label>
-                      <input
-                        id="student-photo-input"
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        className="hidden"
-                        onChange={(e) => { handlePhotoFile(e.target.files?.[0], setPhotoUrl, setPhotoError); e.target.value = ''; }}
-                      />
-                      {photoUrl && (
-                        <button type="button" onClick={() => setPhotoUrl('')} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold transition">
-                          <Trash2 className="h-3.5 w-3.5" />
-                          <span>Remove</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                  <PhotoCaptureInput
+                    photoUrl={photoUrl}
+                    onChange={setPhotoUrl}
+                    name={fullName || 'New Student'}
+                    label="Profile & Student ID Photo"
+                    helperText="Take a live photo with camera or choose an image file. It formats automatically for the Student ID card."
+                  />
                   {photoError && <p className="mt-2 text-xs text-rose-600 font-medium">{photoError}</p>}
-                  <p className="mt-2 text-[11px] text-slate-500">JPG or PNG. It is cropped square and resized automatically. You can also add it later from Edit.</p>
                 </div>
                 <div>
                   <p className="text-xs font-bold text-slate-700 uppercase mb-2">Student ID Card - Live Preview</p>
@@ -1462,32 +1441,15 @@ export default function StudentsPage() {
 
             <form noValidate onSubmit={handleSaveEdit} className="space-y-4 mt-4 text-sm">
               {/* Profile photo - the same photo appears on the ID card */}
-              <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
-                <StudentAvatar name={editFullName || editingStudent.name} photoUrl={editPhotoUrl || undefined} size="lg" />
-                <div>
-                  <p className="text-xs font-bold text-slate-700 uppercase">Profile Photo</p>
-                  <p className="text-[11px] text-slate-500 mb-1.5">Same photo on the profile and the Student ID Card.</p>
-                  <div className="flex items-center gap-1.5">
-                    <label htmlFor="edit-student-photo-input" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-academic-navy-900 hover:bg-academic-navy-800 text-white rounded-lg text-xs font-semibold cursor-pointer transition">
-                      <Camera className="h-3.5 w-3.5 text-academic-gold-400" />
-                      <span>{editPhotoUrl ? 'Change photo' : 'Upload photo'}</span>
-                    </label>
-                    <input
-                      id="edit-student-photo-input"
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      className="hidden"
-                      onChange={(e) => { handlePhotoFile(e.target.files?.[0], setEditPhotoUrl, setEditPhotoError); e.target.value = ''; }}
-                    />
-                    {editPhotoUrl && (
-                      <button type="button" onClick={() => setEditPhotoUrl('')} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold transition">
-                        <Trash2 className="h-3.5 w-3.5" />
-                        <span>Remove</span>
-                      </button>
-                    )}
-                  </div>
-                  {editPhotoError && <p className="mt-1.5 text-xs text-rose-600 font-medium">{editPhotoError}</p>}
-                </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <PhotoCaptureInput
+                  photoUrl={editPhotoUrl}
+                  onChange={setEditPhotoUrl}
+                  name={editFullName || editingStudent.name}
+                  label="Student Photo (Live Camera or File)"
+                  helperText="Take a live photo with camera or choose an image file. It formats automatically for the Student ID card."
+                />
+                {editPhotoError && <p className="mt-1.5 text-xs text-rose-600 font-medium">{editPhotoError}</p>}
               </div>
 
               {/* Full Name */}

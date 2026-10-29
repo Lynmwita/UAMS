@@ -19,7 +19,8 @@ interface AuditItem {
 
 export default function AuditPage() {
   const { role } = useAuth();
-  const isAdmin = ['super_admin', 'admin'].includes(role);
+  const isAdmin = ['super_admin', 'admin', 'audit_officer'].includes(role);
+  const isAuditOfficer = role === 'audit_officer';
   const [logs, setLogs] = useState<AuditItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [openDetail, setOpenDetail] = useState<string | null>(null);
@@ -64,6 +65,23 @@ export default function AuditPage() {
           <span>Refresh Telemetry</span>
         </button>
       </div>
+
+      {isAuditOfficer && (
+        <div className="bg-academic-navy-900 border border-academic-navy-800 rounded-xl p-4 text-white flex items-center justify-between shadow-sm">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-academic-gold-500/20 border border-academic-gold-500/40 rounded-lg text-academic-gold-400">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-sm font-bold tracking-tight text-white">Compliance & Internal Audit Mode</div>
+              <div className="text-xs text-slate-300">Independent read-only oversight active across all institutional operations and financial ledgers.</div>
+            </div>
+          </div>
+          <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 bg-academic-navy-800 text-academic-gold-400 rounded border border-academic-gold-500/30">
+            Read-Only Inspector
+          </span>
+        </div>
+      )}
 
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">

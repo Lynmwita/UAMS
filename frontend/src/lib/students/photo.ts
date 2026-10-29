@@ -82,3 +82,32 @@ export async function fileToStudentPhotoDataUrl(file: File): Promise<string> {
   bitmap.close();
   return canvas.toDataURL('image/jpeg', 0.85);
 }
+
+/**
+ * Browser-only: captures the current frame from an HTMLVideoElement, centre-crops
+ * to a square, downscales to at most 512x512, and returns a JPEG data URL.
+ */
+export function captureVideoFrameToDataUrl(video: HTMLVideoElement): string {
+  const w = video.videoWidth;
+  const h = video.videoHeight;
+  if (!w || !h) {
+    throw new Error('Camera stream is not ready yet. Please wait a moment and try again.');
+  }
+  const size = Math.min(w, h, 512);
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Your browser could not capture the photo.');
+  const side = Math.min(w, h);
+  const sx = (w - side) / 2;
+  const sy = (h - side) / 2;
+  ctx.drawImage(video, sx, sy, side, side, 0, 0, size, size);
+  return canvas.toDataURL('image/jpeg', 0.88);
+}
+
+// Aliases for unified staff and student photo helpers
+export const isValidPhoto = isValidStudentPhoto;
+export const fileToPhotoDataUrl = fileToStudentPhotoDataUrl;
+export const extractPhoto = extractStudentPhoto;
+

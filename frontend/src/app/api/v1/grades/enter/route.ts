@@ -9,7 +9,7 @@ import { requireServerAuth } from '@/lib/auth/server-auth';
 import { recordAuditEvent } from '@/lib/audit/audit-logger';
 
 export async function GET(request: NextRequest) {
-  const auth = await requireServerAuth(request, ['student','admin','super_admin','registrar','hod','lecturer']);
+  const auth = await requireServerAuth(request, ['student','admin','super_admin','registrar','hod','lecturer','audit_officer']);
   if ('errorResponse' in auth) {
     return auth.errorResponse;
   }

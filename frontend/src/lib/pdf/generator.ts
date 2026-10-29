@@ -12,6 +12,15 @@ export interface PDFStudentInfo {
   status?: string;
 }
 
+export interface PDFStaffInfo {
+  name: string;
+  staffNumber: string;
+  jobTitle: string;
+  department: string;
+  email?: string;
+  phone?: string;
+}
+
 export interface PDFCourseGrade {
   courseCode: string;
   courseTitle: string;
@@ -620,4 +629,153 @@ export function generateStudentIDCardPDF(data: {
 
   return doc;
 }
+
+/**
+ * 5. PVC Plastic Staff ID Card (Front & Back Layout)
+ */
+export function generateStaffIDCardPDF(data: {
+  staff: PDFStaffInfo;
+  issueDate?: string;
+  expiryDate?: string;
+  /** The staff's profile photo as a data URL - the same photo shown on screen. */
+  photoDataUrl?: string;
+}) {
+  // CR80 Card Size in Landscape (85.6mm x 54mm)
+  const doc = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: [85.6, 54],
+  });
+
+  // ========== FRONT SIDE ==========
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, 85.6, 54, 'F');
+
+  // Top Navy Bar
+  doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.rect(0, 0, 85.6, 12, 'F');
+
+  // Gold Accent Line
+  doc.setFillColor(GOLD[0], GOLD[1], GOLD[2]);
+  doc.rect(0, 12, 85.6, 1.2, 'F');
+
+  // University Header
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.text(process.env.NEXT_PUBLIC_INSTITUTION_NAME || 'UNIVERSITY INSTITUTION', 42.8, 6.5, { align: 'center' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(5);
+  doc.text('STAFF IDENTIFICATION CARD', 42.8, 10, { align: 'center' });
+
+  // Photo Box
+  doc.setFillColor(241, 245, 249);
+  doc.roundedRect(6, 16, 22, 28, 1, 1, 'F');
+  doc.setDrawColor(203, 213, 225);
+  doc.roundedRect(6, 16, 22, 28, 1, 1, 'S');
+
+  let photoDrawn = false;
+  if (data.photoDataUrl && data.photoDataUrl.startsWith('data:image/')) {
+    try {
+      const format = data.photoDataUrl.includes('image/png') ? 'PNG' : data.photoDataUrl.includes('image/webp') ? 'WEBP' : 'JPEG';
+      doc.addImage(data.photoDataUrl, format as any, 6, 16, 22, 28);
+      doc.setDrawColor(203, 213, 225);
+      doc.roundedRect(6, 16, 22, 28, 1, 1, 'S');
+      photoDrawn = true;
+    } catch {
+      photoDrawn = false;
+    }
+  }
+  if (!photoDrawn) {
+    doc.setFontSize(6);
+    doc.setTextColor(SLATE[0], SLATE[1], SLATE[2]);
+    doc.text('PHOTO', 17, 30, { align: 'center' });
+  }
+
+  // Staff Details
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.text(data.staff.name.toUpperCase(), 31, 19);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6);
+  doc.setTextColor(GOLD[0], GOLD[1], GOLD[2]);
+  doc.text('STAFF NO:', 31, 24);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.setFontSize(7);
+  doc.text(data.staff.staffNumber, 45, 24);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(5.5);
+  doc.setTextColor(SLATE[0], SLATE[1], SLATE[2]);
+  doc.text('ROLE:', 31, 29);
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.setFont('helvetica', 'normal');
+  doc.text((data.staff.jobTitle || 'STAFF MEMBER').toUpperCase(), 31, 33, { maxWidth: 50 });
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(5.5);
+  doc.setTextColor(SLATE[0], SLATE[1], SLATE[2]);
+  doc.text('DEPT:', 31, 38);
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.setFont('helvetica', 'normal');
+  doc.text(data.staff.department || 'GENERAL OPERATIONS', 41, 38, { maxWidth: 40 });
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(5.5);
+  doc.setTextColor(SLATE[0], SLATE[1], SLATE[2]);
+  doc.text('EXPIRY:', 31, 43);
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.setFont('helvetica', 'normal');
+  doc.text(data.expiryDate || 'DECEMBER 2028', 43, 43);
+
+  // Bottom Security Strip
+  doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.rect(0, 48, 85.6, 6, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(4.5);
+  doc.setFont('helvetica', 'normal');
+  doc.text('PROPERTY OF THE UNIVERSITY • FOR OFFICIAL USE ONLY', 42.8, 52, { align: 'center' });
+
+  // ========== BACK SIDE ==========
+  doc.addPage([85.6, 54], 'landscape');
+
+  // Background
+  doc.setFillColor(248, 250, 252);
+  doc.rect(0, 0, 85.6, 54, 'F');
+
+  // Magnetic / Barcode simulation area
+  doc.setFillColor(15, 23, 42);
+  doc.rect(0, 5, 85.6, 10, 'F');
+
+  // Terms & Conditions
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(5.5);
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.text('CONDITIONS OF ISSUE & USAGE:', 6, 20);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(4.5);
+  doc.setTextColor(SLATE[0], SLATE[1], SLATE[2]);
+  doc.text('1. This card is non-transferable and remains valid during university employment.', 6, 24);
+  doc.text('2. Lost cards must be reported immediately to the Human Resources Office.', 6, 28);
+  doc.text('3. If found, please return to any university campus administration or security.', 6, 32);
+
+  // Barcode simulation
+  doc.setFillColor(15, 23, 42);
+  for (let i = 0; i < 40; i++) {
+    const w = (i % 3 === 0 || i % 7 === 0) ? 0.8 : 0.4;
+    doc.rect(20 + (i * 1.1), 37, w, 8, 'F');
+  }
+
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(5);
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.text(`*${data.staff.staffNumber}*`, 42.8, 48, { align: 'center' });
+
+  return doc;
+}
+
 

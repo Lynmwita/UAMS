@@ -5,7 +5,7 @@ import {institutionalDatabase} from '@/lib/academic/institutional';
 import {uuidPattern} from '@/lib/integrations/support';
 const canReadSensitive=(role:string)=>['super_admin','admin'].includes(role);
 export async function GET(request:Request){
- const auth=await requireServerAuth(request,['super_admin','admin','registrar']);if('errorResponse'in auth)return auth.errorResponse;
+ const auth=await requireServerAuth(request,['super_admin','admin','registrar','support_agent']);if('errorResponse'in auth)return auth.errorResponse;
  if(isDemoUser(auth.user))return NextResponse.json({success:true,data:[],mode:'demo'},{headers:{'Cache-Control':'private, no-store'}});
  const university=process.env.HUB_UNIVERSITY_ID;if(!university||!uuidPattern.test(university))return NextResponse.json({success:false,error:'The Hub university is not configured.'},{status:503});
  const params=new URL(request.url).searchParams,page=Number(params.get('page')||0),kind=params.get('kind');
@@ -19,7 +19,7 @@ export async function GET(request:Request){
  }catch{return NextResponse.json({success:false,error:'Support requests could not be loaded.'},{status:503});}
 }
 export async function PATCH(request:Request){
- const auth=await requireServerAuth(request,['super_admin','admin','registrar']);if('errorResponse'in auth)return auth.errorResponse;
+ const auth=await requireServerAuth(request,['super_admin','admin','registrar','support_agent']);if('errorResponse'in auth)return auth.errorResponse;
  if(isDemoUser(auth.user))return NextResponse.json({success:false,error:'Demo sessions cannot review institutional student requests.'},{status:403});
  let body:Record<string,unknown>;try{body=await request.json();}catch{return NextResponse.json({success:false,error:'Invalid JSON.'},{status:400});}
  if(!body||typeof body.id!=='string'||!uuidPattern.test(body.id)||!['in_review','in_progress','resolved','closed'].includes(String(body.status))||typeof body.staff_note!=='string'||body.staff_note.trim().length<2||body.staff_note.length>4000)return NextResponse.json({success:false,error:'Choose a valid request, status and reply (2–4,000 characters).'},{status:400});

@@ -36,6 +36,9 @@ export const DEMO_USERS: Partial<Record<UserRole, { email: string; passwordHash:
   finance_officer: { email: 'finance_officer@university.ac.ke', get passwordHash() { return getDemoHash(); } },
   student: { email: 'student@university.ac.ke', get passwordHash() { return getDemoHash(); } },
   librarian: { email: 'librarian@university.ac.ke', get passwordHash() { return getDemoHash(); } },
+  audit_officer: { email: 'audit_officer@university.ac.ke', get passwordHash() { return getDemoHash(); } },
+  hostel_manager: { email: 'hostel_manager@university.ac.ke', get passwordHash() { return getDemoHash(); } },
+  support_agent: { email: 'support_agent@university.ac.ke', get passwordHash() { return getDemoHash(); } },
 };
 
 export function normalizeRole(role?: string): UserRole {
@@ -51,7 +54,8 @@ export function isValidDemoCredentials(email: string, password: string, role?: s
   if (!expectedUser) return false;
 
   const normalizedEmail = email.trim().toLowerCase();
-  if (normalizedEmail !== expectedUser.email) return false;
+  const isEmailMatch = normalizedEmail === expectedUser.email || (normalizedRole === 'audit_officer' && normalizedEmail === 'auditor@university.ac.ke');
+  if (!isEmailMatch) return false;
 
   // Accept standard demo passwords
   if (password === 'DemoPassword2026!' || password === 'DemoPass2026!') {
