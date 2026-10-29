@@ -10,6 +10,7 @@ import { registrationsStore } from '@/lib/academic/registrations';
 import { invoicesStore } from '@/lib/finance/invoices';
 import { gradesStore } from '@/lib/academic/grades';
 import { attendanceSessions, derivedAttendanceAverage } from '@/lib/academic/attendance-store';
+import { getAuditLogs } from '@/lib/audit/audit-logger';
 
 /**
  * Single live source for the demo dashboard (DashboardExperience). Every
@@ -61,18 +62,57 @@ export async function GET(request: Request) {
 
   const attendanceAverage = derivedAttendanceAverage(attendanceSessions);
 
+  // Command-center data for the admin dashboard (all roles receive it; only
+  // the admin view renders it). Every item is real: pending admissions,
+  // pending course registrations, fee-clearance exceptions, and the latest
+  // audit events. Grade-change requests and hostel disputes have no data
+  // source yet, so the UI shows honest "not tracked" states for those.
+  const pendingAdmissions = admissionsStore
+    .filter((a) => ['submitted', 'under_review', 'shortlisted'].includes(a.status))
+    .slice(0, 5)
+    .map((a) => ({ id: a.id, name: a.applicant_name, program: a.program_name, reference: a.reference_number, status: a.status }));
+  const pendingRegistrations = scopeRegistrations
+    .filter((r) => r.status === 'pending')
+    .slice(0, 5)
+    .map((r) => {
+      const s = studentsStore.find((x) => x.id === r.student_id);
+      const c = coursesStore.find((x) => x.code === r.course_code);
+      return { id: r.id, student: s ? `${s.first_name} ${s.last_name}` : r.student_id, course: c ? `${c.code} ${c.title}` : r.course_code };
+    });
+  const feeExceptions = students
+    .filter((s) => s.fee_balance > 0)
+    .slice(0, 5)
+    .map((s) => ({ id: s.id, name: `${s.first_name} ${s.last_name}`, balance: s.fee_balance, admission: s.admission_number }));
+  const statusBreakdown: Record<string, number> = {};
+  for (const s of students) statusBreakdown[s.status] = (statusBreakdown[s.status] || 0) + 1;
+  let recentActivity: { action: string; actor: string; at: string; detail: string }[] = [];
+  try {
+    recentActivity = getAuditLogs({ limit: 8 }).map((l) => ({
+      action: l.action,
+      actor: l.actor_email,
+      at: l.timestamp,
+      detail: typeof l.details === 'object' && l.details !== null
+        ? Object.values(l.details).filter((v) => typeof v === 'string').slice(0, 2).join(' · ')
+        : String(l.details || ''),
+    }));
+  } catch {
+    recentActivity = [];
+  }
+
   return NextResponse.json({
     success: true,
     data: {
       generated_at: new Date().toISOString(),
-      students: { total: students.length, active: students.filter((s) => s.status === 'active').length, programs: [...new Set(students.map((s) => s.program_name))].length },
+      students: { total: students.length, active: students.filter((s) => s.status === 'active').length, programs: [...new Set(students.map((s) => s.program_name))].length, byStatus: statusBreakdown },
       staff: { total: staffStore.length, active: staffStore.filter((s) => s.is_active).length },
       courses: { total: coursesStore.length, active: coursesStore.filter((c) => c.is_active).length },
-      applications: { total: admissionsStore.length },
+      applications: { total: admissionsStore.length, pending: pendingAdmissions.length },
       registrations: { total: scopeRegistrations.length, approved: approvedInScope.length, pending: scopeRegistrations.filter((r) => r.status === 'pending').length },
       finance,
       attendance: { sessions: attendanceSessions.length, average_percentage: attendanceAverage },
       catalogue,
+      approvalQueue: { pendingAdmissions, pendingRegistrations, feeExceptions },
+      recentActivity,
       student: self ? {
         name: `${self.first_name} ${self.last_name}`,
         cgpa: self.cgpa,

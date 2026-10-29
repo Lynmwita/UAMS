@@ -28,17 +28,24 @@ import { ROLE_LABELS, roleHasPermission } from '@/lib/auth/rbac';
 import InstitutionalDashboard from './InstitutionalDashboard';
 import LibrarianDashboard from './LibrarianDashboard';
 import SupportStaffDashboard from './SupportStaffDashboard';
+import AdminCommandCenter from './AdminCommandCenter';
 
 type Summary = {
   generated_at: string;
-  students: { total: number; active: number; programs: number };
+  students: { total: number; active: number; programs: number; byStatus?: Record<string, number> };
   staff: { total: number; active: number };
   courses: { total: number; active: number };
-  applications: { total: number };
+  applications: { total: number; pending?: number };
   registrations: { total: number; approved: number; pending: number };
   finance: { invoiced: number; collected: number; outstanding: number; invoices_issued: number; accounts_with_outstanding_balance: number };
   attendance: { sessions: number; average_percentage: number | null };
   catalogue: { code: string; title: string; department: string; status: string; approved_registrations: number }[];
+  approvalQueue?: {
+    pendingAdmissions: { id: string; name: string; program: string; reference: string; status: string }[];
+    pendingRegistrations: { id: string; student: string; course: string }[];
+    feeExceptions: { id: string; name: string; balance: number; admission: string }[];
+  };
+  recentActivity?: { action: string; actor: string; at: string; detail: string }[];
   student: { name: string; cgpa: number; fee_balance: number; approved_registrations: number } | null;
   lecturer: { teaching_units: number; approved_registrations: number; distinct_students: number; units_with_marks: number } | null;
 };
@@ -134,6 +141,9 @@ export default function DashboardExperience() {
       {error && <p role="alert" className="border border-amber-300 rounded p-4 text-amber-900">{error}</p>}
 
       {summary && (
+        (role === 'admin' || role === 'super_admin') ? (
+          <AdminCommandCenter summary={summary} />
+        ) : (
         <>
           <section aria-label="Institution overview" className="metric-grid">
             {metrics.map(({ label, value, detail, icon: Icon, tone }, index) => (
@@ -148,7 +158,7 @@ export default function DashboardExperience() {
             ))}
           </section>
 
-          {(role === 'super_admin' || role === 'admin' || role === 'registrar' || role === 'hod') && (
+          {(role === 'registrar' || role === 'hod') && (
             <p className="text-sm text-slate-600">Active students: {summary.students.active} of {summary.students.total} student records.</p>
           )}
 
@@ -202,8 +212,10 @@ export default function DashboardExperience() {
             </aside>
           </section>
         </>
+        )
       )}
 
+      {(role !== 'admin' && role !== 'super_admin') && (
       <section className="shortcut-strip" aria-label="Quick access">
         <div className="shortcut-title"><span className="shortcut-rule" /><span>QUICK ACCESS</span></div>
         <Link style={{ display: canAccessPage(role, 'students') ? undefined : 'none' }} href="/dashboard/students"><Users size={17} /> Student records <ArrowUpRight size={14} /></Link>
@@ -212,6 +224,7 @@ export default function DashboardExperience() {
         <Link style={{ display: canAccessPage(role, 'attendance') ? undefined : 'none' }} href="/dashboard/attendance"><ClipboardCheck size={17} /> Attendance <ArrowUpRight size={14} /></Link>
         <Link style={{ display: canAccessPage(role, 'announcements') ? undefined : 'none' }} href="/dashboard/announcements"><Megaphone size={17} /> Announcements <ArrowUpRight size={14} /></Link>
       </section>
+      )}
     </div>
   );
 }
