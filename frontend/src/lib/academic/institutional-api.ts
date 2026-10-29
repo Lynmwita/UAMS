@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { TokenPayload } from '@/lib/auth/server-auth';
 import { institutionalRows,institutionalDatabase,readStudents,readGrades,courseScope,callInstitutional } from './institutional';
 import { extractStudentPhoto, isValidStudentPhoto } from '@/lib/students/photo';
+import { extractStaffPhoto, isValidStaffPhoto } from '@/lib/staff/photo';
 import { dispatchNotification } from '@/lib/messaging/dispatcher';
 
 const fail=(error:string,status=400)=>NextResponse.json({success:false,error},{status});
@@ -117,6 +118,20 @@ export async function institutionalApi(request:Request,user:TokenPayload,module:
     // The durable photo home is users.avatar_url; the student records view exposes it as photo_url.
     const {error:photoError}=await institutionalDatabase().from('users').update({avatar_url:photo}).eq('id',data.user_id);
     if(!photoError)data.photo_url=photo;
+   }
+  }
+  if(module==='staff'&&(request.method==='POST'||request.method==='PATCH')) {
+   // Staff photos are UAMS-only (staff records never sync to the Student Hub).
+   // Same durable home as students: users.avatar_url, exposed as photo_url
+   // by the staff records view (migration 20261029120000).
+   const photo=extractStaffPhoto(body);
+   if(photo!==undefined&&photo!==null&&!isValidStaffPhoto(photo))return fail('Profile photo must be an image (JPG/PNG/WebP) or an https photo URL.');
+   if(photo!==undefined) {
+    const staffEmail=String(data?.email||body.email||'').trim().toLowerCase();
+    if(staffEmail) {
+     const {error:photoError}=await institutionalDatabase().from('users').update({avatar_url:photo}).eq('email',staffEmail);
+     if(!photoError)data.photo_url=photo||undefined;
+    }
    }
   }
   if(module==='notifications'&&request.method==='POST'&&data?.id) {
