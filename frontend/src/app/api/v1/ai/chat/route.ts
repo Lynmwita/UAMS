@@ -55,22 +55,55 @@ export async function POST(request: Request) {
       );
     }
 
+    // Role-specific guardrail check before network call
+    if (userRole === 'librarian') {
+      const lastUserMsg = messages[messages.length - 1]?.content?.toLowerCase() || '';
+      const asksToModifyGrades = (lastUserMsg.includes('grade') || lastUserMsg.includes('score') || lastUserMsg.includes('marks')) &&
+        (lastUserMsg.includes('modify') || lastUserMsg.includes('change') || lastUserMsg.includes('edit') || lastUserMsg.includes('enter') || lastUserMsg.includes('update') || lastUserMsg.includes('override'));
+      const asksFinancialLedger = (lastUserMsg.includes('financial ledger') || lastUserMsg.includes('disbursement') || lastUserMsg.includes('m-pesa') || lastUserMsg.includes('fee payment gateway') || lastUserMsg.includes('ledger details'));
+
+      if (asksToModifyGrades || asksFinancialLedger) {
+        return NextResponse.json({
+          success: true,
+          reply: `I'm sorry, but accessing or modifying grade/financial records is outside the operational scope of the University Librarian role.`,
+          model: 'uams-guardrail-enforcer',
+        });
+      }
+    }
+
     const apiKey = process.env.NVIDIA_API_KEY;
     const baseUrl = process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1';
     const model = process.env.NVIDIA_MODEL || 'meta/llama-3.2-11b-vision-instruct';
 
+    const getFallbackResponse = () => {
+      let fallbackReply = `### UAMS Institutional Advisory\n\nI am currently experiencing higher than normal demand from the AI compute cluster. Here is standard institutional guidance:\n\n* **Exam Clearance**: Ensure your fees are 100% settled and attendance exceeds 75% to download your official clearance card.\n* **Academic Support**: For unit registration and credit transfers, please reach out directly to your Departmental HOD or Academic Registrar.\n* **Technical Portal Support**: Contact the ICT Directorate at \`ict@university.ac.ke\`.`;
+
+      if (userRole === 'librarian') {
+        fallbackReply = `### University Librarian Desk Advisory\n\nHere is operational guidance for library desk operations:\n\n* 📚 **Calculating Overdue Fines**: In accordance with institutional policy, late returns accrue fines at KES 50 per day up to the book maximum cap (KES 2,000).\n* 🔄 **Lost Book Replacement**: Student pays the standard replacement fee (KES 1,500) plus any accrued overdue penalty. Once settled with receipt reference, mark the loan resolved.\n* 🚫 **Exam Clearance Dependencies**: Under the active library policy (\`block_clearance_on_fines\`), students with overdue loans or unpaid penalties are automatically flagged as BLOCKED in the Exam Clearance module.\n* 📦 **Batch Catalogue Ingestion**: New textbook shipments can be imported in batches under the Library Desk catalogue tab.`;
+      } else if (userRole === 'audit_officer') {
+        fallbackReply = `### Institutional Compliance Advisory\n\n* **Audit Trail**: Every grade change, fee adjustment, and waiver grant requires a logged reason and timestamp.\n* **Clearance Overrides**: Financial waivers bypass fee clearance rules but cannot override attendance or disciplinary holds.\n* **Discrepancy Triage**: Review audit logs for high-frequency adjustments during exam registration periods.`;
+      }
+
+      return NextResponse.json({
+        success: true,
+        reply: fallbackReply,
+        model: 'fallback-advisor',
+      });
+    };
+
     if (!apiKey) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'NVIDIA AI API Key is not configured in environment variables.',
-        },
-        { status: 500 }
-      );
+      return getFallbackResponse();
     }
 
     // Role-specific instruction overlay
-    const contextPrompt = `${UAMS_SYSTEM_PROMPT}\n\nCurrent User Context: Role: ${userRole.toUpperCase()}, Name: ${userName}. Tailor guidance specifically to their institutional privileges and academic needs.`;
+    let roleInstruction = '';
+    if (userRole === 'librarian') {
+      roleInstruction = `\nYou are an AI assistant tailored for a University Librarian. Focus your guidance on library cataloging, loan policies, overdue fines, book circulation rules, and library-to-exam-clearance dependencies. Redirect questions about grading or financial ledgers to the appropriate department.\nStrict Guardrail: If the user asks to modify student grades or check financial ledger details outside their role scope, you MUST reply: "I'm sorry, but accessing or modifying grade/financial records is outside the operational scope of the University Librarian role."`;
+    } else if (userRole === 'audit_officer') {
+      roleInstruction = `\nYou are an AI assistant tailored for an Institutional Audit Officer. Focus your guidance on compliance checkpoints, fee overrides, audit trails, and risk anomaly detection.`;
+    }
+
+    const contextPrompt = `${UAMS_SYSTEM_PROMPT}\n\nCurrent User Context: Role: ${userRole.toUpperCase()}, Name: ${userName}. Tailor guidance specifically to their institutional privileges and operational scope.${roleInstruction}`;
 
     const formattedMessages = [
       { role: 'system', content: contextPrompt },
@@ -98,10 +131,18 @@ export async function POST(request: Request) {
       const errorText = await response.text();
       console.error('NVIDIA AI API returned error:', response.status, errorText);
 
-      // Intelligent academic fallback if upstream API is throttling
+      // Intelligent role-based fallback if upstream API is throttling
+      let fallbackReply = `### UAMS Institutional Advisory\n\nI am currently experiencing higher than normal demand from the AI compute cluster. Here is standard institutional guidance:\n\n* **Exam Clearance**: Ensure your fees are 100% settled and attendance exceeds 75% to download your official clearance card.\n* **Academic Support**: For unit registration and credit transfers, please reach out directly to your Departmental HOD or Academic Registrar.\n* **Technical Portal Support**: Contact the ICT Directorate at \`ict@university.ac.ke\`.`;
+
+      if (userRole === 'librarian') {
+        fallbackReply = `### University Librarian Desk Advisory\n\nHere is operational guidance for library desk operations:\n\n* 📚 **Calculating Overdue Fines**: In accordance with institutional policy, late returns accrue fines at KES 50 per day up to the book maximum cap (KES 2,000).\n* 🔄 **Lost Book Replacement**: Student pays the standard replacement fee (KES 1,500) plus any accrued overdue penalty. Once settled with receipt reference, mark the loan resolved.\n* 🚫 **Exam Clearance Dependencies**: Under the active library policy (\`block_clearance_on_fines\`), students with overdue loans or unpaid penalties are automatically flagged as BLOCKED in the Exam Clearance module.\n* 📦 **Batch Catalogue Ingestion**: New textbook shipments can be imported in batches under the Library Desk catalogue tab.`;
+      } else if (userRole === 'audit_officer') {
+        fallbackReply = `### Institutional Compliance Advisory\n\n* **Audit Trail**: Every grade change, fee adjustment, and waiver grant requires a logged reason and timestamp.\n* **Clearance Overrides**: Financial waivers bypass fee clearance rules but cannot override attendance or disciplinary holds.\n* **Discrepancy Triage**: Review audit logs for high-frequency adjustments during exam registration periods.`;
+      }
+
       return NextResponse.json({
         success: true,
-        reply: `### UAMS Institutional Advisory\n\nI am currently experiencing higher than normal demand from the AI compute cluster. Here is standard institutional guidance:\n\n* **Exam Clearance**: Ensure your fees are 100% settled and attendance exceeds 75% to download your official clearance card.\n* **Academic Support**: For unit registration and credit transfers, please reach out directly to your Departmental HOD or Academic Registrar.\n* **Technical Portal Support**: Contact the ICT Directorate at \`ict@university.ac.ke\`.`,
+        reply: fallbackReply,
         model: 'fallback-advisor',
       });
     }

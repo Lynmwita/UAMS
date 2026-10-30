@@ -58,14 +58,66 @@ const PRESET_PROMPTS = [
   },
 ];
 
+const LIBRARIAN_PROMPTS = [
+  {
+    title: '📚 Calculate Overdue Fines',
+    icon: BookOpen,
+    prompt: 'How do I calculate overdue book fines and apply late penalties according to library policy?',
+  },
+  {
+    title: '🔄 Lost Book Replacement',
+    icon: RotateCcw,
+    prompt: 'What is the procedure for processing a lost book replacement and clearing the student loan?',
+  },
+  {
+    title: '🚫 Library Blocks on Clearance',
+    icon: AlertCircle,
+    prompt: 'How do library overdue books and fine blocks affect student exam clearance cards?',
+  },
+  {
+    title: '📦 Batch Catalogue Upload',
+    icon: FileText,
+    prompt: 'How do I submit and verify a bulk book catalogue batch for administrative approval?',
+  },
+];
+
+const AUDIT_PROMPTS = [
+  {
+    title: '🔍 Compliance Checkpoints',
+    icon: ShieldCheck,
+    prompt: 'What are the required compliance checkpoints for semester grade publishing and fee waiver approvals?',
+  },
+  {
+    title: '📋 Audit Trail Inspection',
+    icon: FileText,
+    prompt: 'How do I inspect and verify high-risk administrative actions in the system audit logs?',
+  },
+  {
+    title: '⚠️ Fee Override Discrepancies',
+    icon: AlertCircle,
+    prompt: 'How do I audit manual fee adjustments against M-Pesa transaction statements?',
+  },
+];
+
+function getWelcomeContent(userRole: string): string {
+  if (userRole === 'librarian') {
+    return `### Welcome to UAMS AI Library Desk Advisor\n\nI am your **AI Circulation & Cataloging Intelligence Assistant**, tailored for the **University Librarian**.\n\nI can assist you with:\n* 📚 **Circulation Policies**: Loan duration rules, renewals, and patron hold limits\n* 💰 **Overdue Fines & Penalties**: Daily fee calculations, waivers, and settlement procedures\n* 🚫 **Exam Clearance Dependencies**: How unreturned textbooks and unpaid fines block exam cards\n* 📦 **Catalogue Management**: ISBN indexing, inventory stock levels, and batch imports\n\nHow can I help your library desk today?`;
+  }
+  if (userRole === 'audit_officer') {
+    return `### Welcome to UAMS AI Compliance & Audit Advisor\n\nI am your **Institutional Compliance Intelligence Assistant**, tailored for the **Audit Officer**.\n\nI can assist you with:\n* 🔍 **Audit Trail Inspection**: Tracing actor roles, IPs, and high-risk action logs\n* ⚖️ **Compliance Checkpoints**: Grade approval chains, senate sign-offs, and fee waivers\n* 📊 **Risk Anomaly Detection**: Identifying duplicate transactions and policy deviations\n\nHow can I assist your audit review today?`;
+  }
+  return `### Welcome to UAMS Institutional AI Advisor\n\nI am your **AI Academic & Operational Assistant**, powered by **NVIDIA NIM Accelerated Intelligence**.\n\nI can assist you with:\n* **Academic Regulations**: Course prerequisites, registration rules, GPA standing & honors calculations\n* **Financial Clearance**: Exam clearance thresholds, M-Pesa automated receipts & billing\n* **Campus Life**: Hostel allocation guidelines, digital library policies, and timetable conflicts\n* **Administrative Drafts**: Inquiry letters, department appeals, and institutional memorandums\n\nHow can I help you today?`;
+}
+
 export default function AIAssistantPage() {
   const { role } = useAuth();
+  const activePresets = role === 'librarian' ? LIBRARIAN_PROMPTS : role === 'audit_officer' ? AUDIT_PROMPTS : PRESET_PROMPTS;
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
       role: 'assistant',
-      content: `### Welcome to UAMS Institutional AI Advisor\n\nI am your **AI Academic & Operational Assistant**, powered by **NVIDIA NIM Accelerated Intelligence**.\n\nI can assist you with:\n* **Academic Regulations**: Course prerequisites, registration rules, GPA standing & honors calculations\n* **Financial Clearance**: Exam clearance thresholds, M-Pesa automated receipts & billing\n* **Campus Life**: Hostel allocation guidelines, digital library policies, and timetable conflicts\n* **Administrative Drafts**: Inquiry letters, department appeals, and institutional memorandums\n\nHow can I help you today?`,
+      content: getWelcomeContent(role),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -161,7 +213,7 @@ export default function AIAssistantPage() {
       {
         id: `welcome-${Date.now()}`,
         role: 'assistant',
-        content: `Conversation refreshed. How may I assist your academic journey today?`,
+        content: getWelcomeContent(role),
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       },
     ]);
@@ -221,9 +273,11 @@ export default function AIAssistantPage() {
 
       {/* Preset Suggestions */}
       <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Quick Academic Inquiries</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+          {role === 'librarian' ? 'Quick Library Desk Inquiries' : role === 'audit_officer' ? 'Audit & Compliance Inquiries' : 'Quick Academic Inquiries'}
+        </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-          {PRESET_PROMPTS.map((item, idx) => {
+          {activePresets.map((item, idx) => {
             const Icon = item.icon;
             return (
               <button

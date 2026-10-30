@@ -5,7 +5,7 @@ import { recordAuditEvent } from '@/lib/audit/audit-logger';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
-  const auth = await requireServerAuth(request, ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student', 'support_staff']);
+  const auth = await requireServerAuth(request, ['super_admin', 'admin', 'registrar', 'hod', 'lecturer', 'finance_officer', 'student', 'support_staff', 'librarian', 'audit_officer']);
   if ('errorResponse' in auth) return auth.errorResponse;
   if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'events');
 
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireServerAuth(request, ['super_admin', 'admin', 'registrar', 'hod']);
+  const auth = await requireServerAuth(request, ['super_admin', 'admin', 'registrar', 'hod', 'librarian']);
   if ('errorResponse' in auth) return auth.errorResponse;
   if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'events');
 
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request:NextRequest){
- const auth=await requireServerAuth(request,['admin','super_admin','registrar','hod']);if('errorResponse'in auth)return auth.errorResponse;
+ const auth=await requireServerAuth(request,['admin','super_admin','registrar','hod','librarian']);if('errorResponse'in auth)return auth.errorResponse;
  if(!auth.user.id.startsWith('usr-'))return institutionalApi(request,auth.user,'events');
  try{const body=await request.json();const event=eventsStore.find(e=>e.id===body.id);if(!event)return NextResponse.json({success:false,error:'Event not found.'},{status:404});if(auth.user.role==='hod'&&event.created_by!==auth.user.email)return NextResponse.json({success:false,error:'Event outside your scope.'},{status:403});if(body.is_active===false){event.is_active=false;return NextResponse.json({success:true,data:event});}if(typeof body.title!=='string'||!body.title.trim()||!Number.isFinite(Date.parse(body.starts_at))||!Number.isFinite(Date.parse(body.ends_at))||Date.parse(body.ends_at)<=Date.parse(body.starts_at))return NextResponse.json({success:false,error:'Valid event title and dates required.'},{status:400});Object.assign(event,{title:body.title.trim(),description:String(body.description||''),starts_at:new Date(body.starts_at).toISOString(),ends_at:new Date(body.ends_at).toISOString(),location:String(body.location||event.location)});return NextResponse.json({success:true,data:event});}catch{return NextResponse.json({success:false,error:'Invalid event update.'},{status:400});}
 }

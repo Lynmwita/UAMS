@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   if ('errorResponse' in auth) return auth.errorResponse;
   try {
     const notices = await listNotices(isDemoUser(auth.user));
-    const reviewer = ['super_admin', 'admin', 'registrar'].includes(auth.user.role);
+    const reviewer = ['super_admin', 'admin', 'registrar', 'librarian'].includes(auth.user.role);
     const audience = auth.user.role === 'student' ? 'Students' : 'Faculty & Lecturers';
     const now = Date.now();
     return NextResponse.json({ success: true, data: reviewer ? notices : notices.filter(n =>
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 }
 
 async function writeNotice(request: Request, update: boolean) {
-  const auth = await requireServerAuth(request, ['admin', 'registrar', 'super_admin']);
+  const auth = await requireServerAuth(request, ['admin', 'registrar', 'super_admin', 'librarian']);
   if ('errorResponse' in auth) return auth.errorResponse;
   let body: unknown;
   try { body = await request.json(); } catch {
@@ -31,6 +31,13 @@ async function writeNotice(request: Request, update: boolean) {
   const id = (body as { id?: unknown } | null)?.id;
   if (!input || (update && (typeof id !== 'string' || !/^[a-zA-Z0-9-]{1,200}$/.test(id)))) {
     return NextResponse.json({ success: false, error: 'Valid notice details and audience are required.' }, { status: 400 });
+  }
+
+  // Scoped enforcement for librarian role: notices must pertain to Library
+  if (auth.user.role === 'librarian') {
+    if (!['Library & Books', 'Library', 'General'].includes(input.category)) {
+      input.category = 'Library & Books';
+    }
   }
   try {
     const notice = await saveNotice(input, auth.user.email, isDemoUser(auth.user), update ? id as string : undefined);

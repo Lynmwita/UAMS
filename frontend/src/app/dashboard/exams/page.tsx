@@ -39,6 +39,7 @@ const WAIVER_TYPE_LABEL: Record<string, string> = {
 };
 
 function statusReason(c: ExamClearanceCard): string {
+  if (c.library_blocked) return `Blocked: Unpaid library fine (KES ${c.library_fine_balance || 0}) or overdue books`;
   if (c.status === 'blocked_attendance') return 'Blocked: attendance below 75%';
   if (c.status === 'blocked_fee') return `Blocked: fee balance KES ${c.fee_balance.toLocaleString()}`;
   if (c.status === 'waived') return `Waived until ${c.waiver?.valid_until}`;
@@ -611,8 +612,8 @@ export default function ExamsPage() {
                       <td className="px-4 py-3 text-center font-mono font-bold">{c.fee_paid_percentage}%</td>
                       <td className="px-4 py-3 text-right font-mono">KES {c.fee_balance.toLocaleString()}</td>
                       <td className="px-4 py-3">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${STATUS_STYLE[c.status]}`}>
-                          {c.status === 'waived' ? `Waived until ${c.waiver?.valid_until}` : STATUS_LABEL[c.status]}
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${c.library_blocked ? 'bg-rose-100 text-rose-800' : STATUS_STYLE[c.status]}`}>
+                          {c.library_blocked ? 'Blocked (Library)' : c.status === 'waived' ? `Waived until ${c.waiver?.valid_until}` : STATUS_LABEL[c.status]}
                         </span>
                         <div className="text-[10px] text-slate-500 mt-0.5">{statusReason(c)}</div>
                       </td>

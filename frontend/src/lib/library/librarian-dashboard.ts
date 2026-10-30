@@ -1,4 +1,4 @@
-import type { LibraryBook, LibraryLoan } from '@/types';
+import type { LibraryBook, LibraryLoan, LibraryReservation } from '@/types';
 
 /**
  * Librarian dashboard summary, computed only from the library module's own
@@ -17,6 +17,9 @@ export interface LibrarianLoanRow {
   admissionNumber: string;
   dueDate: string;
   daysOverdue: number;
+  fineAmount: number;
+  bookId: string;
+  studentId: string;
 }
 
 export interface LibrarianSummary {
@@ -29,6 +32,10 @@ export interface LibrarianSummary {
   dueSoonLoans: LibrarianLoanRow[];
   /** The library module has no holds shelf yet, so this is always false. */
   reservationsTracked: boolean;
+  pendingReservations: number;
+  totalOutstandingFines: number;
+  lowStockAlerts: LibraryBook[];
+  recentAdditions: LibraryBook[];
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -42,6 +49,7 @@ function parseDay(value: string): Date {
 function toRow(loan: LibraryLoan, today: Date): LibrarianLoanRow {
   const due = parseDay(loan.due_date);
   const daysOverdue = Math.max(0, Math.floor((today.getTime() - due.getTime()) / DAY_MS));
+  const fineAmount = loan.fine_amount ?? (daysOverdue > 0 ? daysOverdue * 50 : 0);
   return {
     id: loan.id,
     bookTitle: loan.book_title,
@@ -49,6 +57,9 @@ function toRow(loan: LibraryLoan, today: Date): LibrarianLoanRow {
     admissionNumber: loan.admission_number,
     dueDate: loan.due_date,
     daysOverdue,
+    fineAmount,
+    bookId: loan.book_id,
+    studentId: loan.student_id,
   };
 }
 
@@ -56,6 +67,7 @@ export function summarizeLibrary(
   books: LibraryBook[],
   loans: LibraryLoan[],
   todayInput: Date = new Date(),
+  reservations: LibraryReservation[] = [],
 ): LibrarianSummary {
   const today = new Date(todayInput.getFullYear(), todayInput.getMonth(), todayInput.getDate());
   const weekEnd = new Date(today.getTime() + 7 * DAY_MS);
@@ -80,6 +92,11 @@ export function summarizeLibrary(
     .map((loan) => toRow(loan, today))
     .sort((a, b) => (a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : 0));
 
+  const lowStockAlerts = books.filter((b) => !b.is_archived && b.available_copies <= 0);
+  const recentAdditions = [...books].slice(0, 4);
+  const totalOutstandingFines = overdueLoans.reduce((sum, l) => sum + l.fineAmount, 0);
+  const pendingReservations = reservations.filter((r) => r.status === 'queued').length;
+
   return {
     onLoan: active.length,
     overdue: overdueLoans.length,
@@ -89,5 +106,9 @@ export function summarizeLibrary(
     overdueLoans,
     dueSoonLoans,
     reservationsTracked: false,
+    pendingReservations,
+    totalOutstandingFines,
+    lowStockAlerts,
+    recentAdditions,
   };
 }

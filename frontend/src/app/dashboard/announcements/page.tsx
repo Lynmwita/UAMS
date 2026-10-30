@@ -6,8 +6,9 @@ import { Bell, Plus, AlertCircle, Bookmark, Megaphone, Calendar, X, Filter } fro
 
 export default function AnnouncementsPage() {
   const {role}=useAuth();
-  const canPost=['super_admin','admin','registrar'].includes(role);
+  const canPost=['super_admin','admin','registrar','librarian'].includes(role);
   const [filterAudience, setFilterAudience] = useState('All');
+  const [filterCategory, setFilterCategory] = useState('All');
 
   const [error,setError]=useState('');
   const [success,setSuccess]=useState('');
@@ -21,9 +22,9 @@ export default function AnnouncementsPage() {
   const [newNotice, setNewNotice] = useState({
     title: '',
     audience: 'All Campus',
-    category: 'Academic',
+    category: role === 'librarian' ? 'Library & Books' : 'Academic',
     priority: 'Normal',
-    author: 'Registrar Academic Affairs',
+    author: role === 'librarian' ? 'University Librarian' : 'Registrar Academic Affairs',
     body: '',
   });
 
@@ -63,7 +64,11 @@ export default function AnnouncementsPage() {
     try{const r=await fetch('/api/v1/announcements',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(newNotice)});const d=await r.json();if(!r.ok)throw new Error(d.error);setNotices(prev=>[d.data,...prev]);setIsModalOpen(false);setError('');setSuccess('Notice published successfully.');}catch(e){setError(e instanceof Error?e.message:'Publishing failed.');}
   };
 
-  const filteredNotices = filterAudience === 'All' ? notices : notices.filter((n) => n.audience === filterAudience || n.audience === 'All Campus');
+  const filteredNotices = notices.filter((n) => {
+    const matchAudience = filterAudience === 'All' || n.audience === filterAudience || n.audience === 'All Campus';
+    const matchCategory = filterCategory === 'All' || n.category.toLowerCase().includes(filterCategory.toLowerCase());
+    return matchAudience && matchCategory;
+  });
 
   return (
     <div className="space-y-6">
@@ -85,25 +90,44 @@ export default function AnnouncementsPage() {
           className="bg-academic-navy-900 hover:bg-academic-navy-800 text-white font-bold px-4 py-2.5 rounded-lg text-sm transition flex items-center space-x-2 shadow-sm"
         >
           <Plus className="h-4 w-4 text-academic-gold-400" />
-          <span>Publish Notice</span>
+          <span>{role === 'librarian' ? 'Publish Library Notice' : 'Publish Notice'}</span>
         </button>
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex items-center space-x-2 overflow-x-auto pb-1">
-        {['All', 'Students', 'Faculty & Lecturers', 'All Campus'].map((aud) => (
-          <button
-            key={aud}
-            onClick={() => setFilterAudience(aud)}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition whitespace-nowrap ${
-              filterAudience === aud
-                ? 'bg-academic-navy-900 text-white shadow'
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            {aud === 'All' ? 'All Bulletins' : aud}
-          </button>
-        ))}
+      <div className="space-y-2">
+        <div className="flex items-center space-x-2 overflow-x-auto pb-1">
+          {['All', 'Students', 'Faculty & Lecturers', 'All Campus'].map((aud) => (
+            <button
+              key={aud}
+              onClick={() => setFilterAudience(aud)}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition whitespace-nowrap ${
+                filterAudience === aud
+                  ? 'bg-academic-navy-900 text-white shadow'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {aud === 'All' ? 'All Bulletins' : aud}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center space-x-2 overflow-x-auto pb-1 text-xs">
+          <span className="text-slate-400 font-semibold px-1 text-[11px] uppercase tracking-wider">Category:</span>
+          {['All', 'Library & Books', 'Academic', 'Fee Advisories'].map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setFilterCategory(cat)}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition whitespace-nowrap ${
+                filterCategory === cat
+                  ? 'bg-academic-gold-500 text-academic-navy-950 font-bold shadow-sm'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {cat === 'All' ? 'All Categories' : cat}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Notices List */}
@@ -217,6 +241,7 @@ export default function AnnouncementsPage() {
                     onChange={(e) => setNewNotice({ ...newNotice, category: e.target.value })}
                     className="w-full border border-slate-300 rounded-lg px-2.5 py-2 text-xs focus:ring-2 focus:ring-academic-navy-900 outline-none font-medium"
                   >
+                    <option value="Library & Books">Library & Books</option>
                     <option value="Academic">Academic</option>
                     <option value="Finance">Finance</option>
                     <option value="Examinations">Examinations</option>

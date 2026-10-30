@@ -31,7 +31,7 @@ const CATEGORY_COLOR: Record<string, string> = {
 };
 
 export default function EventsPage() {
-  const {role}=useAuth();const canWrite=['admin','super_admin','registrar','hod'].includes(role);
+  const {role}=useAuth();const canWrite=['admin','super_admin','registrar','hod','librarian'].includes(role);
   const [editingId,setEditingId]=useState('');
   const [scopes,setScopes]=useState<Record<string,{id:string;name:string}[]>>({});
   const [events, setEvents] = useState<CampusEvent[]>([]);

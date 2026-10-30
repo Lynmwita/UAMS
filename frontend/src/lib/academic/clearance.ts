@@ -6,7 +6,7 @@ import { studentsStore } from './student-records';
 import { invoicesStore } from '@/lib/finance/invoices';
 import { registrationsStore } from './registrations';
 import { computeStudentAttendance } from './attendance-store';
-import { getStudentUnpaidFines, getLibraryPolicies } from '@/lib/library/store';
+import { getStudentUnpaidFines, getLibraryPolicies, libraryLoansStore, daysBetween, todayYmd } from '@/lib/library/store';
 import type { ExamClearanceCard, ExamClearanceStatus, ExamWaiver } from '@/types';
 
 /** Exam Pass rule shown on the Examinations page and applied to every demo card:
@@ -70,13 +70,16 @@ export function buildExamClearanceCards(): ExamClearanceCard[] {
     const att = attendanceByAdm.get(student.admission_number);
     const attendance_blocked = !!att && att.is_blocked;
     const attendance_exempt = !!att && att.is_exempt;
-    // Library fine block: driven by the library module. When the
+    // Library fine & overdue block: driven by the library module. When the
     // block_clearance_on_fines policy is on and the student has unpaid
-    // library fines, the card is blocked regardless of fee status.
-    // Defaults to false (not blocked) when the policy is off or no fines exist.
+    // library fines or overdue unreturned loans, the card is blocked regardless of fee status.
+    // Defaults to false (not blocked) when the policy is off or no fines/overdue loans exist.
     const libraryPolicies = getLibraryPolicies();
     const libraryFineBalance = getStudentUnpaidFines(student.admission_number);
-    const libraryBlocked = libraryPolicies.block_clearance_on_fines && libraryFineBalance > 0;
+    const hasOverdueLoans = libraryLoansStore.some(
+      (l) => l.admission_number === student.admission_number && l.status !== 'returned' && (l.status === 'overdue' || daysBetween(l.due_date, todayYmd()) > 0)
+    );
+    const libraryBlocked = libraryPolicies.block_clearance_on_fines && (libraryFineBalance > 0 || hasOverdueLoans);
     return {
       id: `clr-${student.id}`,
       student_id: student.id,

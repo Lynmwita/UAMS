@@ -17,13 +17,26 @@ import { studentsStore } from '@/lib/academic/student-records';
 const seedBooks: LibraryBook[] = [
   { id: 'bk-01', isbn: '978-0131103627', title: 'The C Programming Language (2nd Edition)', author: 'Brian Kernighan, Dennis Ritchie', publisher: 'Prentice Hall', category: 'Computer Science', total_copies: 15, available_copies: 12, shelf_location: 'CS-ST1-04', is_ebook_available: true },
   { id: 'bk-02', isbn: '978-0134685991', title: 'Effective Java (3rd Edition)', author: 'Joshua Bloch', publisher: 'Addison-Wesley', category: 'Software Engineering', total_copies: 10, available_copies: 7, shelf_location: 'SE-ST2-11', is_ebook_available: true },
-  { id: 'bk-03', isbn: '978-0262033848', title: 'Introduction to Algorithms (CLRS)', author: 'Thomas Cormen, Charles Leiserson', publisher: 'MIT Press', category: 'Algorithms', total_copies: 20, available_copies: 14, shelf_location: 'AL-ST3-01', is_ebook_available: false },
+  { id: 'bk-03', isbn: '978-0262033848', title: 'Introduction to Algorithms (CLRS)', author: 'Thomas Cormen, Charles Leiserson', publisher: 'MIT Press', category: 'Algorithms', total_copies: 20, available_copies: 0, shelf_location: 'AL-ST3-01', is_ebook_available: false },
   { id: 'bk-04', isbn: '978-1449331818', title: 'Learning Python (5th Edition)', author: 'Mark Lutz', publisher: "O'Reilly Media", category: 'Data Science', total_copies: 8, available_copies: 5, shelf_location: 'PY-ST1-09', is_ebook_available: true },
 ];
 
 const seedLoans: LibraryLoan[] = [
-  { id: 'ln-01', book_id: 'bk-01', book_title: 'The C Programming Language', student_id: 'std-01', student_name: 'Faith Wanjiku', admission_number: 'BIT/2023/8849', borrow_date: '2026-09-15', due_date: '2026-09-29', return_date: '2026-09-28', status: 'returned', fine_amount: 0 },
+  { id: 'ln-01', book_id: 'bk-01', book_title: 'The C Programming Language (2nd Edition)', student_id: 'std-01', student_name: 'Faith Wanjiku', admission_number: 'BIT/2023/8849', borrow_date: '2026-09-15', due_date: '2026-09-29', return_date: '2026-09-28', status: 'returned', fine_amount: 0 },
   { id: 'ln-02', book_id: 'bk-03', book_title: 'Introduction to Algorithms (CLRS)', student_id: 'std-02', student_name: 'Kevin Otieno', admission_number: 'BCS/2023/1204', borrow_date: '2026-09-20', due_date: '2026-10-04', status: 'overdue', fine_amount: 50 },
+];
+
+const seedReservations: LibraryReservation[] = [
+  {
+    id: 'rsv-01',
+    book_id: 'bk-03',
+    book_title: 'Introduction to Algorithms (CLRS)',
+    student_id: 'std-01',
+    student_name: 'Faith Wanjiku',
+    admission_number: 'BIT/2023/8849',
+    reserved_date: '2026-10-25',
+    status: 'queued',
+  },
 ];
 
 const defaultPolicies: LibraryPolicies = {
@@ -56,7 +69,7 @@ export const libraryLoansStore: LibraryLoan[] =
   rt.__uams_libraryLoans || (rt.__uams_libraryLoans = [...seedLoans]);
 
 export const libraryReservationsStore: LibraryReservation[] =
-  rt.__uams_libraryReservations || (rt.__uams_libraryReservations = []);
+  rt.__uams_libraryReservations || (rt.__uams_libraryReservations = [...seedReservations]);
 
 export const libraryBatchesStore: LibraryCatalogBatch[] =
   rt.__uams_libraryBatches || (rt.__uams_libraryBatches = []);
