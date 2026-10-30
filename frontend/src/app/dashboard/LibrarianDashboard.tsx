@@ -179,7 +179,7 @@ export default function LibrarianDashboard() {
                   </div>
                   <div className="task-item">
                     <span className="task-icon task-orange"><BookMarked size={16} /></span>
-                    <span className="task-copy"><strong>Reservation pickups</strong><small>Holds are not tracked in the library module yet</small></span>
+                    <span className="task-copy"><strong>Reservation pickups</strong><small>{summary.overdue === 0 ? 'No' : 'Check the'} reservation queue on the library page</small></span>
                     <ArrowRight className="task-arrow" size={15} />
                   </div>
                 </div>

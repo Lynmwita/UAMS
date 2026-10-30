@@ -5,6 +5,7 @@
 import { studentsStore } from './student-records';
 import { invoicesStore } from '@/lib/finance/invoices';
 import { registrationsStore } from './registrations';
+import { getStudentUnpaidFines, getLibraryPolicies } from '@/lib/library/store';
 import type { ExamClearanceCard } from '@/types';
 
 /** Exam Pass rule shown on the Examinations page and applied to every demo card:
@@ -26,6 +27,13 @@ export function buildExamClearanceCards(): ExamClearanceCard[] {
     const amountPaid = invoices.reduce((sum, i) => sum + i.amount_paid, 0);
     const result = evaluateExamClearance(totalBilled, amountPaid, EXAM_CARD_CLEARANCE_THRESHOLD);
     const admissionSuffix = student.admission_number.replace(/[^A-Za-z0-9]/g, '-');
+    // Library fine block: driven by the library module. When the
+    // block_clearance_on_fines policy is on and the student has unpaid
+    // library fines, the card is blocked regardless of fee status.
+    // Defaults to false (not blocked) when the policy is off or no fines exist.
+    const libraryPolicies = getLibraryPolicies();
+    const libraryFineBalance = getStudentUnpaidFines(student.admission_number);
+    const libraryBlocked = libraryPolicies.block_clearance_on_fines && libraryFineBalance > 0;
     return {
       id: `clr-${student.id}`,
       student_id: student.id,
@@ -36,9 +44,11 @@ export function buildExamClearanceCards(): ExamClearanceCard[] {
       card_serial_number: `EXAM-2026-SEP-${student.admission_number.slice(-4)}`,
       fee_balance: result.remainingBalance,
       fee_paid_percentage: result.percentagePaid,
-      is_cleared: result.isCleared,
+      is_cleared: result.isCleared && !libraryBlocked,
       security_qr_token: `UAMS-SEC-CLR-${admissionSuffix}-VALID-2026`,
       registered_units: registrationsStore.filter((r) => r.student_id === student.id).length,
+      library_blocked: libraryBlocked,
+      library_fine_balance: libraryFineBalance,
     };
   });
 }
