@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const auth = await requireServerAuth(request, ['hod','registrar','super_admin']);
+  const auth = await requireServerAuth(request, ['hod','registrar','admin','super_admin']);
   if ('errorResponse' in auth) return auth.errorResponse;
   if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'grades/enter');
   try {

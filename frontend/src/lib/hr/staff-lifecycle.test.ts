@@ -69,7 +69,7 @@ test('audit_officer and support_staff page access and rbac rules', () => {
   assert.equal(roleHasPermission('audit_officer', 'finance:read'), true);
   assert.equal(roleHasPermission('audit_officer', 'grades:read'), true);
   assert.equal(roleHasPermission('audit_officer', 'exams:read'), true);
-  assert.equal(roleHasPermission('audit_officer', 'grades:enter'), false);
+  assert.equal(roleHasPermission('audit_officer', 'grades:write'), false);
 
   assert.equal(canAccessPage('support_staff', 'dashboard'), true);
   assert.equal(canAccessPage('support_staff', 'support'), false);
