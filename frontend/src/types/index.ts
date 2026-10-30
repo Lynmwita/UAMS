@@ -215,6 +215,9 @@ export interface ExamClearanceCard {
   fee_balance: number;
   fee_paid_percentage: number;
   is_cleared: boolean;
+  attendance_percentage: number | null;
+  attendance_blocked: boolean;
+  attendance_exempt: boolean;
   security_qr_token: string;
   registered_units: number;
 }
