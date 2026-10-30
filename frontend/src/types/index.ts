@@ -240,8 +240,6 @@ export interface ExamClearanceCard {
   attendance_exempt: boolean;
   security_qr_token: string;
   registered_units: number;
-  /** Driven by the attendance module; defaults false until that module reports. */
-  attendance_blocked: boolean;
   /** Active waiver if one exists, else null. */
   waiver: {
     waiver_type: ExamWaiver['waiver_type'];
