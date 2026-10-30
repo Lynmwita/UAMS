@@ -1,4 +1,21 @@
-const seed = [
+export type UamsCourse = {
+  id: string;
+  code: string;
+  title: string;
+  department: string;
+  credit_hours: number;
+  level: number;
+  prerequisites: string[];
+  lecturer: string;
+  capacity: number;
+  enrolled: number;
+  is_active: boolean;
+  unit_type: 'core' | 'elective';
+  semester: 1 | 2;
+  description: string;
+};
+
+const seed: UamsCourse[] = [
   {
     id: 'crs-1',
     code: 'BCS 311',
@@ -11,6 +28,9 @@ const seed = [
     capacity: 60,
     enrolled: 48,
     is_active: true,
+    unit_type: 'core',
+    semester: 1,
+    description: '',
   },
   {
     id: 'crs-2',
@@ -24,6 +44,9 @@ const seed = [
     capacity: 65,
     enrolled: 52,
     is_active: true,
+    unit_type: 'core',
+    semester: 1,
+    description: '',
   },
   {
     id: 'crs-3',
@@ -37,6 +60,9 @@ const seed = [
     capacity: 55,
     enrolled: 44,
     is_active: true,
+    unit_type: 'core',
+    semester: 1,
+    description: '',
   },
   {
     id: 'crs-4',
@@ -50,6 +76,9 @@ const seed = [
     capacity: 50,
     enrolled: 41,
     is_active: true,
+    unit_type: 'core',
+    semester: 1,
+    description: '',
   },
   {
     id: 'crs-5',
@@ -63,6 +92,9 @@ const seed = [
     capacity: 80,
     enrolled: 72,
     is_active: true,
+    unit_type: 'core',
+    semester: 1,
+    description: '',
   },
 ];
 const runtime=globalThis as typeof globalThis & {__uams_coursesStore?: typeof seed};
