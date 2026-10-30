@@ -6,13 +6,49 @@ import { studentsStore } from './student-records';
 import { invoicesStore } from '@/lib/finance/invoices';
 import { registrationsStore } from './registrations';
 import { computeStudentAttendance } from './attendance-store';
-import type { ExamClearanceCard } from '@/types';
+import type { ExamClearanceCard, ExamClearanceStatus, ExamWaiver } from '@/types';
 
 /** Exam Pass rule shown on the Examinations page and applied to every demo card:
  * 100% of billed fees must be paid; any outstanding balance blocks the pass.
  * (The configurable institutional policy default is 75%; the exam-card rule
  * below is deliberately stricter and is stated on the page, not silent.) */
 export const EXAM_CARD_CLEARANCE_THRESHOLD = 100;
+
+export const WAIVER_TYPES = [
+  'gov_disbursement_delay',
+  'payment_plan',
+  'scholarship',
+  'other',
+] as const;
+
+const waiverRuntime = globalThis as typeof globalThis & {
+  __uams_examWaivers?: ExamWaiver[];
+};
+
+/** In-memory waiver store (demo path). Institutional path persists via Supabase. */
+export const examWaiversStore: ExamWaiver[] =
+  waiverRuntime.__uams_examWaivers || (waiverRuntime.__uams_examWaivers = []);
+
+/** Returns the active (non-revoked, non-expired) waiver for a student, or null. */
+export function getActiveWaiver(student_id: string): ExamWaiver | null {
+  const now = new Date();
+  return (
+    examWaiversStore.find(
+      (w) => w.student_id === student_id && !w.is_revoked && new Date(w.valid_until) >= now
+    ) || null
+  );
+}
+
+/** Derives the display status: attendance blocks stand alone; waivers override fee blocks. */
+export function deriveClearanceStatus(
+  feeCleared: boolean,
+  attendanceBlocked: boolean,
+  waiver: ExamWaiver | null
+): ExamClearanceStatus {
+  if (attendanceBlocked) return 'blocked_attendance';
+  if (waiver) return 'waived';
+  return feeCleared ? 'cleared' : 'blocked_fee';
+}
 
 /**
  * Builds exam clearance cards from the ONE registry dataset, the invoice
@@ -33,7 +69,6 @@ export function buildExamClearanceCards(): ExamClearanceCard[] {
     const att = attendanceByAdm.get(student.admission_number);
     const attendance_blocked = !!att && att.is_blocked;
     const attendance_exempt = !!att && att.is_exempt;
-    const is_cleared = result.isCleared && !attendance_blocked;
     return {
       id: `clr-${student.id}`,
       student_id: student.id,
@@ -44,12 +79,28 @@ export function buildExamClearanceCards(): ExamClearanceCard[] {
       card_serial_number: `EXAM-2026-SEP-${student.admission_number.slice(-4)}`,
       fee_balance: result.remainingBalance,
       fee_paid_percentage: result.percentagePaid,
-      is_cleared,
       attendance_percentage: att?.percentage ?? null,
       attendance_blocked,
       attendance_exempt,
       security_qr_token: `UAMS-SEC-CLR-${admissionSuffix}-VALID-2026`,
       registered_units: registrationsStore.filter((r) => r.student_id === student.id).length,
+      ...(() => {
+        const waiver = getActiveWaiver(student.id);
+        const status = deriveClearanceStatus(result.isCleared, attendance_blocked, waiver);
+        return {
+          // A waived student may print their pass despite a fee balance.
+          // Attendance blocks stand alone: waivers never override them.
+          is_cleared: (status === 'cleared' || status === 'waived') && !attendance_blocked,
+          waiver: waiver
+            ? {
+                waiver_type: waiver.waiver_type,
+                valid_until: waiver.valid_until,
+                granted_by_email: waiver.granted_by_email,
+              }
+            : null,
+          status,
+        };
+      })(),
     };
   });
 }
