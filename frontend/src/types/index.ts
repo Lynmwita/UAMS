@@ -175,6 +175,9 @@ export interface LibraryBook {
   available_copies: number;
   shelf_location: string;
   is_ebook_available: boolean;
+  /** Asset write-off: archived books leave the catalogue but loan history is preserved. */
+  is_archived?: boolean;
+  archived_reason?: string;
 }
 
 export interface LibraryLoan {
@@ -189,6 +192,62 @@ export interface LibraryLoan {
   return_date?: string;
   status: 'borrowed' | 'returned' | 'overdue';
   fine_amount?: number;
+  /** Renewals are limited to one per loan (policy). */
+  renewed?: boolean;
+  /** Fine settlement tracking at the library desk. */
+  fine_paid?: boolean;
+  fine_payment_ref?: string;
+  fine_paid_at?: string;
+}
+
+export interface LibraryReservation {
+  id: string;
+  book_id: string;
+  book_title: string;
+  student_id: string;
+  student_name: string;
+  admission_number: string;
+  reserved_date: string;
+  status: 'queued' | 'fulfilled' | 'cancelled';
+}
+
+export interface LibraryBatchBook {
+  title: string;
+  author: string;
+  isbn: string;
+  publisher?: string;
+  category?: string;
+  shelf_location?: string;
+  total_copies: number;
+}
+
+export interface LibraryCatalogBatch {
+  id: string;
+  submitted_by_email: string;
+  submitted_at: string;
+  books: LibraryBatchBook[];
+  status: 'pending' | 'approved' | 'rejected';
+  reviewed_by_email?: string;
+  reviewed_at?: string;
+  review_reason?: string;
+}
+
+export type LibraryMemberType = 'undergrad' | 'postgrad' | 'staff';
+
+export interface LibraryLoanRule {
+  max_books: number;
+  loan_days: number;
+}
+
+export interface LibraryPolicies {
+  loan_rules: Record<LibraryMemberType, LibraryLoanRule>;
+  fine_per_day: number;
+  max_fine_per_book: number;
+  lost_book_fee: number;
+  /** When true, students with unpaid library fines are blocked from exam/graduation clearance. */
+  block_clearance_on_fines: boolean;
+  updated_at: string;
+  updated_by_email?: string;
 }
 
 export interface ExamSchedule {
@@ -217,6 +276,10 @@ export interface ExamClearanceCard {
   is_cleared: boolean;
   security_qr_token: string;
   registered_units: number;
+  /** Library fine block: driven by the library module when block_clearance_on_fines is on.
+   *  Defaults to false (not blocked); computed from unpaid library fines. */
+  library_blocked: boolean;
+  library_fine_balance?: number;
 }
 
 export interface NotificationLog {
