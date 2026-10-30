@@ -55,3 +55,25 @@ export function determineStanding(cgpa: number): string {
 }
 
 export const getAcademicStanding = determineStanding;
+
+/**
+ * Academic standing badges for the Transcript Desk (display only).
+ * Bands per the examinations redesign brief. This is separate from
+ * determineStanding(), which feeds official transcript documents.
+ */
+export type StandingBand =
+  | { band: "Dean's List"; detail: 'First Class Honors'; tone: 'gold' }
+  | { band: 'Second Class Upper'; detail: 'Honors'; tone: 'silver' }
+  | { band: 'Second Class Lower'; detail: 'Honors'; tone: 'bronze' }
+  | { band: 'Pass'; detail: 'Satisfactory'; tone: 'blue' }
+  | { band: 'Academic Probation'; detail: 'Warning letter due'; tone: 'red' }
+  | { band: 'Insufficient data'; detail: 'Fewer than 3 graded units'; tone: 'gray' };
+
+export function classifyStanding(cgpa: number, gradedUnits: number): StandingBand {
+  if (gradedUnits < 3) return { band: 'Insufficient data', detail: 'Fewer than 3 graded units', tone: 'gray' };
+  if (cgpa >= 3.6) return { band: "Dean's List", detail: 'First Class Honors', tone: 'gold' };
+  if (cgpa >= 3.0) return { band: 'Second Class Upper', detail: 'Honors', tone: 'silver' };
+  if (cgpa >= 2.5) return { band: 'Second Class Lower', detail: 'Honors', tone: 'bronze' };
+  if (cgpa >= 2.0) return { band: 'Pass', detail: 'Satisfactory', tone: 'blue' };
+  return { band: 'Academic Probation', detail: 'Warning letter due', tone: 'red' };
+}
