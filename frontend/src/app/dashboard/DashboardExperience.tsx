@@ -29,6 +29,7 @@ import InstitutionalDashboard from './InstitutionalDashboard';
 import LibrarianDashboard from './LibrarianDashboard';
 import SupportStaffDashboard from './SupportStaffDashboard';
 import AdminCommandCenter from './AdminCommandCenter';
+import AuditOfficerDashboard from './AuditOfficerDashboard';
 
 type Summary = {
   generated_at: string;
@@ -80,6 +81,7 @@ export default function DashboardExperience() {
   if (!id.startsWith('usr-')) return <InstitutionalDashboard />;
   if (role === 'librarian') return <LibrarianDashboard />;
   if (role === 'support_staff') return <SupportStaffDashboard />;
+  if (role === 'audit_officer') return <AuditOfficerDashboard />;
 
   const metrics: { label: string; value: string; detail: string; icon: typeof Users; tone: string }[] = summary
     ? role === 'student' && summary.student
@@ -130,9 +132,9 @@ export default function DashboardExperience() {
         <div className="heading-tools">
           <span className="session-pill"><span className="session-dot" /> Semester 1 in session</span>
           {roleHasPermission(role, 'students:read') && <Link style={{ display: canAccessPage(role, 'students') ? undefined : 'none' }} className="search-link" href="/dashboard/students" aria-label="Search student records"><Search size={17} /></Link>}
-          <Link className="primary-action" href={role === 'audit_officer' ? '/dashboard/audit' : role === 'student' || role === 'finance_officer' ? '/dashboard/finance' : roleHasPermission(role, 'students:write') ? '/dashboard/students?action=register' : '/dashboard/courses'}>
+          <Link className="primary-action" href={role === 'student' || role === 'finance_officer' ? '/dashboard/finance' : roleHasPermission(role, 'students:write') ? '/dashboard/students?action=register' : '/dashboard/courses'}>
             <FilePlus2 size={16} />
-            {role === 'audit_officer' ? 'Inspect Audit Logs' : role === 'student' ? 'Make a payment' : role === 'finance_officer' ? 'Review payments' : roleHasPermission(role, 'students:write') ? 'Register student' : 'View courses'}
+            {role === 'student' ? 'Make a payment' : role === 'finance_officer' ? 'Review payments' : roleHasPermission(role, 'students:write') ? 'Register student' : 'View courses'}
           </Link>
         </div>
       </section>
