@@ -780,6 +780,426 @@ export function generateStaffIDCardPDF(data: {
 
 
 
+/**
+ * 6. Grade Audit Compliance Report (for Audit & Compliance Officer)
+ *
+ * Senate-ready report: the inspected grade roll, all flagged records,
+ * and the modification history per grade.
+ */
+export function generateGradeAuditReportPDF(data: {
+  auditorEmail: string;
+  generatedAt: string;
+  grades: {
+    student: string; admission: string; course: string; courseTitle: string;
+    cat: number; exam: number; total: number; grade: string;
+    status: string; isModified: boolean;
+    modifications: { from: string; to: string; authorizedBy: string; at: string; reason: string }[];
+    isFlagged: boolean;
+  }[];
+  flags: { student: string; admission: string; course: string; reason: string; flaggedBy: string; at: string }[];
+}) {
+  const doc = new jsPDF('p', 'mm', 'a4');
+  addHeader(doc, 'GRADE AUDIT COMPLIANCE REPORT');
+
+  // Report meta box
+  doc.setFillColor(248, 250, 252);
+  doc.roundedRect(14, 46, 182, 24, 2, 2, 'F');
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(14, 46, 182, 24, 2, 2, 'S');
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.text('Prepared by (Audit & Compliance):', 18, 53);
+  doc.setFont('helvetica', 'normal');
+  doc.text(data.auditorEmail, 80, 53);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Inspection date:', 18, 60);
+  doc.setFont('helvetica', 'normal');
+  doc.text(data.generatedAt, 80, 60);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Records inspected:', 120, 60);
+  doc.setFont('helvetica', 'normal');
+  doc.text(String(data.grades.length), 155, 60);
+
+  let currentY = 76;
+
+  // Section 1: Summary
+  const modifiedCount = data.grades.filter((g) => g.isModified).length;
+  const flaggedCount = data.grades.filter((g) => g.isFlagged).length;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.text('1. INSPECTION SUMMARY', 14, currentY);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(30, 41, 59);
+  currentY += 6;
+  doc.text(`Total grade records inspected: ${data.grades.length}`, 18, currentY); currentY += 5;
+  doc.text(`Records with post-submission modifications: ${modifiedCount}`, 18, currentY); currentY += 5;
+  doc.text(`Records flagged for compliance review: ${flaggedCount}`, 18, currentY); currentY += 5;
+  doc.text(`Discrete flags raised during this inspection: ${data.flags.length}`, 18, currentY); currentY += 10;
+
+  // Section 2: Grade roll with modification markers
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.text('2. INSPECTED GRADE ROLL', 14, currentY);
+
+  const rollBody = data.grades.map((g) => [
+    g.student,
+    g.admission,
+    g.course,
+    `${g.total}/100`,
+    g.grade,
+    g.status,
+    g.isModified ? 'MODIFIED' : '—',
+    g.isFlagged ? 'FLAGGED' : '—',
+  ]);
+
+  autoTable(doc, {
+    startY: currentY + 3,
+    head: [['Student', 'Adm No', 'Course', 'Total', 'Grade', 'Status', 'Modified?', 'Flagged?']],
+    body: rollBody,
+    theme: 'grid',
+    headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 7, fontStyle: 'bold' },
+    styles: { fontSize: 7, cellPadding: 2, textColor: [30, 41, 59] },
+    columnStyles: {
+      0: { cellWidth: 38 },
+      1: { cellWidth: 26 },
+      2: { cellWidth: 20, fontStyle: 'bold' },
+      3: { cellWidth: 16, halign: 'center' },
+      4: { cellWidth: 14, halign: 'center', fontStyle: 'bold' },
+      5: { cellWidth: 28 },
+      6: { cellWidth: 20, halign: 'center' },
+      7: { cellWidth: 20, halign: 'center' },
+    },
+    margin: { left: 14, right: 14, top: 46, bottom: 22 },
+  });
+
+  let finalY = (doc as any).lastAutoTable.finalY || currentY + 40;
+  currentY = finalY + 10;
+
+  // Section 3: Modification history
+  if (currentY > 240) { doc.addPage(); addHeader(doc, 'GRADE AUDIT COMPLIANCE REPORT'); currentY = 48; }
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.text('3. GRADE MODIFICATION HISTORY', 14, currentY);
+  currentY += 6;
+
+  const modifiedGrades = data.grades.filter((g) => g.isModified);
+  if (modifiedGrades.length === 0) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(30, 41, 59);
+    doc.text('No post-submission grade modifications were found in the audit trail.', 18, currentY);
+    currentY += 8;
+  } else {
+    const modBody: string[][] = [];
+    for (const g of modifiedGrades) {
+      for (const m of g.modifications) {
+        modBody.push([g.student, g.admission, g.course, m.from, m.to, m.authorizedBy, m.at, m.reason]);
+      }
+    }
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Student', 'Adm No', 'Course', 'From', 'To', 'Authorized By', 'Date', 'Reason']],
+      body: modBody,
+      theme: 'grid',
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 7, fontStyle: 'bold' },
+      styles: { fontSize: 7, cellPadding: 2, textColor: [30, 41, 59] },
+      columnStyles: {
+        0: { cellWidth: 30 },
+        1: { cellWidth: 24 },
+        2: { cellWidth: 18, fontStyle: 'bold' },
+        3: { cellWidth: 16, halign: 'center' },
+        4: { cellWidth: 16, halign: 'center', fontStyle: 'bold' },
+        5: { cellWidth: 34 },
+        6: { cellWidth: 20 },
+        7: { cellWidth: 24 },
+      },
+      margin: { left: 14, right: 14, top: 46, bottom: 22 },
+    });
+    currentY = ((doc as any).lastAutoTable.finalY || currentY + 40) + 10;
+  }
+
+  // Section 4: Flagged records
+  if (currentY > 240) { doc.addPage(); addHeader(doc, 'GRADE AUDIT COMPLIANCE REPORT'); currentY = 48; }
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.text('4. FLAGGED RECORDS', 14, currentY);
+  currentY += 6;
+
+  if (data.flags.length === 0) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(30, 41, 59);
+    doc.text('No records were flagged during this inspection.', 18, currentY);
+    currentY += 8;
+  } else {
+    const flagBody = data.flags.map((f) => [f.student, f.admission, f.course, f.reason, f.flaggedBy, f.at]);
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Student', 'Adm No', 'Course', 'Reason', 'Flagged By', 'Date']],
+      body: flagBody,
+      theme: 'grid',
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 7, fontStyle: 'bold' },
+      styles: { fontSize: 7, cellPadding: 2, textColor: [30, 41, 59] },
+      columnStyles: {
+        0: { cellWidth: 34 },
+        1: { cellWidth: 26 },
+        2: { cellWidth: 20, fontStyle: 'bold' },
+        3: { cellWidth: 52 },
+        4: { cellWidth: 28 },
+        5: { cellWidth: 22 },
+      },
+      margin: { left: 14, right: 14, top: 46, bottom: 22 },
+    });
+    currentY = ((doc as any).lastAutoTable.finalY || currentY + 40) + 10;
+  }
+
+  // Auditor attestation
+  const pageHeight = doc.internal.pageSize.height || 297;
+  if (currentY + 50 > pageHeight) { doc.addPage(); addHeader(doc, 'GRADE AUDIT COMPLIANCE REPORT'); currentY = 48; }
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.text('AUDITOR ATTESTATION', 14, currentY + 6);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(30, 41, 59);
+  doc.text('This report reflects the grade records as inspected on the date above. All modifications listed were', 14, currentY + 12, { maxWidth: 182 });
+  doc.text('traced through the institutional audit trail. Flagged records require follow-up before Senate ratification.', 14, currentY + 17, { maxWidth: 182 });
+
+  const sigY = currentY + 28;
+  doc.line(18, sigY + 12, 80, sigY + 12);
+  doc.text('Audit & Compliance Officer (signature)', 18, sigY + 16);
+  doc.line(116, sigY + 12, 178, sigY + 12);
+  doc.text('Date', 116, sigY + 16);
+
+  const pages = doc.getNumberOfPages();
+  for (let page = 1; page <= pages; page++) { doc.setPage(page); addFooter(doc, page, pages); }
+  return doc;
+}
+
+/**
+ * 7. Exam Clearance Audit Report (for Audit & Compliance Officer)
+ *
+ * Senate-ready report: clearance summary, ghost clearance findings,
+ * override/exception log, pass generation log, and flagged records.
+ */
+export function generateClearanceAuditReportPDF(data: {
+  auditorEmail: string;
+  generatedAt: string;
+  summary: { total: number; cleared: number; blockedFee: number; blockedAttendance: number; waived: number };
+  ghostClearances: { student: string; admission: string; balance: number; paidPct: number }[];
+  overrides: { student: string; admission: string; type: string; reason: string; grantedBy: string; grantedAt: string; validUntil: string }[];
+  passGenerations: { passCode: string; student: string; authorizedBy: string; at: string }[];
+  flags: { student: string; admission: string; reason: string; flaggedBy: string; at: string }[];
+}) {
+  const doc = new jsPDF('p', 'mm', 'a4');
+  addHeader(doc, 'EXAM CLEARANCE AUDIT REPORT');
+
+  // Report meta box
+  doc.setFillColor(248, 250, 252);
+  doc.roundedRect(14, 46, 182, 24, 2, 2, 'F');
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(14, 46, 182, 24, 2, 2, 'S');
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.text('Prepared by (Audit & Compliance):', 18, 53);
+  doc.setFont('helvetica', 'normal');
+  doc.text(data.auditorEmail, 80, 53);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Inspection date:', 18, 60);
+  doc.setFont('helvetica', 'normal');
+  doc.text(data.generatedAt, 80, 60);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Students inspected:', 120, 60);
+  doc.setFont('helvetica', 'normal');
+  doc.text(String(data.summary.total), 155, 60);
+
+  let currentY = 76;
+
+  // Section 1: Clearance summary
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.text('1. CLEARANCE SUMMARY', 14, currentY);
+  currentY += 6;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(30, 41, 59);
+  doc.text(`Cleared for examinations: ${data.summary.cleared}`, 18, currentY); currentY += 5;
+  doc.text(`Blocked (unpaid fees): ${data.summary.blockedFee}`, 18, currentY); currentY += 5;
+  doc.text(`Blocked (attendance below 75%): ${data.summary.blockedAttendance}`, 18, currentY); currentY += 5;
+  doc.text(`Conditionally waived: ${data.summary.waived}`, 18, currentY); currentY += 10;
+
+  // Section 2: Ghost clearance findings
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(220, 38, 38);
+  doc.text('2. ZERO-BALANCE ENFORCEMENT — GHOST CLEARANCE FINDINGS', 14, currentY);
+  currentY += 6;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(30, 41, 59);
+  if (data.ghostClearances.length === 0) {
+    doc.text('No ghost clearances detected. Every CLEARED student has 100% payment backing or a valid waiver.', 18, currentY);
+    currentY += 8;
+  } else {
+    doc.setTextColor(220, 38, 38);
+    doc.text(`${data.ghostClearances.length} student(s) marked CLEARED without 100% payment backing and without a valid waiver:`, 18, currentY);
+    currentY += 3;
+    doc.setTextColor(30, 41, 59);
+    const ghostBody = data.ghostClearances.map((g) => [g.student, g.admission, `KES ${g.balance.toLocaleString()}`, `${g.paidPct}%`]);
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Student', 'Adm No', 'Outstanding Balance', 'Paid %']],
+      body: ghostBody,
+      theme: 'grid',
+      headStyles: { fillColor: [185, 28, 28], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+      styles: { fontSize: 8, cellPadding: 2, textColor: [30, 41, 59] },
+      columnStyles: {
+        0: { cellWidth: 50 },
+        1: { cellWidth: 36 },
+        2: { cellWidth: 50, halign: 'right', fontStyle: 'bold' },
+        3: { cellWidth: 46, halign: 'center' },
+      },
+      margin: { left: 14, right: 14, top: 46, bottom: 22 },
+    });
+    currentY = ((doc as any).lastAutoTable.finalY || currentY + 40) + 10;
+  }
+
+  // Section 3: Override & exception log
+  if (currentY > 230) { doc.addPage(); addHeader(doc, 'EXAM CLEARANCE AUDIT REPORT'); currentY = 48; }
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.text('3. OVERRIDE & EXCEPTION LOG (CONDITIONAL WAIVERS)', 14, currentY);
+  currentY += 6;
+  if (data.overrides.length === 0) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(30, 41, 59);
+    doc.text('No conditional waivers on record.', 18, currentY);
+    currentY += 8;
+  } else {
+    const ovBody = data.overrides.map((o) => [o.student, o.admission, o.type, o.grantedBy, o.grantedAt, o.validUntil, o.reason.slice(0, 60)]);
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Student', 'Adm No', 'Type', 'Granted By', 'Granted At', 'Valid Until', 'Reason']],
+      body: ovBody,
+      theme: 'grid',
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 7, fontStyle: 'bold' },
+      styles: { fontSize: 7, cellPadding: 2, textColor: [30, 41, 59] },
+      columnStyles: {
+        0: { cellWidth: 28 },
+        1: { cellWidth: 24 },
+        2: { cellWidth: 24 },
+        3: { cellWidth: 28 },
+        4: { cellWidth: 22 },
+        5: { cellWidth: 22 },
+        6: { cellWidth: 34 },
+      },
+      margin: { left: 14, right: 14, top: 46, bottom: 22 },
+    });
+    currentY = ((doc as any).lastAutoTable.finalY || currentY + 40) + 10;
+  }
+
+  // Section 4: Pass generation log
+  if (currentY > 230) { doc.addPage(); addHeader(doc, 'EXAM CLEARANCE AUDIT REPORT'); currentY = 48; }
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.text('4. EXAM PASS GENERATION LOG', 14, currentY);
+  currentY += 6;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(30, 41, 59);
+  if (data.passGenerations.length === 0) {
+    doc.text('No pass generation events recorded in the audit trail.', 18, currentY);
+    currentY += 8;
+  } else {
+    const pgBody = data.passGenerations.map((p) => [p.passCode, p.student, p.authorizedBy, p.at]);
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Pass Code', 'Student', 'Authorized By', 'Generated At']],
+      body: pgBody,
+      theme: 'grid',
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+      styles: { fontSize: 8, cellPadding: 2, textColor: [30, 41, 59] },
+      columnStyles: {
+        0: { cellWidth: 44, fontStyle: 'bold' },
+        1: { cellWidth: 50 },
+        2: { cellWidth: 44 },
+        3: { cellWidth: 44 },
+      },
+      margin: { left: 14, right: 14, top: 46, bottom: 22 },
+    });
+    currentY = ((doc as any).lastAutoTable.finalY || currentY + 40) + 10;
+  }
+
+  // Section 5: Flagged records
+  if (currentY > 230) { doc.addPage(); addHeader(doc, 'EXAM CLEARANCE AUDIT REPORT'); currentY = 48; }
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.text('5. FLAGGED RECORDS', 14, currentY);
+  currentY += 6;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(30, 41, 59);
+  if (data.flags.length === 0) {
+    doc.text('No clearance records were flagged during this inspection.', 18, currentY);
+    currentY += 8;
+  } else {
+    const flagBody = data.flags.map((f) => [f.student, f.admission, f.reason, f.flaggedBy, f.at]);
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Student', 'Adm No', 'Reason', 'Flagged By', 'Date']],
+      body: flagBody,
+      theme: 'grid',
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+      styles: { fontSize: 8, cellPadding: 2, textColor: [30, 41, 59] },
+      columnStyles: {
+        0: { cellWidth: 36 },
+        1: { cellWidth: 28 },
+        2: { cellWidth: 56 },
+        3: { cellWidth: 32 },
+        4: { cellWidth: 30 },
+      },
+      margin: { left: 14, right: 14, top: 46, bottom: 22 },
+    });
+    currentY = ((doc as any).lastAutoTable.finalY || currentY + 40) + 10;
+  }
+
+  // Auditor attestation
+  const pageHeight = doc.internal.pageSize.height || 297;
+  if (currentY + 50 > pageHeight) { doc.addPage(); addHeader(doc, 'EXAM CLEARANCE AUDIT REPORT'); currentY = 48; }
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+  doc.text('AUDITOR ATTESTATION', 14, currentY + 6);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(30, 41, 59);
+  doc.text('This report reflects the exam clearance ledger as inspected on the date above. Ghost clearance', 14, currentY + 12, { maxWidth: 182 });
+  doc.text('findings require immediate registrar follow-up. Waivers listed were verified against authorizer records.', 14, currentY + 17, { maxWidth: 182 });
+
+  const sigY = currentY + 28;
+  doc.line(18, sigY + 12, 80, sigY + 12);
+  doc.text('Audit & Compliance Officer (signature)', 18, sigY + 16);
+  doc.line(116, sigY + 12, 178, sigY + 12);
+  doc.text('Date', 116, sigY + 16);
+
+  const pages = doc.getNumberOfPages();
+  for (let page = 1; page <= pages; page++) { doc.setPage(page); addFooter(doc, page, pages); }
+  return doc;
+}
+
 export interface PDFTimetableSlot {
   day: string;
   time: string;
@@ -840,6 +1260,7 @@ export function generateTimetablePDF(slots: PDFTimetableSlot[]) {
     doc.setPage(i);
     addFooter(doc, i, totalPages);
   }
+
 
   return doc;
 }

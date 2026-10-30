@@ -258,9 +258,29 @@ export interface ExamSchedule {
   start_time: string;
   end_time: string;
   venue: string;
+  building?: string;
+  seat_range?: string;
   chief_invigilator: string;
   total_candidates: number;
   status: 'scheduled' | 'ongoing' | 'completed';
+}
+
+export type ExamClearanceStatus = 'cleared' | 'blocked_fee' | 'blocked_attendance' | 'waived';
+
+export interface ExamWaiver {
+  id: string;
+  student_id: string;
+  admission_number: string;
+  student_name: string;
+  waiver_type: 'gov_disbursement_delay' | 'payment_plan' | 'scholarship' | 'other';
+  reason: string;
+  granted_by_email: string;
+  granted_by_role: string;
+  granted_at: string;
+  valid_until: string;
+  is_revoked: boolean;
+  revoked_at?: string;
+  revoked_by_email?: string;
 }
 
 export interface ExamClearanceCard {
@@ -274,12 +294,22 @@ export interface ExamClearanceCard {
   fee_balance: number;
   fee_paid_percentage: number;
   is_cleared: boolean;
+  attendance_percentage: number | null;
+  attendance_blocked: boolean;
+  attendance_exempt: boolean;
   security_qr_token: string;
   registered_units: number;
+  /** Active waiver if one exists, else null. */
+  waiver: {
+    waiver_type: ExamWaiver['waiver_type'];
+    valid_until: string;
+    granted_by_email: string;
+  } | null;
   /** Library fine block: driven by the library module when block_clearance_on_fines is on.
    *  Defaults to false (not blocked); computed from unpaid library fines. */
   library_blocked: boolean;
   library_fine_balance?: number;
+  status: ExamClearanceStatus;
 }
 
 export interface NotificationLog {

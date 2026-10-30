@@ -92,3 +92,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
+
+export async function PATCH(request: NextRequest) {
+  // Update a department: rename, reassign HOD, or suspend/archive (is_active).
+  // Admin-tier only; audit-logged. Historical student records are untouched
+  // by suspend/archive (is_active=false only hides it from new selections).
+  const auth = await requireServerAuth(request, ['super_admin','admin']);
+  if ('errorResponse' in auth) return auth.errorResponse;
+  if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'departments');
+  try {
+    const body = await request.json();
+    const dept = departmentsStore.find((d) => d.id === body.id);
+    if (!dept) return NextResponse.json({ success: false, error: 'Department not found.' }, { status: 404 });
+    if (typeof body.name === 'string' && body.name.trim()) dept.name = body.name.trim();
+    if (typeof body.hod === 'string') dept.hod = body.hod.trim() || dept.hod;
+    if (typeof body.hod_email === 'string') dept.hod_email = body.hod_email.trim();
+    if (typeof body.is_active === 'boolean') dept.is_active = body.is_active;
+    recordAuditEvent({
+      actor_email: auth.user.email, actor_role: auth.user.role, action: 'DEPARTMENT_UPDATED',
+      entity_type: 'departments', entity_id: dept.id,
+      ip_address: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '127.0.0.1',
+      status: 'SUCCESS', details: { code: dept.code },
+    });
+    return NextResponse.json({ success: true, data: dept });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}

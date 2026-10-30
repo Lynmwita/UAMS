@@ -41,6 +41,10 @@ test('all seven roles obey the API authorization matrix',async()=>{
       ['create student',students.POST,['super_admin','admin','registrar']],
       ['create course',courses.POST,['super_admin','admin','registrar']],
       ['enter marks',grades.POST,['super_admin','lecturer']],
+      // PATCH now runs the moderation workflow: lecturer submits drafts,
+      // hod/registrar/admin approve. Empty body defaults to approve action,
+      // which lecturer cannot perform (grade lookup 404s before the role check
+      // for non-existent grades, so we test with a real grade id below).
       ['approve marks',grades.PATCH,['super_admin','admin','registrar','hod']],
       ['reconcile bank',bank.POST,['super_admin','finance_officer']],
       ['take attendance',attendance.POST,['super_admin','lecturer']],
