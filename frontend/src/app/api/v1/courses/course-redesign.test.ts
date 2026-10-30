@@ -68,6 +68,7 @@ test('courses PATCH: admin can edit unit_type, archive, update description', asy
 test('courses PATCH: invalid unit_type is ignored', async () => {
   const { coursesStore } = await import('@/lib/academic/course-catalog');
   const course = coursesStore.find((c: any) => c.code === 'TEST 101');
+  assert.ok(course, 'TEST 101 must exist');
   const res = await updateCourse(makeRequest('admin', 'PATCH', { id: course.id, unit_type: 'super-core' }));
   const body = await res.json();
   assert.equal(body.data.unit_type, 'core'); // unchanged
