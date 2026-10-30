@@ -55,6 +55,16 @@ export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
     const action: string = body.action || 'approve';
+    // Action-specific authorization BEFORE the grade lookup so unauthorized
+    // roles get 403 (not 404) even when the grade id is missing/invalid.
+    const approverRoles = ['hod','registrar','admin','super_admin'];
+    if (action === 'submit') {
+      // lecturer+ can submit drafts; requireServerAuth already gated the role list
+    } else if (action === 'request_correction' || action === 'approve') {
+      if (!approverRoles.includes(auth.user.role)) return NextResponse.json({ success:false, error:'Only HOD/registrar/admin can perform this action.' }, {status:403});
+    } else {
+      return NextResponse.json({ success:false, error:'Unknown moderation action.' }, {status:400});
+    }
     const grade = gradesStore.find(g => g.id === body.grade_id);
     if (!grade || !canReviewCourse(auth.user, grade.course_code)) return NextResponse.json({ success:false, error:'Grade not found in your scope.' }, {status:404});
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
