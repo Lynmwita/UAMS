@@ -1199,3 +1199,68 @@ export function generateClearanceAuditReportPDF(data: {
   for (let page = 1; page <= pages; page++) { doc.setPage(page); addFooter(doc, page, pages); }
   return doc;
 }
+
+export interface PDFTimetableSlot {
+  day: string;
+  time: string;
+  courseCode: string;
+  courseTitle: string;
+  room: string;
+  lecturer: string;
+}
+
+/** Weekly timetable PDF: one section per day with a clean slot table. */
+export function generateTimetablePDF(slots: PDFTimetableSlot[]) {
+  const doc = new jsPDF('p', 'mm', 'a4');
+  addHeader(doc, 'WEEKLY LECTURE TIMETABLE');
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 116, 139);
+  doc.text('Semester weekly template — recurring every week.', 14, 44);
+
+  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+  let y = 52;
+
+  for (const day of days) {
+    const daySlots = slots.filter((s) => s.day === day);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+    doc.text(day, 14, y);
+    y += 4;
+
+    if (daySlots.length === 0) {
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(148, 163, 184);
+      doc.text('No lectures scheduled.', 14, y);
+      y += 8;
+    } else {
+      autoTable(doc, {
+        startY: y,
+        head: [['Time', 'Course Unit', 'Venue', 'Lecturer']],
+        body: daySlots.map((s) => [s.time, `${s.courseCode} — ${s.courseTitle}`, s.room, s.lecturer]),
+        theme: 'grid',
+        headStyles: { fillColor: [15, 23, 42] as [number, number, number], textColor: 255, fontSize: 8 },
+        bodyStyles: { fontSize: 8 },
+        margin: { left: 14, right: 14 },
+      });
+      y = (doc as any).lastAutoTable.finalY + 10;
+    }
+
+    if (y > 270) {
+      doc.addPage();
+      y = 20;
+    }
+  }
+
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    addFooter(doc, i, totalPages);
+  }
+
+
+  return doc;
+}

@@ -26,6 +26,8 @@ function makeCard(overrides: Partial<ExamClearanceCard>): ExamClearanceCard {
     attendance_exempt: false,
     security_qr_token: 'token',
     registered_units: 5,
+    library_blocked: false,
+    library_fine_balance: 0,
     waiver: null,
     status: 'cleared',
     ...overrides,

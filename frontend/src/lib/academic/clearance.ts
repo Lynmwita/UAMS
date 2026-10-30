@@ -6,6 +6,7 @@ import { studentsStore } from './student-records';
 import { invoicesStore } from '@/lib/finance/invoices';
 import { registrationsStore } from './registrations';
 import { computeStudentAttendance } from './attendance-store';
+import { getStudentUnpaidFines, getLibraryPolicies } from '@/lib/library/store';
 import type { ExamClearanceCard, ExamClearanceStatus, ExamWaiver } from '@/types';
 
 /** Exam Pass rule shown on the Examinations page and applied to every demo card:
@@ -69,6 +70,13 @@ export function buildExamClearanceCards(): ExamClearanceCard[] {
     const att = attendanceByAdm.get(student.admission_number);
     const attendance_blocked = !!att && att.is_blocked;
     const attendance_exempt = !!att && att.is_exempt;
+    // Library fine block: driven by the library module. When the
+    // block_clearance_on_fines policy is on and the student has unpaid
+    // library fines, the card is blocked regardless of fee status.
+    // Defaults to false (not blocked) when the policy is off or no fines exist.
+    const libraryPolicies = getLibraryPolicies();
+    const libraryFineBalance = getStudentUnpaidFines(student.admission_number);
+    const libraryBlocked = libraryPolicies.block_clearance_on_fines && libraryFineBalance > 0;
     return {
       id: `clr-${student.id}`,
       student_id: student.id,
@@ -82,15 +90,17 @@ export function buildExamClearanceCards(): ExamClearanceCard[] {
       attendance_percentage: att?.percentage ?? null,
       attendance_blocked,
       attendance_exempt,
-      security_qr_token: `UAMS-SEC-CLR-${admissionSuffix}-VALID-2026`,
+      security_qr_token: `QR-${student.admission_number}-2026SEP`,
       registered_units: registrationsStore.filter((r) => r.student_id === student.id).length,
+      library_blocked: libraryBlocked,
+      library_fine_balance: libraryFineBalance,
       ...(() => {
         const waiver = getActiveWaiver(student.id);
         const status = deriveClearanceStatus(result.isCleared, attendance_blocked, waiver);
         return {
           // A waived student may print their pass despite a fee balance.
-          // Attendance blocks stand alone: waivers never override them.
-          is_cleared: (status === 'cleared' || status === 'waived') && !attendance_blocked,
+          // Attendance and library blocks stand alone: waivers never override them.
+          is_cleared: (status === 'cleared' || status === 'waived') && !attendance_blocked && !libraryBlocked,
           waiver: waiver
             ? {
                 waiver_type: waiver.waiver_type,
