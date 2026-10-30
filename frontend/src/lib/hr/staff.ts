@@ -67,14 +67,12 @@ const seed: UamsStaffMember[] = [
     joined_date: '2018-02-01',
   },
   {
-    // Demo librarian identity, kept identical to the demo sign-in account:
-    // button "Librarian", header name derived from this email, and this
-    // record all resolve to librarian@university.ac.ke, Active. The name
-    // below is the account's display name, not a separate person.
+    // Demo librarian identity for the demo sign-in account
+    // librarian@university.ac.ke (demo button "Librarian").
     id: 'staff-4',
     staff_number: 'EUC/STAFF/004',
-    first_name: 'Librarian',
-    last_name: '',
+    first_name: 'Ann',
+    last_name: 'Wanjiru',
     email: 'librarian@university.ac.ke',
     phone: '+254700000104',
     role: 'librarian',
