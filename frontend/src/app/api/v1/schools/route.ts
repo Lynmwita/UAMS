@@ -1,49 +1,9 @@
 import { institutionalApi } from '@/lib/academic/institutional-api';
 import { requireServerAuth, requirePermission } from '@/lib/auth/server-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { recordAuditEvent } from '@/lib/audit/audit-logger';
 
-const schoolsStore = [
-  {
-    id: 'sch-ict',
-    code: 'SOICT',
-    name: 'School of Information Communication & Technology',
-    dean: 'Prof. Alice Njuguna',
-    dean_email: 'dean.soict@university.ac.ke',
-    departments_count: 3,
-    programs_count: 7,
-    is_active: true,
-  },
-  {
-    id: 'sch-biz',
-    code: 'SOBE',
-    name: 'School of Business and Economics',
-    dean: 'Dr. Martin Omondi',
-    dean_email: 'dean.sobe@university.ac.ke',
-    departments_count: 2,
-    programs_count: 5,
-    is_active: true,
-  },
-  {
-    id: 'sch-eng',
-    code: 'SOET',
-    name: 'School of Engineering & Technology',
-    dean: 'Eng. Samuel Githae',
-    dean_email: 'dean.soet@university.ac.ke',
-    departments_count: 3,
-    programs_count: 6,
-    is_active: true,
-  },
-  {
-    id: 'sch-edu',
-    code: 'SOEAS',
-    name: 'School of Education, Arts & Social Sciences',
-    dean: 'Dr. Beatrice Wanyama',
-    dean_email: 'dean.soeas@university.ac.ke',
-    departments_count: 2,
-    programs_count: 4,
-    is_active: true,
-  },
-];
+import { schoolsStore } from '@/lib/academic/structure';
 
 export async function GET(request: NextRequest) {
   const auth = await requireServerAuth(request, ['super_admin','admin','registrar']);
@@ -80,6 +40,32 @@ export async function POST(request: NextRequest) {
 
     schoolsStore.push(newSchool);
     return NextResponse.json({ success: true, data: newSchool }, { status: 201 });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  // Update a school: rename, reassign dean, or suspend/archive (is_active).
+  // Admin-tier only; audit-logged.
+  const auth = await requireServerAuth(request, ['super_admin','admin']);
+  if ('errorResponse' in auth) return auth.errorResponse;
+  if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'schools');
+  try {
+    const body = await request.json();
+    const school = schoolsStore.find((s) => s.id === body.id);
+    if (!school) return NextResponse.json({ success: false, error: 'School not found.' }, { status: 404 });
+    if (typeof body.name === 'string' && body.name.trim()) school.name = body.name.trim();
+    if (typeof body.dean === 'string') school.dean = body.dean.trim() || 'Pending Appointment';
+    if (typeof body.dean_email === 'string') school.dean_email = body.dean_email.trim();
+    if (typeof body.is_active === 'boolean') school.is_active = body.is_active;
+    recordAuditEvent({
+      actor_email: auth.user.email, actor_role: auth.user.role, action: 'SCHOOL_UPDATED',
+      entity_type: 'schools', entity_id: school.id,
+      ip_address: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '127.0.0.1',
+      status: 'SUCCESS', details: { code: school.code },
+    });
+    return NextResponse.json({ success: true, data: school });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
