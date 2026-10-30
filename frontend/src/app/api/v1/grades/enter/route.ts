@@ -45,15 +45,36 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const auth = await requireServerAuth(request, ['hod','registrar','admin','super_admin']);
+  // Grade moderation workflow. Actions:
+  // - 'submit' (lecturer/admin): draft -> pending_hod
+  // - 'request_correction' (hod/registrar/admin/super_admin): pending_hod -> draft
+  // - 'approve' or omitted (hod/registrar/admin/super_admin): -> senate_approved (official transcript record)
+  const auth = await requireServerAuth(request, ['lecturer','hod','registrar','admin','super_admin']);
   if ('errorResponse' in auth) return auth.errorResponse;
   if (!auth.user.id.startsWith('usr-')) return institutionalApi(request, auth.user, 'grades/enter');
   try {
     const body = await request.json();
+    const action: string = body.action || 'approve';
     const grade = gradesStore.find(g => g.id === body.grade_id);
     if (!grade || !canReviewCourse(auth.user, grade.course_code)) return NextResponse.json({ success:false, error:'Grade not found in your scope.' }, {status:404});
-    grade.is_approved = true;
-    recordAuditEvent({ actor_email:auth.user.email, actor_role:auth.user.role, action:'GRADE_APPROVED', entity_type:'student_grades', entity_id:grade.id, ip_address:request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown', status:'SUCCESS' });
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const audit = (act: string, details?: Record<string, unknown>) => recordAuditEvent({ actor_email:auth.user.email, actor_role:auth.user.role, action:act, entity_type:'student_grades', entity_id:grade.id, ip_address:ip, status:'SUCCESS', details });
+    if (action === 'submit') {
+      if (grade.moderation_status !== 'draft') return NextResponse.json({ success:false, error:'Only draft grades can be submitted for review.' }, {status:400});
+      grade.moderation_status = 'pending_hod';
+      audit('GRADE_SUBMITTED_FOR_REVIEW', { course_code: grade.course_code });
+    } else if (action === 'request_correction') {
+      if (!['hod','registrar','admin','super_admin'].includes(auth.user.role)) return NextResponse.json({ success:false, error:'Only HOD/registrar/admin can request corrections.' }, {status:403});
+      if (grade.moderation_status !== 'pending_hod') return NextResponse.json({ success:false, error:'Only grades pending review can be sent back.' }, {status:400});
+      grade.moderation_status = 'draft';
+      audit('GRADE_CORRECTION_REQUESTED', { course_code: grade.course_code, note: body.note || '' });
+    } else {
+      // approve -> senate_approved (official transcript record)
+      if (!['hod','registrar','admin','super_admin'].includes(auth.user.role)) return NextResponse.json({ success:false, error:'Only HOD/registrar/admin can approve grades.' }, {status:403});
+      grade.moderation_status = 'senate_approved';
+      grade.is_approved = true;
+      audit('GRADE_APPROVED', { course_code: grade.course_code });
+    }
     return NextResponse.json({success:true,data:grade});
   } catch { return NextResponse.json({success:false,error:'Invalid grade approval request.'},{status:400}); }
 }
@@ -105,7 +126,8 @@ export async function POST(request: NextRequest) {
       letter_grade: letter,
       grade_point: points,
       is_submitted: true,
-      is_approved: false, // requires senate/registrar approval
+      is_approved: false, // requires HOD moderation + senate approval
+      moderation_status: 'draft' as const,
     };
 
     gradesStore.push(newGrade);
