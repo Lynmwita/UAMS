@@ -6,9 +6,15 @@ import { roleHasPermission } from '@/lib/auth/rbac';
 import {
   Award, CheckCircle2, FileSpreadsheet, Download, Plus, X, Printer,
   Upload, FileDown, ChevronDown, AlertTriangle, Scale, Inbox, ClipboardCheck,
+  Flag, History, ShieldAlert, FileText,
 } from 'lucide-react';
 
 import { calculateGradePoint, classifyStanding } from '@/lib/academic/gpa';
+import {
+  buildGradeModificationMap, buildAuditorFlagList,
+  type GradeModification, type AuditorFlag,
+} from '@/lib/audit/auditor-utils';
+import { generateGradeAuditReportPDF } from '@/lib/pdf/generator';
 
 type ModerationStatus = 'draft' | 'pending_hod' | 'senate_approved';
 type GradeRow = {
@@ -40,9 +46,10 @@ const STANDING_TONE: Record<string, string> = {
 };
 
 export default function GradesPage() {
-  const { role } = useAuth();
+  const { role, email } = useAuth();
   const canWrite = roleHasPermission(role, 'grades:write');
   const canModerate = ['hod', 'registrar', 'admin', 'super_admin'].includes(role);
+  const isAuditor = role === 'audit_officer';
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [activeTab, setActiveTab] = useState<'queue' | 'roll' | 'transcript'>('roll');
@@ -50,6 +57,14 @@ export default function GradesPage() {
   const [grades, setGrades] = useState<GradeRow[]>([]);
   const [gradesLoaded, setGradesLoaded] = useState(false);
   const [appeals, setAppeals] = useState<Appeal[]>([]);
+
+  // ---- Auditor: modification history + flags ----
+  const [modMap, setModMap] = useState<Map<string, GradeModification[]>>(new Map());
+  const [flags, setFlags] = useState<AuditorFlag[]>([]);
+  const [flaggingId, setFlaggingId] = useState<string | null>(null);
+  const [flagReason, setFlagReason] = useState('');
+  const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
+  const [exportingReport, setExportingReport] = useState(false);
 
   const mapGrade = (g: any): GradeRow => ({
     id: g.id, studentId: g.student_id, student: g.student_name, adm: g.admission_number,
@@ -73,10 +88,83 @@ export default function GradesPage() {
       setAppeals(d.data);
     } catch { /* appeals unavailable for this role */ }
   };
+  // ---- Auditor: load grade modification history + existing flags from the audit trail ----
+  const loadAuditorData = async () => {
+    try {
+      const r = await fetch('/api/v1/audit?limit=200');
+      if (!r.ok) return;
+      const d = await r.json();
+      setModMap(buildGradeModificationMap(d.data || []));
+      setFlags(buildAuditorFlagList(d.data || []));
+    } catch { /* audit trail unavailable — honest empty states */ }
+  };
   useEffect(() => {
     loadGrades().catch((e) => setError(e.message)).finally(() => setGradesLoaded(true));
     loadAppeals();
+    if (isAuditor) loadAuditorData();
   }, []);
+
+  // ---- Auditor: raise a discrepancy flag on a grade record ----
+  const raiseFlag = async (g: GradeRow) => {
+    if (!flagReason.trim()) { setError('Please enter a reason for the flag.'); return; }
+    setError('');
+    try {
+      const r = await fetch('/api/v1/audit/flags', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entity_type: 'grade',
+          entity_id: g.id,
+          student_name: g.student,
+          admission_number: g.adm,
+          course_code: g.course,
+          reason: flagReason.trim(),
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Flag failed.');
+      setNotice(`Flag raised on ${g.student} (${g.course}) — logged to the audit trail.`);
+      setFlaggingId(null); setFlagReason('');
+      await loadAuditorData();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Flag failed.'); }
+  };
+
+  // ---- Auditor: export the senate-ready Grade Audit Compliance Report ----
+  const exportAuditReport = () => {
+    if (exportingReport) return;
+    setExportingReport(true);
+    try {
+      const flaggedIds = new Set(flags.filter((f) => f.entityType === 'student_grades').map((f) => f.entityId));
+      const doc = generateGradeAuditReportPDF({
+        auditorEmail: email || 'audit_officer@university.ac.ke',
+        generatedAt: new Date().toLocaleString('en-KE', { timeZone: 'Africa/Nairobi' }),
+        grades: grades.map((g) => {
+          const mods = modMap.get(g.id) || [];
+          return {
+            student: g.student, admission: g.adm, course: g.course, courseTitle: g.courseTitle,
+            cat: g.cat, exam: g.exam, total: g.total, grade: g.grade,
+            status: STATUS_META[g.status]?.label || g.status,
+            isModified: mods.length > 0,
+            modifications: mods.map((m) => ({
+              from: m.from, to: m.to, authorizedBy: `${m.authorizedBy} (${m.authorizedRole})`,
+              at: new Date(m.at).toLocaleDateString('en-KE'), reason: m.reason,
+            })),
+            isFlagged: flaggedIds.has(g.id),
+          };
+        }),
+        flags: flags.filter((f) => f.entityType === 'student_grades').map((f) => ({
+          student: f.student, admission: f.admission, course: f.course,
+          reason: f.reason, flaggedBy: f.flaggedBy,
+          at: new Date(f.at).toLocaleDateString('en-KE'),
+        })),
+      });
+      doc.save(`Grade-Audit-Compliance-Report-${new Date().toISOString().slice(0, 10)}.pdf`);
+      setNotice('Grade Audit Compliance Report downloaded — ready for Senate review.');
+    } catch (e) {
+      setError('Report generation failed.');
+    } finally {
+      setExportingReport(false);
+    }
+  };
 
   const moderate = async (gradeId: string, action: 'submit' | 'approve' | 'request_correction', note?: string) => {
     setError(''); setNotice('');
@@ -286,6 +374,28 @@ export default function GradesPage() {
             <span className="font-bold text-academic-gold-400">🛡️ Audit & Compliance Inspector:</span> Read-only grade inspection mode active. Grade modifications and approval gates are restricted.
           </div>
           <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 bg-academic-navy-800 text-academic-gold-400 rounded border border-academic-gold-500/30">Read-Only</span>
+        </div>
+      )}
+
+      {/* Auditor compliance toolbar */}
+      {isAuditor && (
+        <div className="bg-white border border-amber-200 rounded-xl p-4 shadow-sm flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 text-sm">
+            <ShieldAlert className="h-5 w-5 text-amber-600" />
+            <span className="font-bold text-slate-800">Compliance Toolkit</span>
+          </div>
+          <span className="text-xs text-slate-500">
+            {[...modMap.values()].flat().length > 0
+              ? `${modMap.size} grade(s) with post-submission modifications`
+              : 'No post-submission modifications found in the audit trail'}
+            {' · '}
+            {flags.filter((f) => f.entityType === 'student_grades').length} flag(s) raised
+          </span>
+          <button onClick={exportAuditReport} disabled={exportingReport || !gradesLoaded}
+            className="ml-auto bg-academic-navy-900 hover:bg-academic-navy-800 text-white font-bold px-4 py-2 rounded-lg text-xs transition flex items-center gap-2 shadow-sm disabled:opacity-50">
+            <FileText className="h-4 w-4 text-academic-gold-400" />
+            <span>{exportingReport ? 'Generating…' : 'Export Audit Report (PDF)'}</span>
+          </button>
         </div>
       )}
 
@@ -504,10 +614,17 @@ export default function GradesPage() {
                     <th className="px-5 py-3.5 text-center">Grade</th>
                     <th className="px-5 py-3.5 text-center">Points</th>
                     <th className="px-5 py-3.5">Moderation Status</th>
+                    {isAuditor && <th className="px-5 py-3.5">Audit Trail</th>}
+                    {isAuditor && <th className="px-5 py-3.5 text-right">Flag</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {grades.map((g) => (
+                  {grades.map((g) => {
+                    const mods = modMap.get(g.id) || [];
+                    const isModified = mods.length > 0;
+                    const isFlagged = flags.some((f) => f.entityType === 'student_grades' && f.entityId === g.id);
+                    const historyOpen = expandedHistory === g.id;
+                    return (
                     <tr key={g.id} className="hover:bg-slate-50/60 transition">
                       <td className="px-5 py-3.5">
                         <p className="font-semibold text-slate-900">{g.student}</p>
@@ -525,8 +642,66 @@ export default function GradesPage() {
                       </td>
                       <td className="px-5 py-3.5 text-center font-mono font-semibold text-slate-600">{g.gpa.toFixed(1)}</td>
                       <td className="px-5 py-3.5"><StatusBadge status={g.status} /></td>
+                      {isAuditor && (
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-2">
+                            {isModified ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-100 text-amber-900 border border-amber-300">
+                                Modified
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-slate-400">No modifications</span>
+                            )}
+                            {isFlagged && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-rose-100 text-rose-900 border border-rose-300">
+                                Flagged
+                              </span>
+                            )}
+                          </div>
+                          {isModified && (
+                            <button onClick={() => setExpandedHistory(historyOpen ? null : g.id)}
+                              className="mt-1 text-[11px] font-semibold text-academic-navy-800 hover:underline flex items-center gap-1">
+                              <History className="h-3 w-3" />
+                              {historyOpen ? 'Hide history' : `View history (${mods.length})`}
+                            </button>
+                          )}
+                          {historyOpen && (
+                            <div className="mt-2 space-y-1.5 bg-amber-50/60 border border-amber-200 rounded-lg p-2.5 text-[11px]">
+                              {mods.map((m, i) => (
+                                <div key={i} className="border-b border-amber-100 last:border-0 pb-1.5 last:pb-0">
+                                  <p className="font-semibold text-slate-800">{m.from} → <span className="text-amber-800">{m.to}</span></p>
+                                  <p className="text-slate-600">Authorized by {m.authorizedBy} ({m.authorizedRole})</p>
+                                  <p className="text-slate-500">{new Date(m.at).toLocaleString('en-KE')}</p>
+                                  <p className="italic text-slate-600">“{m.reason}”</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      )}
+                      {isAuditor && (
+                        <td className="px-5 py-3.5 text-right">
+                          {flaggingId === g.id ? (
+                            <div className="flex items-center gap-1.5 justify-end">
+                              <input value={flagReason} onChange={(e) => setFlagReason(e.target.value)}
+                                placeholder="Reason for flag…"
+                                className="w-44 text-xs border border-slate-300 rounded-lg px-2 py-1.5" />
+                              <button onClick={() => raiseFlag(g)}
+                                className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold">Raise</button>
+                              <button onClick={() => { setFlaggingId(null); setFlagReason(''); }}
+                                className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-slate-600 text-xs font-semibold hover:bg-slate-50">Cancel</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => { setFlaggingId(g.id); setFlagReason(''); setError(''); }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-300 text-rose-700 text-xs font-bold hover:bg-rose-50">
+                              <Flag className="h-3.5 w-3.5" /> Flag
+                            </button>
+                          )}
+                        </td>
+                      )}
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -541,7 +716,7 @@ export default function GradesPage() {
             <h2 className="font-bold text-slate-800 text-sm">Transcript Desk</h2>
             <p className="text-xs text-slate-500 mt-0.5">Only Senate-approved grades appear on transcripts. Standing is computed from approved grades only.</p>
             <div className="flex flex-col sm:flex-row sm:items-end gap-4 mt-4">
-              {['super_admin', 'admin', 'registrar'].includes(role) && (
+              {['super_admin', 'admin', 'registrar', 'audit_officer'].includes(role) && (
                 <label className="text-xs text-slate-600">
                   Transcript student
                   <select className="block max-w-64 rounded border border-slate-300 px-2 py-2 text-sm mt-1" value={transcriptStudent} onChange={(e) => setTranscriptStudent(e.target.value)}>
@@ -550,8 +725,8 @@ export default function GradesPage() {
                   </select>
                 </label>
               )}
-              {['super_admin', 'admin', 'registrar', 'student'].includes(role) && (
-                <button onClick={handleDownloadTranscript} disabled={downloading || (role !== 'student' && !transcriptStudent)}
+              {['super_admin', 'admin', 'registrar', 'student', 'audit_officer'].includes(role) && (
+                <button onClick={handleDownloadTranscript} disabled={downloading || (role !== 'student' && role !== 'audit_officer' && !transcriptStudent)}
                   className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold px-4 py-2.5 rounded-lg text-sm transition flex items-center space-x-2 shadow-sm disabled:opacity-50">
                   <Download className="h-4 w-4 text-academic-navy-700" />
                   <span>{downloading ? 'Preparing transcript…' : 'Download Transcript'}</span>

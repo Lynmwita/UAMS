@@ -6,10 +6,16 @@ import { roleHasPermission } from '@/lib/auth/rbac';
 import {
   FileCheck2, Calendar, ShieldCheck, CheckCircle2, QrCode, AlertTriangle, Printer,
   Download, Stamp, ScanLine, X, ChevronDown, RefreshCw, MapPin, Building2, Armchair,
+  Flag, ShieldAlert, FileText, Eye, Ban,
 } from 'lucide-react';
 import { ExamSchedule, ExamClearanceCard, ExamClearanceStatus, ExamWaiver } from '@/types';
+import {
+  detectGhostClearances, buildPassGenerationLog, buildAuditorFlagList,
+  type GhostClearance, type PassGenerationEvent, type AuditorFlag,
+} from '@/lib/audit/auditor-utils';
+import { generateClearanceAuditReportPDF } from '@/lib/pdf/generator';
 
-type Tab = 'ledger' | 'waivers' | 'timetable' | 'new_exam';
+type Tab = 'ledger' | 'waivers' | 'timetable' | 'new_exam' | 'compliance';
 
 const STATUS_LABEL: Record<ExamClearanceStatus, string> = {
   cleared: 'Cleared',
@@ -40,9 +46,10 @@ function statusReason(c: ExamClearanceCard): string {
 }
 
 export default function ExamsPage() {
-  const { role } = useAuth();
+  const { role, email } = useAuth();
   const canSchedule = roleHasPermission(role, 'exams:schedule');
   const canWaive = ['super_admin', 'admin', 'finance_officer', 'hod'].includes(role || '');
+  const isAuditor = role === 'audit_officer';
   const [schedules, setSchedules] = useState<ExamSchedule[]>([]);
   const [cards, setCards] = useState<ExamClearanceCard[]>([]);
   const [students, setStudents] = useState<any[]>([]);
@@ -50,6 +57,14 @@ export default function ExamsPage() {
   const [clearanceThreshold, setClearanceThreshold] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('ledger');
+
+  // ---- Auditor: compliance oversight state ----
+  const [passLog, setPassLog] = useState<PassGenerationEvent[]>([]);
+  const [clearanceFlags, setClearanceFlags] = useState<AuditorFlag[]>([]);
+  const [flaggingId, setFlaggingId] = useState<string | null>(null);
+  const [flagReason, setFlagReason] = useState('');
+  const [exportingReport, setExportingReport] = useState(false);
+  const [auditError, setAuditError] = useState('');
 
   // Ledger filters + selection
   const [schoolFilter, setSchoolFilter] = useState('all');
@@ -114,6 +129,91 @@ export default function ExamsPage() {
   };
 
   useEffect(() => { fetchAll(); }, []);
+
+  // ---- Auditor: load pass generation log + existing flags from the audit trail ----
+  const loadAuditorData = async () => {
+    try {
+      const r = await fetch('/api/v1/audit?limit=200');
+      if (!r.ok) return;
+      const d = await r.json();
+      setPassLog(buildPassGenerationLog(d.data || []));
+      setClearanceFlags(buildAuditorFlagList(d.data || []).filter((f) => f.entityType === 'exam_clearance'));
+    } catch { /* audit trail unavailable — honest empty states */ }
+  };
+  useEffect(() => { if (isAuditor) loadAuditorData(); }, [isAuditor]);
+
+  // ---- Auditor: ghost clearance auto-scan (runs on every card load) ----
+  const ghostClearances = useMemo(() => detectGhostClearances(cards), [cards]);
+  const unexplainedGhosts = ghostClearances.filter((g) => g.kind === 'unexplained');
+  const waivedGhosts = ghostClearances.filter((g) => g.kind === 'waived');
+
+  // ---- Auditor: raise a discrepancy flag on a clearance record ----
+  const raiseClearanceFlag = async (c: ExamClearanceCard) => {
+    if (!flagReason.trim()) { setAuditError('Please enter a reason for the flag.'); return; }
+    setAuditError('');
+    try {
+      const r = await fetch('/api/v1/audit/flags', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entity_type: 'clearance',
+          entity_id: c.id,
+          student_name: c.student_name,
+          admission_number: c.admission_number,
+          reason: flagReason.trim(),
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Flag failed.');
+      setMessage({ type: 'success', text: `Flag raised on ${c.student_name} — logged to the audit trail.` });
+      setFlaggingId(null); setFlagReason('');
+      await loadAuditorData();
+    } catch (e) { setAuditError(e instanceof Error ? e.message : 'Flag failed.'); }
+  };
+
+  // ---- Auditor: export the senate-ready Exam Clearance Audit Report ----
+  const exportClearanceAuditReport = () => {
+    if (exportingReport) return;
+    setExportingReport(true);
+    try {
+      const doc = generateClearanceAuditReportPDF({
+        auditorEmail: email || 'audit_officer@university.ac.ke',
+        generatedAt: new Date().toLocaleString('en-KE', { timeZone: 'Africa/Nairobi' }),
+        summary: {
+          total: cards.length,
+          cleared: cards.filter((c) => c.status === 'cleared').length,
+          blockedFee: cards.filter((c) => c.status === 'blocked_fee').length,
+          blockedAttendance: cards.filter((c) => c.status === 'blocked_attendance').length,
+          waived: cards.filter((c) => c.status === 'waived').length,
+        },
+        ghostClearances: ghostClearances.map((g) => ({
+          student: g.student_name, admission: g.admission_number,
+          balance: g.fee_balance, paidPct: g.fee_paid_percentage,
+        })),
+        overrides: waivers.map((w) => ({
+          student: w.student_name, admission: w.admission_number,
+          type: WAIVER_TYPE_LABEL[w.waiver_type] || w.waiver_type,
+          reason: w.reason, grantedBy: `${w.granted_by_email} (${w.granted_by_role})`,
+          grantedAt: new Date(w.granted_at).toLocaleDateString('en-KE'),
+          validUntil: w.valid_until,
+        })),
+        passGenerations: passLog.map((p) => ({
+          passCode: p.passCode, student: p.student,
+          authorizedBy: `${p.authorizedBy} (${p.authorizedRole})`,
+          at: new Date(p.at).toLocaleString('en-KE'),
+        })),
+        flags: clearanceFlags.map((f) => ({
+          student: f.student, admission: f.admission, reason: f.reason,
+          flaggedBy: f.flaggedBy, at: new Date(f.at).toLocaleDateString('en-KE'),
+        })),
+      });
+      doc.save(`Exam-Clearance-Audit-Report-${new Date().toISOString().slice(0, 10)}.pdf`);
+      setMessage({ type: 'success', text: 'Exam Clearance Audit Report downloaded — ready for Senate review.' });
+    } catch (e) {
+      setAuditError('Report generation failed.');
+    } finally {
+      setExportingReport(false);
+    }
+  };
 
   // Join cards with student faculty/department for filters
   const cardsWithMeta = useMemo(() => {
@@ -284,46 +384,128 @@ export default function ExamsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
             <FileCheck2 className="h-6 w-6 text-academic-navy-900" />
-            Exam Clearance & Financial Verification Desk
+            {isAuditor ? 'Exam Clearance Compliance Review' : 'Exam Clearance & Financial Verification Desk'}
           </h1>
           <p className="text-sm text-slate-500">
-            Clearance ledger, conditional waivers, venue mapping, and bulk exam-pass printing.
+            {isAuditor
+              ? 'Regulatory checkpoint: verify financial controls and academic rules are followed without manipulation. Read-only.'
+              : 'Clearance ledger, conditional waivers, venue mapping, and bulk exam-pass printing.'}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <a
-            href="/dashboard/exams/scanner"
-            className="px-3 py-1.5 text-xs font-bold rounded-lg bg-academic-navy-900 text-white hover:bg-academic-navy-800 flex items-center gap-1.5"
-          >
-            <ScanLine className="h-4 w-4" /> Invigilator Scanner
-          </a>
-          <div className="flex bg-slate-100 p-1 rounded-lg">
-            {(['ledger', 'waivers', 'timetable'] as Tab[]).map((t) => (
+          {isAuditor ? (
+            <button onClick={exportClearanceAuditReport} disabled={exportingReport || loading}
+              className="px-4 py-2 text-xs font-bold rounded-lg bg-academic-navy-900 text-white hover:bg-academic-navy-800 flex items-center gap-2 disabled:opacity-50">
+              <FileText className="h-4 w-4 text-academic-gold-400" />
+              {exportingReport ? 'Generating…' : 'Export Clearance Audit Report (PDF)'}
+            </button>
+          ) : (
+            <>
+              <a
+                href="/dashboard/exams/scanner"
+                className="px-3 py-1.5 text-xs font-bold rounded-lg bg-academic-navy-900 text-white hover:bg-academic-navy-800 flex items-center gap-1.5"
+              >
+                <ScanLine className="h-4 w-4" /> Invigilator Scanner
+              </a>
+              <div className="flex bg-slate-100 p-1 rounded-lg">
+                {(['ledger', 'waivers', 'timetable'] as Tab[]).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setActiveTab(t)}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${
+                      activeTab === t ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {t === 'ledger' && 'Clearance Master Ledger'}
+                    {t === 'waivers' && `Special Waivers & Exceptions (${waivers.filter((w) => !w.is_revoked && new Date(w.valid_until) >= new Date()).length})`}
+                    {t === 'timetable' && 'Exam Timetable'}
+                  </button>
+                ))}
+                {canSchedule && (
+                  <button
+                    onClick={() => setActiveTab('new_exam')}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${
+                      activeTab === 'new_exam' ? 'bg-academic-gold-500 text-slate-900' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    + Schedule Paper
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Auditor: read-only banner + compliance panels */}
+      {isAuditor && (
+        <>
+          <div className="bg-academic-navy-900 border border-academic-navy-800 rounded-xl p-3.5 text-white flex items-center justify-between shadow-sm">
+            <div className="text-xs text-slate-200">
+              <span className="font-bold text-academic-gold-400">🛡️ Audit & Compliance Inspector:</span> Read-only clearance inspection mode active. Pass issuance, waivers, and overrides are restricted.
+            </div>
+            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 bg-academic-navy-800 text-academic-gold-400 rounded border border-academic-gold-500/30">Read-Only</span>
+          </div>
+
+          {/* Zero-balance enforcement verification panel */}
+          <div className={`border rounded-xl p-4 shadow-sm ${unexplainedGhosts.length > 0 ? 'bg-rose-50 border-rose-300' : 'bg-emerald-50 border-emerald-200'}`}>
+            <div className="flex items-center gap-2">
+              {unexplainedGhosts.length > 0 ? (
+                <AlertTriangle className="h-5 w-5 text-rose-600" />
+              ) : (
+                <ShieldCheck className="h-5 w-5 text-emerald-600" />
+              )}
+              <h2 className="font-bold text-sm text-slate-900">Zero-Balance Enforcement Verification</h2>
+              <span className="ml-auto text-xs font-semibold text-slate-600">Auto-scan · runs on every load</span>
+            </div>
+            {loading ? (
+              <p className="text-xs text-slate-500 mt-2">Scanning clearance ledger…</p>
+            ) : unexplainedGhosts.length > 0 ? (
+              <div className="mt-2">
+                <p className="text-sm font-bold text-rose-800">
+                  🚨 {unexplainedGhosts.length} GHOST CLEARANCE{unexplainedGhosts.length > 1 ? 'S' : ''} DETECTED
+                </p>
+                <p className="text-xs text-rose-700 mt-1">
+                  These students are marked CLEARED without 100% payment backing and without a valid waiver.
+                  {waivedGhosts.length > 0 && ` ${waivedGhosts.length} other cleared-with-balance record(s) are covered by valid waivers (see Override Log).`}
+                </p>
+                <div className="mt-2 space-y-1">
+                  {unexplainedGhosts.map((g) => (
+                    <div key={g.student_id} className="flex items-center justify-between bg-white border border-rose-200 rounded-lg px-3 py-2 text-xs">
+                      <span className="font-semibold text-slate-900">{g.student_name} <span className="font-mono text-slate-500">{g.admission_number}</span></span>
+                      <span className="font-mono font-bold text-rose-700">KES {g.fee_balance.toLocaleString()} outstanding ({g.fee_paid_percentage}% paid)</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-emerald-700 mt-2">
+                ✅ No ghost clearances. Every CLEARED student has 100% payment backing
+                {waivedGhosts.length > 0 && `, and ${waivedGhosts.length} cleared-with-balance record(s) are covered by valid waivers`}.
+              </p>
+            )}
+          </div>
+
+          {/* Auditor tabs */}
+          <div className="flex bg-slate-100 p-1 rounded-lg w-fit">
+            {(['ledger', 'waivers', 'compliance'] as const).map((t) => (
               <button
                 key={t}
-                onClick={() => setActiveTab(t)}
+                onClick={() => setActiveTab(t as Tab)}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${
                   activeTab === t ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                {t === 'ledger' && 'Clearance Master Ledger'}
-                {t === 'waivers' && `Special Waivers & Exceptions (${waivers.filter((w) => !w.is_revoked && new Date(w.valid_until) >= new Date()).length})`}
-                {t === 'timetable' && 'Exam Timetable'}
+                {t === 'ledger' && 'Clearance Ledger (Read-Only)'}
+                {t === 'waivers' && `Override & Exception Log (${waivers.filter((w) => !w.is_revoked && new Date(w.valid_until) >= new Date()).length} active)`}
+                {t === 'compliance' && 'Pass Generation Log'}
               </button>
             ))}
-            {canSchedule && (
-              <button
-                onClick={() => setActiveTab('new_exam')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${
-                  activeTab === 'new_exam' ? 'bg-academic-gold-500 text-slate-900' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                + Schedule Paper
-              </button>
-            )}
           </div>
-        </div>
-      </div>
+
+          {auditError && <p role="alert" className="text-rose-700 text-sm bg-rose-50 border border-rose-200 rounded-lg p-3">{auditError}</p>}
+        </>
+      )}
 
       {message && (
         <div className={`p-4 rounded-lg flex items-center gap-3 text-sm font-medium ${
@@ -371,7 +553,8 @@ export default function ExamsPage() {
             </span>
           </div>
 
-          {/* Bulk actions */}
+          {/* Bulk actions — hidden for auditor (operational tool) */}
+          {!isAuditor && (
           <div className="flex flex-wrap items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
             <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
               <input type="checkbox" checked={selectedIds.length === filteredCards.length && filteredCards.length > 0}
@@ -389,6 +572,7 @@ export default function ExamsPage() {
             </button>
             {exportMsg && <span className="text-xs text-slate-600">{exportMsg}</span>}
           </div>
+          )}
 
           {/* Table */}
           <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
@@ -396,22 +580,29 @@ export default function ExamsPage() {
               <table className="w-full text-left text-sm">
                 <thead className="text-xs font-bold uppercase bg-slate-50 text-slate-600 border-b border-slate-200">
                   <tr>
-                    <th className="px-4 py-3 w-10"></th>
+                    {!isAuditor && <th className="px-4 py-3 w-10"></th>}
                     <th className="px-4 py-3">Student & Reg No.</th>
                     <th className="px-4 py-3">Program</th>
                     <th className="px-4 py-3 text-center">Paid %</th>
                     <th className="px-4 py-3 text-right">Balance</th>
                     <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
+                    {isAuditor && <th className="px-4 py-3">Compliance</th>}
+                    <th className="px-4 py-3 text-right">{isAuditor ? 'Flag' : 'Actions'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredCards.map((c) => (
-                    <tr key={c.id} className="hover:bg-slate-50/60">
+                  {filteredCards.map((c) => {
+                    const isGhost = ghostClearances.some((g) => g.student_id === c.student_id);
+                    const isFlagged = clearanceFlags.some((f) => f.entityId === c.id);
+                    const flagOpen = flaggingId === c.id;
+                    return (
+                    <tr key={c.id} className={`hover:bg-slate-50/60 ${isGhost ? 'bg-rose-50/50' : ''}`}>
+                      {!isAuditor && (
                       <td className="px-4 py-3">
                         <input type="checkbox" checked={selectedIds.includes(c.student_id)}
                           onChange={() => toggleSelect(c.student_id)} className="h-4 w-4" />
                       </td>
+                      )}
                       <td className="px-4 py-3">
                         <div className="font-bold text-slate-900">{c.student_name}</div>
                         <div className="font-mono text-xs text-slate-500">{c.admission_number}</div>
@@ -425,16 +616,60 @@ export default function ExamsPage() {
                         </span>
                         <div className="text-[10px] text-slate-500 mt-0.5">{statusReason(c)}</div>
                       </td>
+                      {isAuditor && (
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1.5">
+                            {isGhost ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-rose-100 text-rose-900 border border-rose-300">
+                                Ghost clearance
+                              </span>
+                            ) : c.status === 'waived' ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-100 text-amber-900 border border-amber-300">
+                                Waived — verified
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-slate-400">Verified</span>
+                            )}
+                            {isFlagged && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-rose-100 text-rose-900 border border-rose-300">
+                                Flagged
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <button onClick={() => setPassCard(c)}
-                          className="text-xs font-bold text-academic-navy-800 hover:underline mr-3">View Pass</button>
-                        {(c.status === 'blocked_fee') && canWaive && (
-                          <button onClick={() => { setWaiverCard(c); setWaiverError(''); }}
-                            className="text-xs font-bold text-amber-700 hover:underline">Grant Waiver</button>
+                        {isAuditor ? (
+                          flagOpen ? (
+                            <div className="flex items-center gap-1.5 justify-end">
+                              <input value={flagReason} onChange={(e) => setFlagReason(e.target.value)}
+                                placeholder="Reason for flag…"
+                                className="w-40 text-xs border border-slate-300 rounded-lg px-2 py-1.5" />
+                              <button onClick={() => raiseClearanceFlag(c)}
+                                className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold">Raise</button>
+                              <button onClick={() => { setFlaggingId(null); setFlagReason(''); }}
+                                className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-slate-600 text-xs font-semibold hover:bg-slate-50">Cancel</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => { setFlaggingId(c.id); setFlagReason(''); setAuditError(''); }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-300 text-rose-700 text-xs font-bold hover:bg-rose-50">
+                              <Flag className="h-3.5 w-3.5" /> Flag
+                            </button>
+                          )
+                        ) : (
+                          <>
+                            <button onClick={() => setPassCard(c)}
+                              className="text-xs font-bold text-academic-navy-800 hover:underline mr-3">View Pass</button>
+                            {(c.status === 'blocked_fee') && canWaive && (
+                              <button onClick={() => { setWaiverCard(c); setWaiverError(''); }}
+                                className="text-xs font-bold text-amber-700 hover:underline">Grant Waiver</button>
+                            )}
+                          </>
                         )}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
               {filteredCards.length === 0 && (
@@ -445,9 +680,21 @@ export default function ExamsPage() {
         </div>
       )}
 
-      {/* ============ WAIVERS TAB ============ */}
+      {/* ============ WAIVERS TAB (Override & Exception Log for auditor) ============ */}
       {activeTab === 'waivers' && (
         <div className="space-y-4">
+          {isAuditor && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <h2 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                <Eye className="h-4 w-4 text-amber-600" /> Override & Exception Log
+              </h2>
+              <p className="text-xs text-slate-600 mt-1">
+                Every student granted conditional clearance despite an outstanding balance. Each entry must show
+                formal institutional approval: who authorized it, when, and why. Cross-check against the ghost
+                clearance scan above — any cleared-with-balance student missing from this log is a red flag.
+              </p>
+            </div>
+          )}
           <div className="flex bg-slate-100 p-1 rounded-lg w-fit">
             {(['active', 'expired', 'revoked'] as const).map((s) => (
               <button key={s} onClick={() => setWaiverScope(s)}
@@ -465,7 +712,7 @@ export default function ExamsPage() {
                   <th className="px-4 py-3">Reason</th>
                   <th className="px-4 py-3">Granted By</th>
                   <th className="px-4 py-3">Valid Until</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
+                  {!isAuditor && <th className="px-4 py-3 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -477,8 +724,12 @@ export default function ExamsPage() {
                     </td>
                     <td className="px-4 py-3 text-xs">{WAIVER_TYPE_LABEL[w.waiver_type] || w.waiver_type}</td>
                     <td className="px-4 py-3 text-xs text-slate-600 max-w-[280px]" title={w.reason}>{w.reason}</td>
-                    <td className="px-4 py-3 text-xs font-mono text-slate-500">{w.granted_by_email}</td>
+                    <td className="px-4 py-3 text-xs">
+                      <span className="font-mono text-slate-700">{w.granted_by_email}</span>
+                      <span className="block text-[10px] text-slate-500">{w.granted_by_role} · {new Date(w.granted_at).toLocaleDateString('en-KE')}</span>
+                    </td>
                     <td className="px-4 py-3 text-xs font-mono">{w.valid_until}</td>
+                    {!isAuditor && (
                     <td className="px-4 py-3 text-right">
                       {waiverScope === 'active' && canWaive && (
                         <button onClick={() => handleRevokeWaiver(w.id)}
@@ -486,12 +737,80 @@ export default function ExamsPage() {
                       )}
                       {w.is_revoked && <span className="text-[10px] text-slate-400">Revoked by {w.revoked_by_email}</span>}
                     </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
             </table>
             {scopedWaivers.length === 0 && (
               <p className="p-8 text-center text-xs text-slate-500">No {waiverScope} waivers.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ============ COMPLIANCE TAB: Pass Generation Log (auditor only) ============ */}
+      {activeTab === 'compliance' && isAuditor && (
+        <div className="space-y-4">
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200">
+              <h2 className="font-bold text-slate-800 text-sm">Exam Pass Generation Log</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Which administrator authorized the printing of each secure QR exam pass. Sourced from the institutional audit trail.
+              </p>
+            </div>
+            {passLog.length === 0 ? (
+              <p className="px-5 py-8 text-sm text-slate-500 text-center">
+                No pass generation events recorded in the audit trail.
+              </p>
+            ) : (
+              <table className="w-full text-left text-sm">
+                <thead className="text-xs font-bold uppercase bg-slate-50 text-slate-600 border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-3">Pass Code</th>
+                    <th className="px-4 py-3">Student</th>
+                    <th className="px-4 py-3">Authorized By</th>
+                    <th className="px-4 py-3">Generated At</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {passLog.map((p, i) => (
+                    <tr key={i} className="hover:bg-slate-50/60">
+                      <td className="px-4 py-3 font-mono font-bold text-academic-navy-900 text-xs">{p.passCode}</td>
+                      <td className="px-4 py-3 text-xs font-semibold text-slate-800">{p.student}</td>
+                      <td className="px-4 py-3 text-xs">
+                        <span className="font-mono text-slate-700">{p.authorizedBy}</span>
+                        <span className="block text-[10px] text-slate-500">{p.authorizedRole}</span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-600">{new Date(p.at).toLocaleString('en-KE')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Auditor's flagged clearance records */}
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200">
+              <h2 className="font-bold text-slate-800 text-sm">Flagged Clearance Records</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Discrepancy flags raised during this and prior inspections.</p>
+            </div>
+            {clearanceFlags.length === 0 ? (
+              <p className="px-5 py-8 text-sm text-slate-500 text-center">No clearance records flagged.</p>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {clearanceFlags.map((f) => (
+                  <div key={f.id} className="px-5 py-3.5 flex items-start justify-between">
+                    <div className="text-sm">
+                      <p className="font-semibold text-slate-900">{f.student} <span className="font-mono text-xs text-slate-500">{f.admission}</span></p>
+                      <p className="text-xs text-slate-600 mt-0.5 italic">“{f.reason}”</p>
+                      <p className="text-[11px] text-slate-400 mt-1">Flagged by {f.flaggedBy} · {new Date(f.at).toLocaleDateString('en-KE')}</p>
+                    </div>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-rose-100 text-rose-900 border border-rose-300">Flagged</span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>
