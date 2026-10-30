@@ -5,6 +5,7 @@
 import { studentsStore } from './student-records';
 import { invoicesStore } from '@/lib/finance/invoices';
 import { registrationsStore } from './registrations';
+import { computeStudentAttendance } from './attendance-store';
 import type { ExamClearanceCard } from '@/types';
 
 /** Exam Pass rule shown on the Examinations page and applied to every demo card:
@@ -20,12 +21,19 @@ export const EXAM_CARD_CLEARANCE_THRESHOLD = 100;
  * and is cleared; a student with any balance outstanding is blocked.
  */
 export function buildExamClearanceCards(): ExamClearanceCard[] {
+  // Attendance gate: computed once from recorded session details (never fabricated).
+  // A student with no recorded sessions has percentage=null and is NOT blocked on attendance.
+  const attendanceByAdm = new Map(computeStudentAttendance().map((st) => [st.adm, st]));
   return studentsStore.map((student) => {
     const invoices = invoicesStore.filter((i) => i.student_id === student.id);
     const totalBilled = invoices.reduce((sum, i) => sum + i.total_amount, 0);
     const amountPaid = invoices.reduce((sum, i) => sum + i.amount_paid, 0);
     const result = evaluateExamClearance(totalBilled, amountPaid, EXAM_CARD_CLEARANCE_THRESHOLD);
     const admissionSuffix = student.admission_number.replace(/[^A-Za-z0-9]/g, '-');
+    const att = attendanceByAdm.get(student.admission_number);
+    const attendance_blocked = !!att && att.is_blocked;
+    const attendance_exempt = !!att && att.is_exempt;
+    const is_cleared = result.isCleared && !attendance_blocked;
     return {
       id: `clr-${student.id}`,
       student_id: student.id,
@@ -36,7 +44,10 @@ export function buildExamClearanceCards(): ExamClearanceCard[] {
       card_serial_number: `EXAM-2026-SEP-${student.admission_number.slice(-4)}`,
       fee_balance: result.remainingBalance,
       fee_paid_percentage: result.percentagePaid,
-      is_cleared: result.isCleared,
+      is_cleared,
+      attendance_percentage: att?.percentage ?? null,
+      attendance_blocked,
+      attendance_exempt,
       security_qr_token: `UAMS-SEC-CLR-${admissionSuffix}-VALID-2026`,
       registered_units: registrationsStore.filter((r) => r.student_id === student.id).length,
     };
